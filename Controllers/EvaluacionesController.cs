@@ -486,13 +486,11 @@ namespace EvaluacionDesempenoAB.Controllers
             var planVm = planes.Select(p => new PlanAccionItemVm
             {
                 Id = p.Id,
-                Descripcion = p.DescripcionAccion,
-                Responsable = p.Responsable,
-                FechaCompromiso = p.FechaCompromiso
+               Comportamiento = p.Responsable,
+                Descripcion = p.DescripcionAccion
             }).ToList();
 
-            // Aseguramos algunas filas vacías para poder agregar acciones nuevas
-            while (planVm.Count < 3)
+             if (!planVm.Any())
             {
                 planVm.Add(new PlanAccionItemVm());
             }
@@ -511,7 +509,8 @@ namespace EvaluacionDesempenoAB.Controllers
                 Competencias = competenciasVm,
                 OportunidadesMejora = oportunidades,
                 PlanAccion = planVm,
-                ObservacionesGenerales = eval.Observaciones
+                   ObservacionesGenerales = eval.Observaciones,
+                FechaProximaEvaluacion = eval.FechaProximaEvaluacion
             };
 
             return View("Reporte", vm);
@@ -534,15 +533,16 @@ namespace EvaluacionDesempenoAB.Controllers
             var detalles = await _repo.GetDetallesByEvaluacionAsync(model.EvaluacionId);
 
             var planes = model.PlanAccion
-                .Where(p => !string.IsNullOrWhiteSpace(p.Descripcion))
+                .Where(p => !string.IsNullOrWhiteSpace(p.Descripcion) &&
+                            !string.IsNullOrWhiteSpace(p.Comportamiento))
                 .Select(p => new PlanAccion
                 {
                     Id = p.Id ?? Guid.NewGuid(),
                     EvaluacionId = model.EvaluacionId,
                     DescripcionAccion = p.Descripcion!,
-                    Responsable = p.Responsable,
-                    FechaCompromiso = p.FechaCompromiso
+                       Responsable = p.Comportamiento
                 }).ToList();
+ eval.FechaProximaEvaluacion = model.FechaProximaEvaluacion;
 
             // Reutilizamos UpdateEvaluacionAsync para actualizar solo el plan:
             await _repo.UpdateEvaluacionAsync(eval, detalles, planes);

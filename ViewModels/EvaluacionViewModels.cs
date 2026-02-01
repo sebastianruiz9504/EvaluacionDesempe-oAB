@@ -78,6 +78,7 @@ namespace EvaluacionDesempenoAB.ViewModels
     public class PlanAccionItemVm
     {
         public Guid? Id { get; set; }
+          public string? Comportamiento { get; set; }
         public string? Descripcion { get; set; }
         public string? Responsable { get; set; }
         public DateTime? FechaCompromiso { get; set; }
@@ -105,6 +106,8 @@ namespace EvaluacionDesempenoAB.ViewModels
         public List<PlanAccionItemVm> PlanAccion { get; set; } = new();
 
         public string? ObservacionesGenerales { get; set; }
+        
+        public DateTime? FechaProximaEvaluacion { get; set; }
     }
 
     public class CompetenciaReporteVm
