@@ -19,6 +19,7 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string? NivelCodigo { get; set; }
 
         public string TipoEvaluacion { get; set; } = string.Empty;
+           public decimal? ResultadoFinal { get; set; }
         public bool PuedeReevaluar { get; set; }
     }
 

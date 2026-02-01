@@ -81,6 +81,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     NivelNombre = nivel.Nombre,
                     NivelCodigo = nivel.Codigo,
                     TipoEvaluacion = e.TipoEvaluacion,
+                    ResultadoFinal = e.Total,
                     PuedeReevaluar = puedeReevaluar
                 });
             }
@@ -373,6 +374,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     NivelNombre = nivel.Nombre,
                     NivelCodigo = nivel.Codigo,
                     TipoEvaluacion = e.TipoEvaluacion,
+                    ResultadoFinal = e.Total,
                     PuedeReevaluar = e.TipoEvaluacion == "Inicial"
                 });
             }

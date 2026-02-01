@@ -24,6 +24,7 @@ else
                 <th>Cédula</th>
                 <th>Nivel</th>
                 <th>Tipo</th>
+                 <th>Resultado final</th>
                 <th style="width: 220px;">Acciones</th>
             </tr>
         </thead>
@@ -48,6 +49,16 @@ else
                     }
                 </td>
                 <td>@e.TipoEvaluacion</td>
+                 <td>
+                    @if (e.ResultadoFinal.HasValue)
+                    {
+                        @e.ResultadoFinal.Value.ToString("0.##")<span>%</span>
+                    }
+                    else
+                    {
+                        <span>-</span>
+                    }
+                </td>
                 <td>
                     <a asp-action="Reporte"
                        asp-route-id="@e.Id"
