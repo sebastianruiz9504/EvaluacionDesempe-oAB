@@ -127,8 +127,13 @@
     </p>
 
   @{
-        var oportunidades = Model.OportunidadesMejora
-            .Select(o => o.Comportamiento)
+      var oportunidadesPorCompetencia = Model.OportunidadesMejora
+            .GroupBy(o => o.Competencia)
+            .OrderBy(g => g.Key)
+            .ToList();
+
+        var oportunidades = oportunidadesPorCompetencia
+            .SelectMany(g => g.Select(o => o.Comportamiento))
             .Distinct()
             .ToList();
     }
@@ -141,8 +146,8 @@
         <table class="table table-striped">
             <thead class="table-light">
                 <tr>
-                        <th style="width: 280px;">Oportunidad de mejora</th>
-                    <th>Acciones</th>
+                       <th style="width: 50%;">Oportunidad de mejora</th>
+                    <th style="width: 50%;">Acciones</th>
                 </tr>
             </thead>
              <tbody id="plan-accion-body">
@@ -152,12 +157,17 @@
                     <td>
                            <select asp-for="PlanAccion[@i].Comportamiento" class="form-select plan-accion-comportamiento">
                             <option value="">Seleccione una oportunidad</option>
-                            @foreach (var oportunidad in oportunidades)
+                           @foreach (var grupo in oportunidadesPorCompetencia)
                             {
-                                <option value="@oportunidad"
-                                        selected="@(Model.PlanAccion[i].Comportamiento == oportunidad ? "selected" : null)">
-                                    @oportunidad
-                                </option>
+                                <optgroup label="@grupo.Key">
+                                    @foreach (var oportunidad in grupo.Select(o => o.Comportamiento).Distinct().OrderBy(c => c))
+                                    {
+                                        <option value="@oportunidad"
+                                                selected="@(Model.PlanAccion[i].Comportamiento == oportunidad ? "selected" : null)">
+                                            @oportunidad
+                                        </option>
+                                    }
+                                </optgroup>
                             }
                             @if (!string.IsNullOrWhiteSpace(Model.PlanAccion[i].Comportamiento) &&
                                  !oportunidades.Contains(Model.PlanAccion[i].Comportamiento))
@@ -227,9 +237,14 @@
             <td>
                 <select name="PlanAccion[__index__].Comportamiento" class="form-select plan-accion-comportamiento">
                     <option value="">Seleccione una oportunidad</option>
-                    @foreach (var oportunidad in oportunidades)
+                     @foreach (var grupo in oportunidadesPorCompetencia)
                     {
-                        <option value="@oportunidad">@oportunidad</option>
+                        <optgroup label="@grupo.Key">
+                            @foreach (var oportunidad in grupo.Select(o => o.Comportamiento).Distinct().OrderBy(c => c))
+                            {
+                                <option value="@oportunidad">@oportunidad</option>
+                            }
+                        </optgroup>
                     }
                 </select>
                 <input type="hidden" name="PlanAccion[__index__].Id" value="" />
