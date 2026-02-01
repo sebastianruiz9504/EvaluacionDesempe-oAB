@@ -83,7 +83,9 @@ namespace EvaluacionDesempenoAB.Services
                 FechaFinalizacionPeriodoPrueba =
                     e.GetAttributeValue<DateTime?>("crfb7_fechafinalizacionperiododeprueba"),
                 CorreoElectronico = e.GetAttributeValue<string>("crfb7_correoelectronico"),
-                EvaluadorNombre   = e.GetAttributeValue<string>("crfb7_evaluadorid")
+                EvaluadorNombre   = e.GetAttributeValue<string>("crfb7_evaluadorid"),
+                TipoFormulario    = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value
+
             };
         }
 

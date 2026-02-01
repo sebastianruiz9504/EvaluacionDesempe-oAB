@@ -16,6 +16,13 @@ namespace EvaluacionDesempenoAB.Controllers
     {
         private readonly IEvaluacionRepository _repo;
 
+ private static readonly Dictionary<int, (string Codigo, string Nombre)> TipoFormularioNiveles = new()
+        {
+            { 433930001, ("OPEADM", "Operativo Administrativo") },
+            { 433930000, ("TACT", "Táctico") },
+            { 433930003, ("ESTR", "Estratégico") },
+            { 433930002, ("OPE", "Operativo") }
+        };
         public EvaluacionesController(IEvaluacionRepository repo)
         {
             _repo = repo;
@@ -37,6 +44,21 @@ namespace EvaluacionDesempenoAB.Controllers
                 return null;
 
             return await _repo.GetUsuarioByCorreoAsync(email);
+        }
+private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
+            UsuarioEvaluado usuario,
+            IEnumerable<NivelEvaluacion> niveles)
+        {
+            if (!usuario.TipoFormulario.HasValue)
+                return null;
+
+            if (!TipoFormularioNiveles.TryGetValue(usuario.TipoFormulario.Value, out var nivelInfo))
+                return null;
+
+            return niveles.FirstOrDefault(n =>
+                       string.Equals(n.Codigo, nivelInfo.Codigo, StringComparison.OrdinalIgnoreCase))
+                   ?? niveles.FirstOrDefault(n =>
+                       string.Equals(n.Nombre, nivelInfo.Nombre, StringComparison.OrdinalIgnoreCase));
         }
 
         // ================== LISTADO PRINCIPAL ==================
@@ -104,6 +126,12 @@ namespace EvaluacionDesempenoAB.Controllers
 
             var niveles = await _repo.GetNivelesActivosAsync();
 
+ var nivelAuto = ResolveNivelPorTipoFormulario(usuario, niveles);
+            if (nivelAuto != null)
+            {
+                return RedirectToAction("Formulario", new { usuarioId = usuario.Id, nivelId = nivelAuto.Id });
+            }
+            
             ViewBag.Usuario = usuario;
             ViewBag.Niveles = niveles;
 
