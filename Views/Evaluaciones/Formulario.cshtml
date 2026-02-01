@@ -90,8 +90,8 @@
                             <tr>
                                 <th>Comportamiento</th>
                                 <th style="width: 120px;">Puntaje (0-100)</th>
-                                <th>Comentario</th>
-                            </tr>
+                              <th style="width: 160px;">Nivel</th>                           
+                               </tr>
                         </thead>
                         <tbody>
                         @for (int j = 0; j < comp.Comportamientos.Count; j++)
@@ -107,13 +107,12 @@
                                            type="number"
                                            min="0"
                                            max="100"
-                                           class="form-control" />
-                                    <span asp-validation-for="Competencias[@i].Comportamientos[@j].Puntaje" class="text-danger"></span>
+                                         class="form-control puntaje-input"
+                                           data-nivel-target="nivel-@i-@j" />
+                                                                               <span asp-validation-for="Competencias[@i].Comportamientos[@j].Puntaje" class="text-danger"></span>
                                 </td>
                                 <td>
-                                    <input asp-for="Competencias[@i].Comportamientos[@j].Comentario"
-                                           class="form-control" />
-                                    <span asp-validation-for="Competencias[@i].Comportamientos[@j].Comentario" class="text-danger"></span>
+                                                                   <span id="nivel-@i-@j" class="badge bg-secondary">Sin puntaje</span>
                                 </td>
                             </tr>
                         }
@@ -145,4 +144,51 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+     <script>
+        const getNivelInfo = (valor) => {
+            if (valor === "") {
+                return { texto: "Sin puntaje", clase: "bg-secondary" };
+            }
+
+            const puntaje = Number(valor);
+
+            if (Number.isNaN(puntaje)) {
+                return { texto: "Sin puntaje", clase: "bg-secondary" };
+            }
+
+            if (puntaje <= 25) {
+                return { texto: "Nunca", clase: "bg-danger" };
+            }
+
+            if (puntaje <= 50) {
+                return { texto: "Casi nunca", clase: "bg-warning text-dark" };
+            }
+
+            if (puntaje <= 75) {
+                return { texto: "A veces", clase: "bg-info text-dark" };
+            }
+
+            if (puntaje <= 90) {
+                return { texto: "Casi siempre", clase: "bg-primary" };
+            }
+
+            return { texto: "Siempre", clase: "bg-success" };
+        };
+
+        const actualizarNivel = (input) => {
+            const targetId = input.dataset.nivelTarget;
+            if (!targetId) return;
+            const target = document.getElementById(targetId);
+            if (!target) return;
+
+            const { texto, clase } = getNivelInfo(input.value);
+            target.textContent = texto;
+            target.className = `badge ${clase}`;
+        };
+
+        document.querySelectorAll(".puntaje-input").forEach((input) => {
+            actualizarNivel(input);
+            input.addEventListener("input", () => actualizarNivel(input));
+        });
+    </script>
 }
