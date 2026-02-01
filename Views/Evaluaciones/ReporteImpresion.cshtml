@@ -7,6 +7,37 @@
         .Where(p => !string.IsNullOrWhiteSpace(p.Comportamiento) || !string.IsNullOrWhiteSpace(p.Descripcion))
         .ToList();
 }
+@functions {
+    private (string Texto, string Clase) ObtenerNivelInfo(int? puntaje)
+    {
+        if (!puntaje.HasValue)
+        {
+            return ("Sin puntaje", "bg-secondary");
+        }
+
+        if (puntaje.Value <= 25)
+        {
+            return ("Nunca", "bg-danger");
+        }
+
+        if (puntaje.Value <= 50)
+        {
+            return ("Casi nunca", "bg-warning text-dark");
+        }
+
+        if (puntaje.Value <= 75)
+        {
+            return ("A veces", "bg-info text-dark");
+        }
+
+        if (puntaje.Value <= 90)
+        {
+            return ("Casi siempre", "bg-primary");
+        }
+
+        return ("Siempre", "bg-success");
+    }
+}
 
 <!DOCTYPE html>
 <html lang="es">
@@ -82,7 +113,7 @@
                             <tr>
                                 <th>Comportamiento</th>
                                 <th style="width: 100px;">Puntaje</th>
-                                <th>Comentario</th>
+                               <th style="width: 140px;">Nivel</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -96,7 +127,12 @@
                                         @c.Puntaje.Value<span>%</span>
                                     }
                                 </td>
-                                <td>@c.Comentario</td>
+                                 <td>
+                                    @{
+                                        var nivelInfo = ObtenerNivelInfo(c.Puntaje);
+                                    }
+                                    <span class="badge @nivelInfo.Clase">@nivelInfo.Texto</span>
+                                </td>
                             </tr>
                         }
                         </tbody>
