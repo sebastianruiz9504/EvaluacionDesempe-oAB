@@ -1,0 +1,67 @@
+﻿@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authorization
+@inject IHttpContextAccessor HttpContextAccessor
+@{
+    var user = HttpContextAccessor.HttpContext?.User;
+    var userName = user?.Identity?.IsAuthenticated == true ? user.Identity.Name : "";
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"] - Evaluación de Desempeño AB</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Raleway:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <header class="ab-header-wave mb-4">
+        <div class="container py-3 d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-3">
+                <!-- LOGO: respeta siempre proporciones y color original -->
+                <img src="~/img/logo-aguas-bogota-color.svg" alt="Aguas de Bogotá" style="height:48px;" />
+                <div>
+                    <div class="ab-heading h5 mb-0">Evaluación de Desempeño</div>
+                    <small class="text-light">Nuestra ciudad, nuestro compromiso</small>
+                </div>
+            </div>
+            <div class="text-end">
+                @if (user?.Identity?.IsAuthenticated == true)
+                {
+                    <div class="small">Conectado como</div>
+                    <div class="fw-semibold">@userName</div>
+                    <a class="btn btn-sm btn-outline-light mt-1" asp-controller="Account" asp-action="Logout">Cerrar sesión</a>
+                }
+            </div>
+        </div>
+    </header>
+
+    <nav class="bg-white border-bottom mb-3">
+        <div class="container py-2 d-flex gap-3 flex-wrap">
+            <a class="ab-nav-link" asp-controller="Home" asp-action="Index">Inicio</a>
+            <a class="ab-nav-link" asp-controller="Usuarios" asp-action="Index">Usuarios a mi cargo</a>
+            <a class="ab-nav-link" asp-controller="Evaluaciones" asp-action="Index">Mis evaluaciones</a>
+            <!-- El Superadministrador podría ver más opciones, se controla por roles -->
+            @* Ejemplo:
+            @if (User.IsInRole("SuperAdministrador"))
+            {
+                <a class="ab-nav-link" asp-controller="Admin" asp-action="Catalogos">Catálogos</a>
+            }
+            *@
+        </div>
+    </nav>
+
+    <main class="container mb-5">
+        @RenderBody()
+    </main>
+
+    <footer class="border-top pt-3 pb-4 text-center small text-muted">
+        Aguas de Bogotá S.A. E.S.P. · Carrera 11 # 93-92 · Bogotá D.C. · www.aguasdebogota.co
+    </footer>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

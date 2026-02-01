@@ -1,0 +1,17 @@
+﻿@{
+    ViewData["Title"] = "Inicio";
+}
+
+<div class="row">
+    <div class="col-lg-7">
+        <h1 class="h3 ab-heading mb-3">Bienvenido al módulo de evaluación de desempeño</h1>
+        <p class="lead">
+            Aquí podrás gestionar las evaluaciones de los usuarios a tu cargo, realizar reevaluaciones
+            y consultar el historial de cada colaborador.
+        </p>
+        <div class="d-flex gap-2 mt-3">
+            <a class="btn btn-primary" asp-controller="Usuarios" asp-action="Index">Ver usuarios a mi cargo</a>
+            <a class="btn btn-outline-primary" asp-controller="Evaluaciones" asp-action="Index">Ver mis evaluaciones</a>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,45 @@
+@model EvaluacionDesempenoAB.ViewModels.UsuarioEvaluadoViewModel
+@{
+    ViewData["Title"] = "Registrar usuario evaluado";
+}
+
+<h1 class="h4 ab-heading mb-3">Registrar usuario evaluado</h1>
+
+<form asp-action="Create" method="post">
+    @Html.AntiForgeryToken()
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body row g-3">
+            <div class="col-md-6">
+                <label asp-for="NombreCompleto" class="form-label"></label>
+                <input asp-for="NombreCompleto" class="form-control" />
+                <span asp-validation-for="NombreCompleto" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Cedula" class="form-label"></label>
+                <input asp-for="Cedula" class="form-control" />
+                <span asp-validation-for="Cedula" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Cargo" class="form-label"></label>
+                <input asp-for="Cargo" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Gerencia" class="form-label"></label>
+                <input asp-for="Gerencia" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Regional" class="form-label"></label>
+                <input asp-for="Regional" class="form-control" />
+            </div>
+        </div>
+        <div class="card-footer bg-white border-0 d-flex justify-content-between">
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
