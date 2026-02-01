@@ -400,14 +400,71 @@ namespace EvaluacionDesempenoAB.Controllers
             if (evaluador == null)
                 return Forbid();
 
-            var eval = await _repo.GetEvaluacionByIdAsync(id);
+           var vm = await BuildReporteViewModelAsync(id);
+            if (vm == null)
+                return NotFound();
+
+            return View("Reporte", vm);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ImprimirResultados(Guid id)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+                return Forbid();
+
+            var vm = await BuildReporteViewModelAsync(id);
+            if (vm == null)
+                return NotFound();
+
+            return View("ReporteImpresion", vm);
+        }
+
+        // ================== GUARDAR PLAN DE ACCIÓN (DESDE REPORTE) ==================
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuardarPlanAccion(EvaluacionReporteViewModel model)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+                return Forbid();
+
+            var eval = await _repo.GetEvaluacionByIdAsync(model.EvaluacionId);
             if (eval == null)
                 return NotFound();
+
+            var detalles = await _repo.GetDetallesByEvaluacionAsync(model.EvaluacionId);
+
+            var planes = model.PlanAccion
+                .Where(p => !string.IsNullOrWhiteSpace(p.Descripcion) &&
+                            !string.IsNullOrWhiteSpace(p.Comportamiento))
+                .Select(p => new PlanAccion
+                {
+                    Id = p.Id ?? Guid.NewGuid(),
+                    EvaluacionId = model.EvaluacionId,
+                    DescripcionAccion = p.Descripcion!,
+                       Responsable = p.Comportamiento
+                }).ToList();
+ eval.FechaProximaEvaluacion = model.FechaProximaEvaluacion;
+
+            // Reutilizamos UpdateEvaluacionAsync para actualizar solo el plan:
+            await _repo.UpdateEvaluacionAsync(eval, detalles, planes);
+
+            return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId });
+        }
+
+        private async Task<EvaluacionReporteViewModel?> BuildReporteViewModelAsync(Guid id)
+        {
+            var eval = await _repo.GetEvaluacionByIdAsync(id);
+            if (eval == null)
+                return null;
 
             var usuario = await _repo.GetUsuarioByIdAsync(eval.UsuarioId);
             var nivel = await _repo.GetNivelByIdAsync(eval.NivelId);
             if (usuario == null || nivel == null)
-                return NotFound();
+                return null;
 
             var detalles = await _repo.GetDetallesByEvaluacionAsync(id);
             var planes = await _repo.GetPlanesByEvaluacionAsync(id);
@@ -488,16 +545,16 @@ namespace EvaluacionDesempenoAB.Controllers
             var planVm = planes.Select(p => new PlanAccionItemVm
             {
                 Id = p.Id,
-               Comportamiento = p.Responsable,
+                 Comportamiento = p.Responsable,
                 Descripcion = p.DescripcionAccion
             }).ToList();
 
-             if (!planVm.Any())
+            if (!planVm.Any())
             {
                 planVm.Add(new PlanAccionItemVm());
             }
 
-            var vm = new EvaluacionReporteViewModel
+            return new EvaluacionReporteViewModel
             {
                 EvaluacionId = eval.Id,
                 NombreUsuario = usuario.NombreCompleto,
@@ -514,42 +571,6 @@ namespace EvaluacionDesempenoAB.Controllers
                    ObservacionesGenerales = eval.Observaciones,
                 FechaProximaEvaluacion = eval.FechaProximaEvaluacion
             };
-
-            return View("Reporte", vm);
-        }
-
-        // ================== GUARDAR PLAN DE ACCIÓN (DESDE REPORTE) ==================
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> GuardarPlanAccion(EvaluacionReporteViewModel model)
-        {
-            var evaluador = await GetEvaluadorActualAsync();
-            if (evaluador == null)
-                return Forbid();
-
-            var eval = await _repo.GetEvaluacionByIdAsync(model.EvaluacionId);
-            if (eval == null)
-                return NotFound();
-
-            var detalles = await _repo.GetDetallesByEvaluacionAsync(model.EvaluacionId);
-
-            var planes = model.PlanAccion
-                .Where(p => !string.IsNullOrWhiteSpace(p.Descripcion) &&
-                            !string.IsNullOrWhiteSpace(p.Comportamiento))
-                .Select(p => new PlanAccion
-                {
-                    Id = p.Id ?? Guid.NewGuid(),
-                    EvaluacionId = model.EvaluacionId,
-                    DescripcionAccion = p.Descripcion!,
-                       Responsable = p.Comportamiento
-                }).ToList();
- eval.FechaProximaEvaluacion = model.FechaProximaEvaluacion;
-
-            // Reutilizamos UpdateEvaluacionAsync para actualizar solo el plan:
-            await _repo.UpdateEvaluacionAsync(eval, detalles, planes);
-
-            return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId });
         }
     }
 }

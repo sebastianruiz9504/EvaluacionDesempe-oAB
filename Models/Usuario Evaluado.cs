@@ -13,6 +13,9 @@ namespace EvaluacionDesempenoAB.Models
         public string? Gerencia { get; set; }
         public string? Regional { get; set; }
         public DateTime? FechaIngreso { get; set; }
+         public DateTime? FechaInicioContrato { get; set; }
+        public DateTime? FechaFinalizacionContrato { get; set; }
+        public DateTime? FechaFinalizacionPeriodoPrueba { get; set; }
 
         // Correo electrónico con el que se autentica el usuario/evaluador
         public string? CorreoElectronico { get; set; }

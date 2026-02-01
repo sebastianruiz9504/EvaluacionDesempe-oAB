@@ -1,0 +1,213 @@
+@using EvaluacionDesempenoAB.ViewModels
+@model EvaluacionReporteViewModel
+
+@{
+    Layout = null;
+    var planAccion = Model.PlanAccion
+        .Where(p => !string.IsNullOrWhiteSpace(p.Comportamiento) || !string.IsNullOrWhiteSpace(p.Descripcion))
+        .ToList();
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reporte de evaluación</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+        body {
+            background: #f8f9fa;
+        }
+
+        .reporte-pdf {
+            background: #ffffff;
+            padding: 24px;
+        }
+
+        .firma-linea {
+            border-top: 1px solid #212529;
+            margin-top: 48px;
+        }
+
+        .firma-label {
+            margin-top: 8px;
+        }
+
+        .tabla-compacta th,
+        .tabla-compacta td {
+            padding: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+<div class="container my-4">
+    <div id="reporte-imprimible" class="reporte-pdf shadow-sm">
+        <h2 class="mb-3">Reporte de evaluación de desempeño</h2>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">@Model.NombreUsuario (@Model.CedulaUsuario)</h5>
+                <p class="card-text mb-1"><strong>Cargo:</strong> @Model.Cargo</p>
+                <p class="card-text mb-1"><strong>Gerencia:</strong> @Model.Gerencia</p>
+                <p class="card-text mb-1"><strong>Nivel de evaluación:</strong> @Model.NombreNivel</p>
+                <p class="card-text mb-1"><strong>Tipo de evaluación:</strong> @Model.TipoEvaluacion</p>
+                <p class="card-text mb-1"><strong>Fecha de evaluación:</strong> @Model.FechaEvaluacion.ToShortDateString()</p>
+                <p class="card-text">
+                    <strong>Promedio general:</strong>
+                    @if (Model.PromedioGeneral.HasValue)
+                    {
+                        @Model.PromedioGeneral.Value<span>%</span>
+                    }
+                    else
+                    {
+                        <span>No calculado</span>
+                    }
+                </p>
+            </div>
+        </div>
+
+        <h4 class="mt-4">Detalle por competencia</h4>
+
+        @foreach (var comp in Model.Competencias)
+        {
+            <div class="card mt-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><strong>@comp.Nombre</strong></span>
+                    <span>Promedio: @comp.Promedio %</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0 tabla-compacta">
+                        <thead>
+                            <tr>
+                                <th>Comportamiento</th>
+                                <th style="width: 100px;">Puntaje</th>
+                                <th>Comentario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var c in comp.Comportamientos)
+                        {
+                            <tr class="@(c.Puntaje.HasValue && c.Puntaje.Value < 76 ? "table-warning" : "")">
+                                <td>@c.Descripcion</td>
+                                <td>
+                                    @if (c.Puntaje.HasValue)
+                                    {
+                                        @c.Puntaje.Value<span>%</span>
+                                    }
+                                </td>
+                                <td>@c.Comentario</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <h4 class="mt-4">Oportunidades de mejora</h4>
+
+        @if (!Model.OportunidadesMejora.Any())
+        {
+            <div class="alert alert-success mt-2">
+                No se identificaron comportamientos con puntajes por debajo del 76%.
+            </div>
+        }
+        else
+        {
+            <table class="table table-bordered mt-2 tabla-compacta">
+                <thead class="table-light">
+                    <tr>
+                        <th>Competencia</th>
+                        <th>Comportamiento</th>
+                        <th style="width: 120px;">Puntaje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var o in Model.OportunidadesMejora)
+                {
+                    <tr>
+                        <td>@o.Competencia</td>
+                        <td>@o.Comportamiento</td>
+                        <td>@o.Puntaje %</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.ObservacionesGenerales))
+        {
+            <h4 class="mt-4">Observaciones generales</h4>
+            <div class="card mt-2">
+                <div class="card-body">
+                    @Model.ObservacionesGenerales
+                </div>
+            </div>
+        }
+
+        <h4 class="mt-4">Plan de acción</h4>
+        <p>Define el plan de acción a partir de los resultados de la evaluación y las oportunidades de mejora.</p>
+
+        @if (!planAccion.Any())
+        {
+            <div class="alert alert-info">No hay plan de acción registrado.</div>
+        }
+        else
+        {
+            <table class="table table-striped tabla-compacta">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 50%;">Oportunidad de mejora</th>
+                        <th style="width: 50%;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var plan in planAccion)
+                {
+                    <tr>
+                        <td>@plan.Comportamiento</td>
+                        <td>@plan.Descripcion</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+
+        <h4 class="mt-5">Firmas</h4>
+        <div class="row mt-4">
+            <div class="col-6 text-center">
+                <div class="firma-linea"></div>
+                <div class="firma-label">Firma del evaluador</div>
+            </div>
+            <div class="col-6 text-center">
+                <div class="firma-linea"></div>
+                <div class="firma-label">Firma del usuario</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+        integrity="sha512-YcsIPGdhPK4P0H8JipdAEGZs4B/UXK5wLkMl1bDqLqngt/5qw+5mFZf2W8yI4KpGpkYp4a9p3KX8bfxiTltj/Q=="
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
+<script>
+    window.addEventListener("load", () => {
+        const reporte = document.getElementById("reporte-imprimible");
+        if (!reporte || typeof html2pdf === "undefined") {
+            return;
+        }
+
+        const opciones = {
+            margin: 0.3,
+            filename: "reporte-evaluacion-@(Model.CedulaUsuario).pdf",
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: "in", format: "letter", orientation: "portrait" }
+        };
+
+        html2pdf().set(opciones).from(reporte).save();
+    });
+</script>
+</body>
+</html>

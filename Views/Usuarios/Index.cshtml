@@ -27,6 +27,9 @@ else
                 <th>Cargo</th>
                 <th>Gerencia</th>
                 <th>Correo</th>
+                 <th>Inicio de contrato</th>
+                <th>Finalización contrato</th>
+                <th>Finalización periodo de prueba</th>
                 <th style="width: 220px;">Acciones</th>
             </tr>
         </thead>
@@ -39,6 +42,9 @@ else
                 <td>@u.Cargo</td>
                 <td>@u.Gerencia</td>
                 <td>@u.CorreoElectronico</td>
+                 <td>@(u.FechaInicioContrato?.ToShortDateString() ?? "-")</td>
+                <td>@(u.FechaFinalizacionContrato?.ToShortDateString() ?? "-")</td>
+                <td>@(u.FechaFinalizacionPeriodoPrueba?.ToShortDateString() ?? "-")</td>
                 <td>
                     <a asp-controller="Evaluaciones"
                        asp-action="Nueva"

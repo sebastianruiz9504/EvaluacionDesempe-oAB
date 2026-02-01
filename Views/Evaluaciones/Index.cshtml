@@ -25,7 +25,7 @@ else
                 <th>Nivel</th>
                 <th>Tipo</th>
                  <th>Resultado final</th>
-                <th style="width: 220px;">Acciones</th>
+                 <th style="width: 280px;">Acciones</th>
             </tr>
         </thead>
         <tbody>
@@ -65,7 +65,13 @@ else
                        class="btn btn-sm btn-outline-primary me-2">
                         Ver reporte
                     </a>
-
+ <a asp-action="ImprimirResultados"
+                       asp-route-id="@e.Id"
+                       class="btn btn-sm btn-outline-success me-2"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        Imprimir resultados
+                    </a>
                     @if (e.PuedeReevaluar)
                     {
                         <a asp-action="Reevaluar"
