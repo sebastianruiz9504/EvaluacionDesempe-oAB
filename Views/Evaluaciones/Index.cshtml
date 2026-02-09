@@ -15,9 +15,37 @@
 }
 else
 {
+    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+        <span class="text-muted">Selecciona una evaluación para habilitar las acciones.</span>
+        <a id="accionReporte"
+           class="btn btn-sm btn-outline-primary disabled"
+           href="#"
+           aria-disabled="true">
+            Ver reporte
+        </a>
+        <a id="accionImprimir"
+           class="btn btn-sm btn-outline-success disabled"
+           href="#"
+           aria-disabled="true">
+            Imprimir resultados
+        </a>
+        <a id="accionReevaluar"
+           class="btn btn-sm btn-warning disabled"
+           href="#"
+           aria-disabled="true">
+            Reevaluar
+        </a>
+        <a id="accionCarpeta"
+           class="btn btn-sm btn-outline-secondary disabled"
+           href="#"
+           aria-disabled="true">
+            Carpeta usuario
+        </a>
+    </div>
     <table class="table table-striped table-bordered mt-3">
         <thead class="table-light">
             <tr>
+                <th style="width: 60px;">Seleccionar</th>
                 <th>Fecha evaluación</th>
                 <th>Próxima evaluación</th>
                 <th>Nombre</th>
@@ -25,13 +53,20 @@ else
                 <th>Nivel</th>
                 <th>Tipo</th>
                  <th>Resultado final</th>
-                 <th style="width: 280px;">Acciones</th>
             </tr>
         </thead>
         <tbody>
         @foreach (var e in Model.OrderByDescending(x => x.FechaEvaluacion))
         {
-            <tr>
+            <tr data-evaluacion-id="@e.Id"
+                data-usuario-id="@e.UsuarioId"
+                data-puede-reevaluar="@e.PuedeReevaluar.ToString().ToLower()">
+                <td class="text-center">
+                    <input type="radio"
+                           name="evaluacionSeleccionada"
+                           class="form-check-input"
+                           aria-label="Seleccionar evaluación de @e.NombreUsuario" />
+                </td>
                 <td>@e.FechaEvaluacion.ToShortDateString()</td>
                 <td>
                     @if (e.ProximaEvaluacion.HasValue)
@@ -59,35 +94,76 @@ else
                         <span>-</span>
                     }
                 </td>
-                <td>
-                    <a asp-action="Reporte"
-                       asp-route-id="@e.Id"
-                       class="btn btn-sm btn-outline-primary me-2">
-                        Ver reporte
-                    </a>
- <a asp-action="ImprimirResultados"
-                       asp-route-id="@e.Id"
-                       class="btn btn-sm btn-outline-success me-2">
-                        Imprimir resultados
-                    </a>
-                    @if (e.PuedeReevaluar)
-                    {
-                        <a asp-action="Reevaluar"
-                           asp-route-id="@e.Id"
-                           class="btn btn-sm btn-warning me-2">
-                            Reevaluar
-                        </a>
-                    }
-
-                    <a asp-controller="Usuarios"
-                       asp-action="Detalle"
-                       asp-route-id="@e.UsuarioId"
-                       class="btn btn-sm btn-outline-secondary">
-                        Carpeta usuario
-                    </a>
-                </td>
             </tr>
         }
         </tbody>
     </table>
+}
+
+@section Scripts
+{
+    <script>
+        (() => {
+            const tabla = document.querySelector("table");
+            const accionReporte = document.getElementById("accionReporte");
+            const accionImprimir = document.getElementById("accionImprimir");
+            const accionReevaluar = document.getElementById("accionReevaluar");
+            const accionCarpeta = document.getElementById("accionCarpeta");
+            const baseReporte = "@@Url.Action(\"Reporte\", \"Evaluaciones\")";
+            const baseImprimir = "@@Url.Action(\"ImprimirResultados\", \"Evaluaciones\")";
+            const baseReevaluar = "@@Url.Action(\"Reevaluar\", \"Evaluaciones\")";
+            const baseCarpeta = "@@Url.Action(\"Detalle\", \"Usuarios\")";
+
+            if (!tabla) {
+                return;
+            }
+
+            const setDisabled = (element, disabled) => {
+                if (!element) {
+                    return;
+                }
+                element.classList.toggle("disabled", disabled);
+                element.setAttribute("aria-disabled", disabled ? "true" : "false");
+                if (disabled) {
+                    element.setAttribute("href", "#");
+                }
+            };
+
+            const updateLinks = (row) => {
+                if (!row) {
+                    setDisabled(accionReporte, true);
+                    setDisabled(accionImprimir, true);
+                    setDisabled(accionReevaluar, true);
+                    setDisabled(accionCarpeta, true);
+                    return;
+                }
+
+                const evaluacionId = row.dataset.evaluacionId;
+                const usuarioId = row.dataset.usuarioId;
+                const puedeReevaluar = row.dataset.puedeReevaluar === "true";
+
+                accionReporte.href = `${baseReporte}?id=${evaluacionId}`;
+                accionImprimir.href = `${baseImprimir}?id=${evaluacionId}`;
+                accionCarpeta.href = `${baseCarpeta}?id=${usuarioId}`;
+
+                setDisabled(accionReporte, false);
+                setDisabled(accionImprimir, false);
+                setDisabled(accionCarpeta, false);
+                setDisabled(accionReevaluar, !puedeReevaluar);
+
+                if (puedeReevaluar) {
+                    accionReevaluar.href = `${baseReevaluar}?id=${evaluacionId}`;
+                }
+            };
+
+            tabla.addEventListener("change", (event) => {
+                const input = event.target;
+                if (!(input instanceof HTMLInputElement) || input.type !== "radio") {
+                    return;
+                }
+                const row = input.closest("tr");
+                updateLinks(row);
+            });
+        })();
+    </script>
 }
