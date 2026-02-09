@@ -162,16 +162,18 @@ namespace EvaluacionDesempenoAB.Controllers
                 return StatusCode(500, "No se encontró la URL del flujo de Power Automate.");
             }
 
+            string Safe(string? value) => value ?? string.Empty;
+
             var payload = new
             {
                 usuarioId = usuario.Id,
-                usuarioNombre = usuario.NombreCompleto,
-                usuarioCedula = usuario.Cedula,
-                usuarioCorreo = usuario.CorreoElectronico,
-                evaluadorNombre = evaluador.NombreCompleto,
-                evaluadorCorreo = evaluador.CorreoElectronico ?? GetUserEmail(),
-                fechaFinalizacionContrato = usuario.FechaFinalizacionContrato?.ToString("yyyy-MM-dd"),
-                fechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba?.ToString("yyyy-MM-dd")
+                usuarioNombre = Safe(usuario.NombreCompleto),
+                usuarioCedula = Safe(usuario.Cedula),
+                usuarioCorreo = Safe(usuario.CorreoElectronico),
+                evaluadorNombre = Safe(evaluador.NombreCompleto),
+                evaluadorCorreo = Safe(evaluador.CorreoElectronico ?? GetUserEmail()),
+                fechaFinalizacionContrato = usuario.FechaFinalizacionContrato?.ToString("yyyy-MM-dd") ?? string.Empty,
+                fechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba?.ToString("yyyy-MM-dd") ?? string.Empty
             };
 
             var client = _httpClientFactory.CreateClient();
