@@ -9,6 +9,7 @@ using EvaluacionDesempenoAB.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace EvaluacionDesempenoAB.Controllers
 {
@@ -18,15 +19,18 @@ namespace EvaluacionDesempenoAB.Controllers
         private readonly IEvaluacionRepository _repo;
         private readonly IConfiguration _configuration;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<UsuariosController> _logger;
 
         public UsuariosController(
             IEvaluacionRepository repo,
             IConfiguration configuration,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            ILogger<UsuariosController> logger)
         {
             _repo = repo;
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
         }
 
         // ================== HELPERS ==================
@@ -172,11 +176,23 @@ namespace EvaluacionDesempenoAB.Controllers
 
             var client = _httpClientFactory.CreateClient();
             var response = await client.PostAsJsonAsync(flowUrl, payload);
+            var responseContent = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                return StatusCode((int)response.StatusCode, "No se pudo enviar la solicitud.");
+                _logger.LogWarning(
+                    "Power Automate respondió con error. Status: {StatusCode}. Body: {ResponseBody}",
+                    (int)response.StatusCode,
+                    responseContent);
+                return StatusCode((int)response.StatusCode,
+                    string.IsNullOrWhiteSpace(responseContent)
+                        ? "No se pudo enviar la solicitud."
+                        : responseContent);
             }
 
+            _logger.LogInformation(
+                "Solicitud de activación enviada a Power Automate. Status: {StatusCode}. Body: {ResponseBody}",
+                (int)response.StatusCode,
+                responseContent);
             return Ok(new { message = "Solicitud enviada." });
         }
     }
