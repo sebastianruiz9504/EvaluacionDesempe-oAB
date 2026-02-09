@@ -42,7 +42,7 @@ namespace EvaluacionDesempenoAB.Controllers
         // ================== ACCIONES ==================
 
         // Lista de usuarios asignados al evaluador actual
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? cedula)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
@@ -53,6 +53,14 @@ namespace EvaluacionDesempenoAB.Controllers
 
             // Filtramos por el NOMBRE del evaluador, tal como está en crfb7_evaluadorid
             var usuarios = await _repo.GetUsuariosByEvaluadorAsync(evaluador.NombreCompleto);
+            if (!string.IsNullOrWhiteSpace(cedula))
+            {
+                usuarios = usuarios
+                    .Where(usuario => usuario.Cedula?.Contains(cedula, StringComparison.OrdinalIgnoreCase) == true)
+                    .ToList();
+            }
+
+            ViewData["CedulaFiltro"] = cedula;
 
             return View(usuarios);
         }
