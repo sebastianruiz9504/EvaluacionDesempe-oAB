@@ -48,12 +48,16 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <style>
         body {
-            background: #f8f9fa;
+            background: #ffffff;
+            color: #1f1f1f;
+            font-family: "Raleway", "Poppins", "Segoe UI", sans-serif;
+            font-size: 12px;
         }
 
         .reporte-pdf {
             background: #ffffff;
-            padding: 24px;
+            padding: 16px 18px 24px;
+            border: 1px solid #444;
         }
 
         .firma-linea {
@@ -67,25 +71,135 @@
 
         .tabla-compacta th,
         .tabla-compacta td {
-            padding: 0.5rem;
+            padding: 4px 6px;
+        }
+
+        .tabla-compacta th {
+            background: #e6e6e6;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.2px;
+        }
+
+        .sheet-title {
+            text-transform: uppercase;
+            font-weight: 700;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .sheet-header td,
+        .sheet-header th {
+            border: 1px solid #444;
+            padding: 6px;
+            vertical-align: middle;
+        }
+
+        .sheet-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .sheet-table td,
+        .sheet-table th {
+            border: 1px solid #444;
+        }
+
+        .section-bar {
+            background: #f08b3c;
+            color: #000;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 11px;
+            padding: 4px 8px;
+            border: 1px solid #444;
+        }
+
+        .section-subtitle {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        .rating-cell {
+            text-align: center;
+            font-weight: 700;
+            font-size: 11px;
+        }
+
+        .info-label {
+            width: 32%;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 10px;
+            background: #f4f4f4;
+        }
+
+        .info-value {
+            font-size: 11px;
+        }
+
+        .observaciones-box {
+            min-height: 80px;
+            padding: 8px;
+        }
+
+        .plan-table td {
+            vertical-align: top;
+        }
+
+        .firmas-table td {
+            height: 80px;
+            text-align: center;
+            vertical-align: bottom;
         }
     </style>
 </head>
 <body>
 <div class="container my-4">
     <div id="reporte-imprimible" class="reporte-pdf shadow-sm">
-        <h2 class="mb-3">Reporte de evaluación de desempeño</h2>
+        <table class="sheet-table sheet-header mb-3">
+            <tr>
+                <td style="width: 15%; text-align: center;">
+                    <img src="~/img/LogoAB.png" alt="Logo AB" style="height: 36px;" />
+                </td>
+                <td style="width: 55%;">
+                    <div class="sheet-title">Formato evaluación de desempeño</div>
+                    <div class="sheet-title">@Model.NombreNivel</div>
+                </td>
+                <td style="width: 30%;">
+                    <div><strong>Ficha:</strong> @Model.TipoEvaluacion</div>
+                    <div><strong>Fecha:</strong> @Model.FechaEvaluacion.ToShortDateString()</div>
+                </td>
+            </tr>
+        </table>
 
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">@Model.NombreUsuario (@Model.CedulaUsuario)</h5>
-                <p class="card-text mb-1"><strong>Cargo:</strong> @Model.Cargo</p>
-                <p class="card-text mb-1"><strong>Gerencia:</strong> @Model.Gerencia</p>
-                <p class="card-text mb-1"><strong>Nivel de evaluación:</strong> @Model.NombreNivel</p>
-                <p class="card-text mb-1"><strong>Tipo de evaluación:</strong> @Model.TipoEvaluacion</p>
-                <p class="card-text mb-1"><strong>Fecha de evaluación:</strong> @Model.FechaEvaluacion.ToShortDateString()</p>
-                <p class="card-text">
-                    <strong>Promedio general:</strong>
+        <div class="section-bar">I. Identificación del colaborador</div>
+        <table class="sheet-table tabla-compacta mb-3">
+            <tr>
+                <td class="info-label">Nombre completo</td>
+                <td class="info-value">@Model.NombreUsuario</td>
+            </tr>
+            <tr>
+                <td class="info-label">Cédula</td>
+                <td class="info-value">@Model.CedulaUsuario</td>
+            </tr>
+            <tr>
+                <td class="info-label">Cargo</td>
+                <td class="info-value">@Model.Cargo</td>
+            </tr>
+            <tr>
+                <td class="info-label">Gerencia</td>
+                <td class="info-value">@Model.Gerencia</td>
+            </tr>
+            <tr>
+                <td class="info-label">Nivel de evaluación</td>
+                <td class="info-value">@Model.NombreNivel</td>
+            </tr>
+            <tr>
+                <td class="info-label">Promedio general</td>
+                <td class="info-value">
                     @if (Model.PromedioGeneral.HasValue)
                     {
                         @Model.PromedioGeneral.Value<span>%</span>
@@ -94,65 +208,64 @@
                     {
                         <span>No calculado</span>
                     }
-                </p>
-            </div>
-        </div>
+                </td>
+            </tr>
+        </table>
 
-        <h4 class="mt-4">Detalle por competencia</h4>
+        <div class="section-bar">II. Detalle por competencia</div>
 
         @foreach (var comp in Model.Competencias)
         {
-            <div class="card mt-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><strong>@comp.Nombre</strong></span>
-                    <span>Promedio: @comp.Promedio %</span>
-                </div>
-                <div class="card-body p-0">
-                    <table class="table table-sm mb-0 tabla-compacta">
-                        <thead>
-                            <tr>
-                                <th>Comportamiento</th>
-                                <th style="width: 100px;">Puntaje</th>
-                               <th style="width: 140px;">Nivel</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @foreach (var c in comp.Comportamientos)
-                        {
-                            <tr class="@(c.Puntaje.HasValue && c.Puntaje.Value < 76 ? "table-warning" : "")">
-                                <td>@c.Descripcion</td>
-                                <td>
-                                    @if (c.Puntaje.HasValue)
-                                    {
-                                        @c.Puntaje.Value<span>%</span>
-                                    }
-                                </td>
-                                 <td>
-                                    @{
-                                        var nivelInfo = ObtenerNivelInfo(c.Puntaje);
-                                    }
-                                    <span class="badge @nivelInfo.Clase">@nivelInfo.Texto</span>
-                                </td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <div class="section-subtitle mt-3">@comp.Nombre</div>
+            <table class="sheet-table tabla-compacta mb-2">
+                <thead>
+                    <tr>
+                        <th style="width: 42%;">Comportamiento</th>
+                        <th class="rating-cell" style="width: 9%;">Nunca</th>
+                        <th class="rating-cell" style="width: 9%;">Casi nunca</th>
+                        <th class="rating-cell" style="width: 9%;">A veces</th>
+                        <th class="rating-cell" style="width: 9%;">Casi siempre</th>
+                        <th class="rating-cell" style="width: 9%;">Siempre</th>
+                        <th class="rating-cell" style="width: 13%;">Puntaje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var c in comp.Comportamientos)
+                {
+                    var nivelInfo = ObtenerNivelInfo(c.Puntaje);
+                    <tr>
+                        <td>@c.Descripcion</td>
+                        <td class="rating-cell">@(nivelInfo.Texto == "Nunca" ? "X" : "")</td>
+                        <td class="rating-cell">@(nivelInfo.Texto == "Casi nunca" ? "X" : "")</td>
+                        <td class="rating-cell">@(nivelInfo.Texto == "A veces" ? "X" : "")</td>
+                        <td class="rating-cell">@(nivelInfo.Texto == "Casi siempre" ? "X" : "")</td>
+                        <td class="rating-cell">@(nivelInfo.Texto == "Siempre" ? "X" : "")</td>
+                        <td class="rating-cell">
+                            @if (c.Puntaje.HasValue)
+                            {
+                                @c.Puntaje.Value<span>%</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                <tr>
+                    <td colspan="6" class="info-label">Promedio de competencia</td>
+                    <td class="rating-cell"><strong>@comp.Promedio %</strong></td>
+                </tr>
+                </tbody>
+            </table>
         }
 
-        <h4 class="mt-4">Oportunidades de mejora</h4>
+        <div class="section-bar mt-3">III. Oportunidades de mejora</div>
 
         @if (!Model.OportunidadesMejora.Any())
         {
-            <div class="alert alert-success mt-2">
-                No se identificaron comportamientos con puntajes por debajo del 76%.
-            </div>
+            <div class="mt-2">No se identificaron comportamientos con puntajes por debajo del 76%.</div>
         }
         else
         {
-            <table class="table table-bordered mt-2 tabla-compacta">
-                <thead class="table-light">
+            <table class="sheet-table tabla-compacta mt-2">
+                <thead>
                     <tr>
                         <th>Competencia</th>
                         <th>Comportamiento</th>
@@ -165,7 +278,7 @@
                     <tr>
                         <td>@o.Competencia</td>
                         <td>@o.Comportamiento</td>
-                        <td>@o.Puntaje %</td>
+                        <td class="rating-cell">@o.Puntaje %</td>
                     </tr>
                 }
                 </tbody>
@@ -174,25 +287,25 @@
 
         @if (!string.IsNullOrWhiteSpace(Model.ObservacionesGenerales))
         {
-            <h4 class="mt-4">Observaciones generales</h4>
-            <div class="card mt-2">
-                <div class="card-body">
-                    @Model.ObservacionesGenerales
-                </div>
-            </div>
+            <div class="section-bar mt-3">IV. Observaciones generales</div>
+            <table class="sheet-table tabla-compacta mt-2">
+                <tr>
+                    <td class="observaciones-box">@Model.ObservacionesGenerales</td>
+                </tr>
+            </table>
         }
 
-        <h4 class="mt-4">Plan de acción</h4>
-        <p>Define el plan de acción a partir de los resultados de la evaluación y las oportunidades de mejora.</p>
+        <div class="section-bar mt-3">V. Plan de acción</div>
+        <div class="mt-2">Define el plan de acción a partir de los resultados de la evaluación y las oportunidades de mejora.</div>
 
         @if (!planAccion.Any())
         {
-            <div class="alert alert-info">No hay plan de acción registrado.</div>
+            <div class="mt-2">No hay plan de acción registrado.</div>
         }
         else
         {
-            <table class="table table-striped tabla-compacta">
-                <thead class="table-light">
+            <table class="sheet-table tabla-compacta plan-table mt-2">
+                <thead>
                     <tr>
                         <th style="width: 50%;">Oportunidad de mejora</th>
                         <th style="width: 50%;">Acciones</th>
@@ -210,17 +323,19 @@
             </table>
         }
 
-        <h4 class="mt-5">Firmas</h4>
-        <div class="row mt-4">
-            <div class="col-6 text-center">
-                <div class="firma-linea"></div>
-                <div class="firma-label">Firma del evaluador</div>
-            </div>
-            <div class="col-6 text-center">
-                <div class="firma-linea"></div>
-                <div class="firma-label">Firma del usuario</div>
-            </div>
-        </div>
+        <div class="section-bar mt-4">VI. Firmas</div>
+        <table class="sheet-table firmas-table mt-2">
+            <tr>
+                <td style="width: 50%;">
+                    <div class="firma-linea"></div>
+                    <div class="firma-label">Firma del evaluador</div>
+                </td>
+                <td style="width: 50%;">
+                    <div class="firma-linea"></div>
+                    <div class="firma-label">Firma del usuario</div>
+                </td>
+            </tr>
+        </table>
     </div>
 </div>
 
