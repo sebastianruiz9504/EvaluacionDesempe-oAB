@@ -35,17 +35,10 @@
 
     <div class="col-12 col-lg-4">
         <form asp-controller="Evaluaciones" asp-action="Nueva" method="get" class="d-flex flex-wrap gap-2 align-items-end">
-            <div class="flex-grow-1">
-                <label class="form-label mb-1" for="usuarioEvaluacion">Usuario para evaluación</label>
-                <select id="usuarioEvaluacion" name="usuarioId" class="form-select" required @(hayUsuarios ? "" : "disabled")>
-                    <option value="">Selecciona un usuario</option>
-                    @foreach (var u in Model)
-                    {
-                        <option value="@u.Id">@u.NombreCompleto</option>
-                    }
-                </select>
-            </div>
-            <button type="submit" class="btn btn-primary" @(hayUsuarios ? "" : "disabled")>Iniciar evaluación</button>
+            <input type="hidden" id="usuarioEvaluacionId" name="usuarioId" />
+            <button type="submit" class="btn btn-primary" id="iniciarEvaluacionBtn" @(hayUsuarios ? "" : "disabled")>
+                Iniciar evaluación
+            </button>
         </form>
     </div>
 
@@ -54,6 +47,7 @@
                 class="btn btn-success w-100"
                 data-bs-toggle="modal"
                 data-bs-target="#editarNovedadesModal"
+                id="editarNovedadesBtn"
                 @(hayUsuarios ? "" : "disabled")>
             Editar novedades
         </button>
@@ -68,44 +62,55 @@
 }
 else
 {
-    <table class="table table-striped table-bordered mt-3">
-        <thead class="table-light">
-            <tr>
-                <th>Nombre</th>
-                <th>Cédula</th>
-                <th>Cargo</th>
-                <th>Gerencia</th>
-                <th>Correo</th>
-                <th>Inicio de contrato</th>
-                <th>Finalización contrato</th>
-                <th>Finalización periodo de prueba</th>
-                <th>Novedades</th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var u in Model)
-        {
-            <tr>
-                <td>
-                    <a asp-controller="Usuarios"
-                       asp-action="Detalle"
-                       asp-route-id="@u.Id"
-                       class="link-primary text-decoration-none">
-                        @u.NombreCompleto
-                    </a>
-                </td>
-                <td>@u.Cedula</td>
-                <td>@u.Cargo</td>
-                <td>@u.Gerencia</td>
-                <td>@u.CorreoElectronico</td>
-                <td>@(u.FechaInicioContrato?.ToShortDateString() ?? "-")</td>
-                <td>@(u.FechaFinalizacionContrato?.ToShortDateString() ?? "-")</td>
-                <td>@(u.FechaFinalizacionPeriodoPrueba?.ToShortDateString() ?? "-")</td>
-                <td class="text-wrap">@u.Novedades</td>
-            </tr>
-        }
-        </tbody>
-    </table>
+    <div class="table-responsive mt-3" style="max-height: 60vh; overflow-y: auto;">
+        <table class="table table-striped table-bordered mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Seleccionar</th>
+                    <th>Nombre</th>
+                    <th>Cédula</th>
+                    <th>Cargo</th>
+                    <th>Gerencia</th>
+                    <th>Correo</th>
+                    <th>Inicio de contrato</th>
+                    <th>Finalización contrato</th>
+                    <th>Finalización periodo de prueba</th>
+                    <th>Novedades</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var u in Model)
+            {
+                <tr>
+                    <td class="text-center">
+                        <input type="checkbox"
+                               class="form-check-input usuario-select"
+                               aria-label="Seleccionar usuario"
+                               data-id="@u.Id"
+                               data-nombre="@u.NombreCompleto"
+                               data-novedades="@u.Novedades" />
+                    </td>
+                    <td>
+                        <a asp-controller="Usuarios"
+                           asp-action="Detalle"
+                           asp-route-id="@u.Id"
+                           class="link-primary text-decoration-none">
+                            @u.NombreCompleto
+                        </a>
+                    </td>
+                    <td>@u.Cedula</td>
+                    <td>@u.Cargo</td>
+                    <td>@u.Gerencia</td>
+                    <td>@u.CorreoElectronico</td>
+                    <td>@(u.FechaInicioContrato?.ToShortDateString() ?? "-")</td>
+                    <td>@(u.FechaFinalizacionContrato?.ToShortDateString() ?? "-")</td>
+                    <td>@(u.FechaFinalizacionPeriodoPrueba?.ToShortDateString() ?? "-")</td>
+                    <td class="text-wrap">@u.Novedades</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
 }
 
 <div class="modal fade" id="editarNovedadesModal" tabindex="-1" aria-labelledby="editarNovedadesLabel" aria-hidden="true">
@@ -119,14 +124,8 @@ else
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="novedadesUsuarioSelect" class="form-label">Usuario</label>
-                        <select id="novedadesUsuarioSelect" class="form-select" required>
-                            <option value="">Selecciona un usuario</option>
-                            @foreach (var u in Model)
-                            {
-                                <option value="@u.Id" data-novedades="@u.Novedades">@u.NombreCompleto</option>
-                            }
-                        </select>
+                        <label class="form-label" for="novedadesUsuarioNombre">Usuario</label>
+                        <input type="text" id="novedadesUsuarioNombre" class="form-control" readonly />
                         <input type="hidden" name="id" id="novedadesUsuarioId" />
                     </div>
                     <div class="mb-3">
@@ -146,34 +145,59 @@ else
 @section Scripts {
     <script>
         (() => {
-            const select = document.getElementById('novedadesUsuarioSelect');
+            const checkboxes = document.querySelectorAll('.usuario-select');
+            const iniciarBtn = document.getElementById('iniciarEvaluacionBtn');
+            const editarBtn = document.getElementById('editarNovedadesBtn');
+            const evalInputId = document.getElementById('usuarioEvaluacionId');
             const inputId = document.getElementById('novedadesUsuarioId');
+            const inputNombre = document.getElementById('novedadesUsuarioNombre');
             const textarea = document.getElementById('novedadesTexto');
 
-            const updateNovedades = () => {
-                if (!select || !inputId || !textarea) {
-                    return;
+            const setButtonsState = (enabled) => {
+                if (iniciarBtn) {
+                    iniciarBtn.disabled = !enabled;
                 }
-
-                const option = select.options[select.selectedIndex];
-                if (!option || !option.value) {
-                    inputId.value = '';
-                    textarea.value = '';
-                    return;
+                if (editarBtn) {
+                    editarBtn.disabled = !enabled;
                 }
-
-                inputId.value = option.value;
-                textarea.value = option.dataset.novedades || '';
             };
 
-            if (select) {
-                select.addEventListener('change', updateNovedades);
-            }
+            const updateSelection = () => {
+                const selected = document.querySelector('.usuario-select:checked');
+                if (!evalInputId || !inputId || !textarea || !inputNombre) {
+                    return;
+                }
 
-            const modal = document.getElementById('editarNovedadesModal');
-            if (modal) {
-                modal.addEventListener('show.bs.modal', updateNovedades);
-            }
+                if (!selected) {
+                    evalInputId.value = '';
+                    inputId.value = '';
+                    inputNombre.value = '';
+                    textarea.value = '';
+                    setButtonsState(false);
+                    return;
+                }
+
+                evalInputId.value = selected.dataset.id || '';
+                inputId.value = selected.dataset.id || '';
+                inputNombre.value = selected.dataset.nombre || '';
+                textarea.value = selected.dataset.novedades || '';
+                setButtonsState(true);
+            };
+
+            checkboxes.forEach((checkbox) => {
+                checkbox.addEventListener('change', (event) => {
+                    if (event.target.checked) {
+                        checkboxes.forEach((other) => {
+                            if (other !== event.target) {
+                                other.checked = false;
+                            }
+                        });
+                    }
+                    updateSelection();
+                });
+            });
+
+            updateSelection();
         })();
     </script>
 }
