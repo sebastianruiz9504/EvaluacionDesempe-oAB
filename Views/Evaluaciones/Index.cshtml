@@ -15,7 +15,12 @@
 }
 else
 {
-    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+    <div class="d-flex flex-wrap gap-2 align-items-center mt-3"
+         data-evaluaciones-acciones
+         data-base-reporte="@Url.Action("Reporte", "Evaluaciones")"
+         data-base-imprimir="@Url.Action("ImprimirResultados", "Evaluaciones")"
+         data-base-reevaluar="@Url.Action("Reevaluar", "Evaluaciones")"
+         data-base-carpeta="@Url.Action("Detalle", "Usuarios")">
         <span class="text-muted">Selecciona una evaluación para habilitar las acciones.</span>
         <a id="accionReporte"
            class="btn btn-sm btn-outline-primary disabled"
@@ -105,16 +110,17 @@ else
     <script>
         (() => {
             const tabla = document.querySelector("table");
+            const acciones = document.querySelector("[data-evaluaciones-acciones]");
             const accionReporte = document.getElementById("accionReporte");
             const accionImprimir = document.getElementById("accionImprimir");
             const accionReevaluar = document.getElementById("accionReevaluar");
             const accionCarpeta = document.getElementById("accionCarpeta");
-            const baseReporte = "@@Url.Action(\"Reporte\", \"Evaluaciones\")";
-            const baseImprimir = "@@Url.Action(\"ImprimirResultados\", \"Evaluaciones\")";
-            const baseReevaluar = "@@Url.Action(\"Reevaluar\", \"Evaluaciones\")";
-            const baseCarpeta = "@@Url.Action(\"Detalle\", \"Usuarios\")";
+            const baseReporte = acciones?.dataset.baseReporte ?? "";
+            const baseImprimir = acciones?.dataset.baseImprimir ?? "";
+            const baseReevaluar = acciones?.dataset.baseReevaluar ?? "";
+            const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
 
-            if (!tabla) {
+            if (!tabla || !acciones) {
                 return;
             }
 
