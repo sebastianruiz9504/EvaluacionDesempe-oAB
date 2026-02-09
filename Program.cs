@@ -9,6 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 // MVC
 builder.Services.AddControllersWithViews();
 
+builder.Services.AddHttpClient();
+
 // HttpContextAccessor
 builder.Services.AddHttpContextAccessor();
 

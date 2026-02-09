@@ -39,6 +39,12 @@
             <button type="submit" class="btn btn-primary" id="iniciarEvaluacionBtn" @(hayUsuarios ? "" : "disabled")>
                 Iniciar evaluación
             </button>
+            <button type="button"
+                    class="btn btn-outline-primary d-none"
+                    id="solicitarActivacionBtn"
+                    data-url="@Url.Action("SolicitarActivacion", "Usuarios")">
+                Solicitar Activación de Evaluación
+            </button>
         </form>
     </div>
 </div>
@@ -78,7 +84,10 @@ else
                         <input type="checkbox"
                                class="form-check-input usuario-select"
                                aria-label="Seleccionar usuario"
-                               data-id="@u.Id" />
+                               data-id="@u.Id"
+                               data-fecha-finalizacion-contrato="@(u.FechaFinalizacionContrato?.ToString("yyyy-MM-dd") ?? "")"
+                               data-fecha-finalizacion-prueba="@(u.FechaFinalizacionPeriodoPrueba?.ToString("yyyy-MM-dd") ?? "")"
+                               data-fecha-activacion-evaluacion="@(u.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd") ?? "")" />
                     </td>
                     <td>
                         <a asp-controller="Usuarios"
@@ -102,17 +111,68 @@ else
     </div>
 }
 
+<form id="solicitudActivacionToken" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+
 @section Scripts {
     <script>
         (() => {
             const checkboxes = document.querySelectorAll('.usuario-select');
             const iniciarBtn = document.getElementById('iniciarEvaluacionBtn');
+            const solicitarBtn = document.getElementById('solicitarActivacionBtn');
             const evalInputId = document.getElementById('usuarioEvaluacionId');
 
-            const setButtonsState = (enabled) => {
+            const setButtonsState = (canStart, canRequest) => {
                 if (iniciarBtn) {
-                    iniciarBtn.disabled = !enabled;
+                    iniciarBtn.disabled = !canStart;
                 }
+
+                if (solicitarBtn) {
+                    if (canRequest) {
+                        solicitarBtn.classList.remove('d-none');
+                        solicitarBtn.disabled = false;
+                    } else {
+                        solicitarBtn.classList.add('d-none');
+                        solicitarBtn.disabled = true;
+                        solicitarBtn.textContent = 'Solicitar Activación de Evaluación';
+                    }
+                }
+            };
+
+            const parseDate = (value) => {
+                if (!value) {
+                    return null;
+                }
+
+                const date = new Date(`${value}T00:00:00`);
+                return Number.isNaN(date.getTime()) ? null : date;
+            };
+
+            const isWithinWindow = (targetDate, windowDays = 20) => {
+                if (!targetDate) {
+                    return false;
+                }
+
+                const start = new Date(targetDate);
+                start.setDate(start.getDate() - windowDays);
+                const end = new Date(targetDate);
+
+                const now = new Date();
+                return now >= start && now <= end;
+            };
+
+            const isWithinActivationWindow = (activationDate, windowDays = 20) => {
+                if (!activationDate) {
+                    return false;
+                }
+
+                const start = new Date(activationDate);
+                const end = new Date(activationDate);
+                end.setDate(end.getDate() + windowDays);
+
+                const now = new Date();
+                return now >= start && now <= end;
             };
 
             const updateSelection = () => {
@@ -123,12 +183,24 @@ else
 
                 if (!selected) {
                     evalInputId.value = '';
-                    setButtonsState(false);
+                    setButtonsState(false, false);
                     return;
                 }
 
                 evalInputId.value = selected.dataset.id || '';
-                setButtonsState(true);
+                if (solicitarBtn) {
+                    solicitarBtn.dataset.userId = selected.dataset.id || '';
+                }
+
+                const fechaContrato = parseDate(selected.dataset.fechaFinalizacionContrato);
+                const fechaPrueba = parseDate(selected.dataset.fechaFinalizacionPrueba);
+                const fechaActivacion = parseDate(selected.dataset.fechaActivacionEvaluacion);
+
+                const habilitadoPorFechas = isWithinWindow(fechaContrato) || isWithinWindow(fechaPrueba);
+                const habilitadoPorActivacion = isWithinActivationWindow(fechaActivacion);
+                const puedeIniciar = habilitadoPorFechas || habilitadoPorActivacion;
+
+                setButtonsState(puedeIniciar, !puedeIniciar);
             };
 
             checkboxes.forEach((checkbox) => {
@@ -143,6 +215,41 @@ else
                     updateSelection();
                 });
             });
+
+            if (solicitarBtn) {
+                solicitarBtn.addEventListener('click', async () => {
+                    const userId = solicitarBtn.dataset.userId;
+                    const url = solicitarBtn.dataset.url;
+                    const tokenInput = document.querySelector('#solicitudActivacionToken input[name="__RequestVerificationToken"]');
+
+                    if (!userId || !url || !tokenInput) {
+                        return;
+                    }
+
+                    solicitarBtn.disabled = true;
+                    solicitarBtn.textContent = 'Enviando solicitud...';
+
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'RequestVerificationToken': tokenInput.value
+                            },
+                            body: JSON.stringify({ usuarioId: userId })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Solicitud fallida');
+                        }
+
+                        solicitarBtn.textContent = 'Solicitud enviada';
+                    } catch (error) {
+                        solicitarBtn.disabled = false;
+                        solicitarBtn.textContent = 'Reintentar solicitud';
+                    }
+                });
+            }
 
             updateSelection();
         })();

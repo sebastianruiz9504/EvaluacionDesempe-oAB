@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using EvaluacionDesempenoAB.Models;
@@ -7,6 +8,7 @@ using EvaluacionDesempenoAB.Services;
 using EvaluacionDesempenoAB.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace EvaluacionDesempenoAB.Controllers
 {
@@ -14,10 +16,17 @@ namespace EvaluacionDesempenoAB.Controllers
     public class UsuariosController : Controller
     {
         private readonly IEvaluacionRepository _repo;
+        private readonly IConfiguration _configuration;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public UsuariosController(IEvaluacionRepository repo)
+        public UsuariosController(
+            IEvaluacionRepository repo,
+            IConfiguration configuration,
+            IHttpClientFactory httpClientFactory)
         {
             _repo = repo;
+            _configuration = configuration;
+            _httpClientFactory = httpClientFactory;
         }
 
         // ================== HELPERS ==================
@@ -115,6 +124,60 @@ namespace EvaluacionDesempenoAB.Controllers
             };
 
             return View(vm);
+        }
+
+        public class SolicitudActivacionRequest
+        {
+            public Guid UsuarioId { get; set; }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SolicitarActivacion([FromBody] SolicitudActivacionRequest request)
+        {
+            if (request == null || request.UsuarioId == Guid.Empty)
+            {
+                return BadRequest("Usuario inválido.");
+            }
+
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            var usuario = await _repo.GetUsuarioByIdAsync(request.UsuarioId);
+            if (usuario == null)
+            {
+                return NotFound();
+            }
+
+            var flowUrl = _configuration["PowerAutomate:SolicitudActivacionEvaluacionUrl"];
+            if (string.IsNullOrWhiteSpace(flowUrl))
+            {
+                return StatusCode(500, "No se encontró la URL del flujo de Power Automate.");
+            }
+
+            var payload = new
+            {
+                usuarioId = usuario.Id,
+                usuarioNombre = usuario.NombreCompleto,
+                usuarioCedula = usuario.Cedula,
+                usuarioCorreo = usuario.CorreoElectronico,
+                evaluadorNombre = evaluador.NombreCompleto,
+                evaluadorCorreo = evaluador.CorreoElectronico ?? GetUserEmail(),
+                fechaFinalizacionContrato = usuario.FechaFinalizacionContrato?.ToString("yyyy-MM-dd"),
+                fechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba?.ToString("yyyy-MM-dd")
+            };
+
+            var client = _httpClientFactory.CreateClient();
+            var response = await client.PostAsJsonAsync(flowUrl, payload);
+            if (!response.IsSuccessStatusCode)
+            {
+                return StatusCode((int)response.StatusCode, "No se pudo enviar la solicitud.");
+            }
+
+            return Ok(new { message = "Solicitud enviada." });
         }
     }
 }

@@ -43,9 +43,10 @@ namespace EvaluacionDesempenoAB.Services
                     Cedula = "123456789",
                     Cargo = "Operario",
                     Gerencia = "Operaciones",
- FechaInicioContrato = DateTime.Today.AddYears(-2),
+                    FechaInicioContrato = DateTime.Today.AddYears(-2),
                      FechaFinalizacionContrato = DateTime.Today.AddYears(1),
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-2).AddMonths(3),
+                    FechaActivacionEvaluacion = DateTime.Today.AddDays(-5),
                     CorreoElectronico = "juan.perez@contoso.com",
                     // está bajo el Evaluador Demo
                     EvaluadorNombre = evaluadorNombre,
@@ -63,6 +64,7 @@ namespace EvaluacionDesempenoAB.Services
                       
                     FechaFinalizacionContrato = DateTime.Today.AddYears(1),
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-1).AddMonths(2),
+                    FechaActivacionEvaluacion = null,
                     CorreoElectronico = "maria.lopez@contoso.com",
                     EvaluadorNombre = evaluadorNombre,
                     Novedades = "Cambio de cargo en trámite."
