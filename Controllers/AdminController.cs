@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using EvaluacionDesempenoAB.Models;
@@ -40,12 +41,20 @@ namespace EvaluacionDesempenoAB.Controllers
             return usuario?.EsSuperAdministrador == true;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? cedula)
         {
             if (!await EsSuperAdminAsync())
                 return Forbid();
 
             var usuarios = await _repo.GetUsuariosAsync();
+            if (!string.IsNullOrWhiteSpace(cedula))
+            {
+                usuarios = usuarios
+                    .Where(usuario => usuario.Cedula?.Contains(cedula, StringComparison.OrdinalIgnoreCase) == true)
+                    .ToList();
+            }
+
+            ViewData["CedulaFiltro"] = cedula;
             return View(usuarios);
         }
 

@@ -7,7 +7,60 @@
 
 <h2 class="mt-4">Modulo admin</h2>
 
-@if (!Model.Any())
+@{
+    var cedulaFiltro = ViewData["CedulaFiltro"] as string;
+    var hayUsuarios = Model.Any();
+}
+
+<div class="row g-3 mt-1 align-items-end">
+    <div class="col-12 col-lg-5">
+        <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+            <div class="flex-grow-1">
+                <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cédula</label>
+                <input id="cedulaFiltro"
+                       name="cedula"
+                       class="form-control"
+                       value="@cedulaFiltro"
+                       placeholder="Ingresa la cédula" />
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
+                @if (!string.IsNullOrWhiteSpace(cedulaFiltro))
+                {
+                    <a class="btn btn-outline-danger" asp-action="Index">Limpiar</a>
+                }
+            </div>
+        </form>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <form asp-controller="Evaluaciones" asp-action="Nueva" method="get" class="d-flex flex-wrap gap-2 align-items-end">
+            <div class="flex-grow-1">
+                <label class="form-label mb-1" for="usuarioEvaluacion">Usuario para evaluación</label>
+                <select id="usuarioEvaluacion" name="usuarioId" class="form-select" required @(hayUsuarios ? "" : "disabled")>
+                    <option value="">Selecciona un usuario</option>
+                    @foreach (var u in Model)
+                    {
+                        <option value="@u.Id">@u.NombreCompleto</option>
+                    }
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" @(hayUsuarios ? "" : "disabled")>Iniciar evaluación</button>
+        </form>
+    </div>
+
+    <div class="col-12 col-lg-3 d-flex justify-content-lg-end">
+        <button type="button"
+                class="btn btn-success w-100"
+                data-bs-toggle="modal"
+                data-bs-target="#editarNovedadesModal"
+                @(hayUsuarios ? "" : "disabled")>
+            Editar novedades
+        </button>
+    </div>
+</div>
+
+@if (!hayUsuarios)
 {
     <div class="alert alert-info mt-3">
         No se encontraron usuarios para mostrar.
@@ -27,14 +80,20 @@ else
                 <th>Finalización contrato</th>
                 <th>Finalización periodo de prueba</th>
                 <th>Novedades</th>
-                <th style="width: 260px;">Acciones</th>
             </tr>
         </thead>
         <tbody>
         @foreach (var u in Model)
         {
             <tr>
-                <td>@u.NombreCompleto</td>
+                <td>
+                    <a asp-controller="Usuarios"
+                       asp-action="Detalle"
+                       asp-route-id="@u.Id"
+                       class="link-primary text-decoration-none">
+                        @u.NombreCompleto
+                    </a>
+                </td>
                 <td>@u.Cedula</td>
                 <td>@u.Cargo</td>
                 <td>@u.Gerencia</td>
@@ -42,33 +101,79 @@ else
                 <td>@(u.FechaInicioContrato?.ToShortDateString() ?? "-")</td>
                 <td>@(u.FechaFinalizacionContrato?.ToShortDateString() ?? "-")</td>
                 <td>@(u.FechaFinalizacionPeriodoPrueba?.ToShortDateString() ?? "-")</td>
-                <td>
-                    <form asp-action="ActualizarNovedades" method="post" class="d-flex flex-column gap-2">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@u.Id" />
-                        <textarea class="form-control" name="novedades" rows="2">@u.Novedades</textarea>
-                        <button type="submit" class="btn btn-sm btn-success align-self-start">
-                            Guardar novedades
-                        </button>
-                    </form>
-                </td>
-                <td>
-                    <a asp-controller="Evaluaciones"
-                       asp-action="Nueva"
-                       asp-route-usuarioId="@u.Id"
-                       class="btn btn-sm btn-primary me-2">
-                        Iniciar evaluación
-                    </a>
-
-                    <a asp-controller="Usuarios"
-                       asp-action="Detalle"
-                       asp-route-id="@u.Id"
-                       class="btn btn-sm btn-outline-secondary">
-                        Ver carpeta
-                    </a>
-                </td>
+                <td class="text-wrap">@u.Novedades</td>
             </tr>
         }
         </tbody>
     </table>
+}
+
+<div class="modal fade" id="editarNovedadesModal" tabindex="-1" aria-labelledby="editarNovedadesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="ActualizarNovedades" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editarNovedadesLabel">Editar novedades</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="novedadesUsuarioSelect" class="form-label">Usuario</label>
+                        <select id="novedadesUsuarioSelect" class="form-select" required>
+                            <option value="">Selecciona un usuario</option>
+                            @foreach (var u in Model)
+                            {
+                                <option value="@u.Id" data-novedades="@u.Novedades">@u.NombreCompleto</option>
+                            }
+                        </select>
+                        <input type="hidden" name="id" id="novedadesUsuarioId" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="novedadesTexto" class="form-label">Novedades</label>
+                        <textarea id="novedadesTexto" name="novedades" class="form-control" rows="6"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar novedades</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const select = document.getElementById('novedadesUsuarioSelect');
+            const inputId = document.getElementById('novedadesUsuarioId');
+            const textarea = document.getElementById('novedadesTexto');
+
+            const updateNovedades = () => {
+                if (!select || !inputId || !textarea) {
+                    return;
+                }
+
+                const option = select.options[select.selectedIndex];
+                if (!option || !option.value) {
+                    inputId.value = '';
+                    textarea.value = '';
+                    return;
+                }
+
+                inputId.value = option.value;
+                textarea.value = option.dataset.novedades || '';
+            };
+
+            if (select) {
+                select.addEventListener('change', updateNovedades);
+            }
+
+            const modal = document.getElementById('editarNovedadesModal');
+            if (modal) {
+                modal.addEventListener('show.bs.modal', updateNovedades);
+            }
+        })();
+    </script>
 }
