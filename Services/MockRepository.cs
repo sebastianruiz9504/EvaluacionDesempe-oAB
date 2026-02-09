@@ -32,7 +32,9 @@ namespace EvaluacionDesempenoAB.Services
                     Cargo = "Jefe",
                     Gerencia = "Operaciones",
                     CorreoElectronico = evaluadorCorreo,
-                    EvaluadorNombre = null // no tiene jefe por encima
+                    EvaluadorNombre = null, // no tiene jefe por encima
+                    EsSuperAdministrador = true,
+                    Novedades = "Usuario de prueba con rol superadmin."
                 },
                 new UsuarioEvaluado
                 {
@@ -47,7 +49,8 @@ namespace EvaluacionDesempenoAB.Services
                     CorreoElectronico = "juan.perez@contoso.com",
                     // está bajo el Evaluador Demo
                     EvaluadorNombre = evaluadorNombre,
-                    TipoFormulario = 433930002 // Operativo
+                    TipoFormulario = 433930002, // Operativo
+                    Novedades = "Pendiente documentación."
                 },
                 new UsuarioEvaluado
                 {
@@ -61,7 +64,8 @@ namespace EvaluacionDesempenoAB.Services
                     FechaFinalizacionContrato = DateTime.Today.AddYears(1),
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-1).AddMonths(2),
                     CorreoElectronico = "maria.lopez@contoso.com",
-                    EvaluadorNombre = evaluadorNombre
+                    EvaluadorNombre = evaluadorNombre,
+                    Novedades = "Cambio de cargo en trámite."
                 }
             };
 
@@ -126,10 +130,24 @@ namespace EvaluacionDesempenoAB.Services
             return Task.FromResult(lista);
         }
 
+        public Task<List<UsuarioEvaluado>> GetUsuariosAsync()
+            => Task.FromResult(_usuarios.ToList());
+
         public Task<UsuarioEvaluado?> GetUsuarioByIdAsync(Guid id)
         {
             var u = _usuarios.FirstOrDefault(x => x.Id == id);
             return Task.FromResult(u);
+        }
+
+        public Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades)
+        {
+            var u = _usuarios.FirstOrDefault(x => x.Id == usuarioId);
+            if (u != null)
+            {
+                u.Novedades = novedades;
+            }
+
+            return Task.CompletedTask;
         }
 
         // === NIVELES ===

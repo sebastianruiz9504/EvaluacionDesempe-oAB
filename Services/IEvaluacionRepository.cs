@@ -15,8 +15,14 @@ namespace EvaluacionDesempenoAB.Services
         // Traer los usuarios a cargo de un evaluador (por nombre de evaluador)
         Task<List<UsuarioEvaluado>> GetUsuariosByEvaluadorAsync(string evaluadorNombre);
 
+        // Traer todos los usuarios
+        Task<List<UsuarioEvaluado>> GetUsuariosAsync();
+
         // Traer un usuario por Id
         Task<UsuarioEvaluado?> GetUsuarioByIdAsync(Guid id);
+
+        // Actualizar novedades del usuario
+        Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades);
 
         // === NIVELES ===
 

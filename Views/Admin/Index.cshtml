@@ -1,0 +1,74 @@
+@using EvaluacionDesempenoAB.Models
+@model IEnumerable<UsuarioEvaluado>
+
+@{
+    ViewData["Title"] = "Modulo admin";
+}
+
+<h2 class="mt-4">Modulo admin</h2>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info mt-3">
+        No se encontraron usuarios para mostrar.
+    </div>
+}
+else
+{
+    <table class="table table-striped table-bordered mt-3">
+        <thead class="table-light">
+            <tr>
+                <th>Nombre</th>
+                <th>Cédula</th>
+                <th>Cargo</th>
+                <th>Gerencia</th>
+                <th>Correo</th>
+                <th>Inicio de contrato</th>
+                <th>Finalización contrato</th>
+                <th>Finalización periodo de prueba</th>
+                <th>Novedades</th>
+                <th style="width: 260px;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var u in Model)
+        {
+            <tr>
+                <td>@u.NombreCompleto</td>
+                <td>@u.Cedula</td>
+                <td>@u.Cargo</td>
+                <td>@u.Gerencia</td>
+                <td>@u.CorreoElectronico</td>
+                <td>@(u.FechaInicioContrato?.ToShortDateString() ?? "-")</td>
+                <td>@(u.FechaFinalizacionContrato?.ToShortDateString() ?? "-")</td>
+                <td>@(u.FechaFinalizacionPeriodoPrueba?.ToShortDateString() ?? "-")</td>
+                <td>
+                    <form asp-action="ActualizarNovedades" method="post" class="d-flex flex-column gap-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@u.Id" />
+                        <textarea class="form-control" name="novedades" rows="2">@u.Novedades</textarea>
+                        <button type="submit" class="btn btn-sm btn-success align-self-start">
+                            Guardar novedades
+                        </button>
+                    </form>
+                </td>
+                <td>
+                    <a asp-controller="Evaluaciones"
+                       asp-action="Nueva"
+                       asp-route-usuarioId="@u.Id"
+                       class="btn btn-sm btn-primary me-2">
+                        Iniciar evaluación
+                    </a>
+
+                    <a asp-controller="Usuarios"
+                       asp-action="Detalle"
+                       asp-route-id="@u.Id"
+                       class="btn btn-sm btn-outline-secondary">
+                        Ver carpeta
+                    </a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

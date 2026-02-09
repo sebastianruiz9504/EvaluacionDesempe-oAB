@@ -62,6 +62,17 @@ namespace EvaluacionDesempenoAB.Services
             return result.Entities.Select(MapUsuario).ToList();
         }
 
+        public async Task<List<UsuarioEvaluado>> GetUsuariosAsync()
+        {
+            var q = new QueryExpression(UsuarioTable)
+            {
+                ColumnSet = new ColumnSet(true)
+            };
+
+            var result = await _client.RetrieveMultipleAsync(q);
+            return result.Entities.Select(MapUsuario).ToList();
+        }
+
         public async Task<UsuarioEvaluado?> GetUsuarioByIdAsync(Guid id)
         {
             var e = await _client.RetrieveAsync(UsuarioTable, id, new ColumnSet(true));
@@ -84,9 +95,34 @@ namespace EvaluacionDesempenoAB.Services
                     e.GetAttributeValue<DateTime?>("crfb7_fechafinalizacionperiododeprueba"),
                 CorreoElectronico = e.GetAttributeValue<string>("crfb7_correoelectronico"),
                 EvaluadorNombre   = e.GetAttributeValue<string>("crfb7_evaluadorid"),
-                TipoFormulario    = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value
+                TipoFormulario    = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value,
+                EsSuperAdministrador = GetBoolOrOptionSet(e, "crfb7_superadministrador"),
+                Novedades = e.GetAttributeValue<string>("crfb7_novedades")
 
             };
+        }
+
+        private static bool GetBoolOrOptionSet(Entity e, string attributeLogicalName)
+        {
+            // Dataverse "Two Options" can surface as bool, while legacy OptionSet returns OptionSetValue.
+            var boolValue = e.GetAttributeValue<bool?>(attributeLogicalName);
+            if (boolValue.HasValue)
+            {
+                return boolValue.Value;
+            }
+
+            var optionValue = e.GetAttributeValue<OptionSetValue>(attributeLogicalName);
+            return optionValue?.Value == 1;
+        }
+
+        public async Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades)
+        {
+            var entity = new Entity(UsuarioTable, usuarioId)
+            {
+                ["crfb7_novedades"] = novedades
+            };
+
+            await _client.UpdateAsync(entity);
         }
 
         // =====================================================

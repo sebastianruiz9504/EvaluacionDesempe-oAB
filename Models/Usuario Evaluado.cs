@@ -23,5 +23,9 @@ namespace EvaluacionDesempenoAB.Models
         // Nombre del evaluador (texto) tal como está en crfb7_evaluadorid
         public string? EvaluadorNombre { get; set; }
          public int? TipoFormulario { get; set; }
+
+        public bool EsSuperAdministrador { get; set; }
+
+        public string? Novedades { get; set; }
     }
 }

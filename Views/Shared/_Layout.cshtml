@@ -1,9 +1,25 @@
 ﻿@using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authorization
+@using EvaluacionDesempenoAB.Services
 @inject IHttpContextAccessor HttpContextAccessor
+@inject IEvaluacionRepository EvaluacionRepository
 @{
     var user = HttpContextAccessor.HttpContext?.User;
     var userName = user?.Identity?.IsAuthenticated == true ? user.Identity.Name : "";
+    var isSuperAdmin = false;
+
+    if (user?.Identity?.IsAuthenticated == true)
+    {
+        var email = user.FindFirst("preferred_username")?.Value
+                    ?? user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                    ?? user.FindFirst(System.Security.Claims.ClaimTypes.Upn)?.Value;
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var usuario = await EvaluacionRepository.GetUsuarioByCorreoAsync(email);
+            isSuperAdmin = usuario?.EsSuperAdministrador == true;
+        }
+    }
 }
 
 <!DOCTYPE html>
@@ -42,13 +58,10 @@
             <a class="ab-nav-link" asp-controller="Home" asp-action="Index">Inicio</a>
             <a class="ab-nav-link" asp-controller="Usuarios" asp-action="Index">Usuarios a mi cargo</a>
             <a class="ab-nav-link" asp-controller="Evaluaciones" asp-action="Index">Mis evaluaciones</a>
-            <!-- El Superadministrador podría ver más opciones, se controla por roles -->
-            @* Ejemplo:
-            @if (User.IsInRole("SuperAdministrador"))
+            @if (isSuperAdmin)
             {
-                <a class="ab-nav-link" asp-controller="Admin" asp-action="Catalogos">Catálogos</a>
+                <a class="ab-nav-link" asp-controller="Admin" asp-action="Index">Modulo admin</a>
             }
-            *@
         </div>
     </nav>
 
