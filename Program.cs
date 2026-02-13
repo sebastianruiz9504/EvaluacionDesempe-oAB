@@ -150,7 +150,7 @@ static string? BuildDataverseConnectionString(string connectionString, string? c
 
         if (string.IsNullOrWhiteSpace(effectiveSecret))
         {
-            logger.LogError("Dataverse está configurado con AuthType=ClientSecret, pero no hay ClientSecret. Configure Dataverse__ClientSecret o ConnectionStrings__Dataverse con ClientSecret.");
+            logger.LogError("Dataverse está configurado con AuthType=ClientSecret, pero no hay ClientSecret. Configure Dataverse__ClientSecret, AzureAd__ClientSecret o ConnectionStrings__Dataverse con ClientSecret.");
             return null;
         }
 
@@ -171,7 +171,21 @@ static string? BuildDataverseConnectionString(string connectionString, string? c
 
 static string? ResolveDataverseClientSecret(IConfiguration configuration)
 {
-    return configuration["Dataverse:ClientSecret"]
-        ?? configuration["ConnectionStrings:DataverseClientSecret"]
-        ?? configuration["AzureAd:ClientSecret"];
+    return FirstNonEmpty(
+        configuration["Dataverse:ClientSecret"],
+        configuration["ConnectionStrings:DataverseClientSecret"],
+        configuration["AzureAd:ClientSecret"]);
+}
+
+static string? FirstNonEmpty(params string?[] values)
+{
+    foreach (var value in values)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+    }
+
+    return null;
 }
