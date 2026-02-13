@@ -1,0 +1,23 @@
+@{
+    ViewData["Title"] = "Acceso denegado";
+    var returnUrl = ViewData["ReturnUrl"] as string;
+}
+
+<div class="container mt-4">
+    <div class="alert alert-warning" role="alert">
+        <h4 class="alert-heading">No tienes permisos para acceder a esta sección.</h4>
+        <p>
+            Tu usuario está autenticado, pero no cuenta con autorización para ver esta página.
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(returnUrl))
+        {
+            <hr />
+            <p class="mb-2"><strong>Ruta solicitada:</strong> @returnUrl</p>
+        }
+
+        <a asp-controller="Home" asp-action="Index" class="btn btn-primary mt-2">
+            Volver al inicio
+        </a>
+    </div>
+</div>
