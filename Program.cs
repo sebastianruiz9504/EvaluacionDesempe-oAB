@@ -59,8 +59,9 @@ builder.Services.AddSingleton<ServiceClient?>(sp =>
     var validationErrors = ValidateDataverseConnectionString(connString);
     if (validationErrors.Count > 0)
     {
-        logger.LogError(
-            "Cadena de conexión de Dataverse inválida. Problemas detectados: {ValidationErrors}. Se usará MockRepository.",
+        logger.LogWarning(
+            "Cadena de conexión de Dataverse inválida o incompleta. Problemas detectados: {ValidationErrors}. Se usará MockRepository. " +
+            "Si estás en desarrollo, puedes omitir Dataverse y continuar con datos de prueba.",
             string.Join(" | ", validationErrors));
         return null;
     }
@@ -251,6 +252,10 @@ static List<string> ValidateDataverseConnectionString(string connectionString)
     {
         errors.Add("Falta Url.");
     }
+    else if (LooksLikeMaskedValue(url))
+    {
+        errors.Add($"Url parece estar enmascarada o de ejemplo ('{url}'). Debe ser la URL real de Dataverse, por ejemplo: 'https://tuorg.crm.dynamics.com'.");
+    }
     else if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
     {
         var suggestedUrl = NormalizeDataverseUrl(url);
@@ -306,6 +311,18 @@ static string? NormalizeDataverseUrl(string? rawUrl)
     }
 
     return uri.GetLeftPart(UriPartial.Authority);
+}
+
+static bool LooksLikeMaskedValue(string value)
+{
+    var normalized = value.Trim();
+
+    return normalized.Contains("...", StringComparison.Ordinal)
+        || normalized.Contains("<", StringComparison.Ordinal)
+        || normalized.Contains(">", StringComparison.Ordinal)
+        || normalized.Contains("your", StringComparison.OrdinalIgnoreCase)
+        || normalized.Contains("example", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(normalized, "https://", StringComparison.OrdinalIgnoreCase);
 }
 
 static string SummarizeConnectionString(string connectionString)
