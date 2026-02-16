@@ -201,6 +201,16 @@ static string? BuildDataverseConnectionString(string connectionString, string? c
         }
     }
 
+    if (builder.TryGetValue("Url", out var rawUrlValue))
+    {
+        var normalizedUrl = NormalizeDataverseUrl(rawUrlValue?.ToString());
+
+        if (!string.IsNullOrWhiteSpace(normalizedUrl))
+        {
+            builder["Url"] = normalizedUrl;
+        }
+    }
+
     return builder.ConnectionString;
 }
 
@@ -243,7 +253,8 @@ static List<string> ValidateDataverseConnectionString(string connectionString)
     }
     else if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
     {
-        errors.Add("Url no es una URI absoluta válida.");
+        var suggestedUrl = NormalizeDataverseUrl(url);
+        errors.Add($"Url no es una URI absoluta válida. Valor recibido: '{url}'. Sugerencia: '{suggestedUrl ?? "sin sugerencia"}'.");
     }
 
     if (string.Equals(authType, "ClientSecret", StringComparison.OrdinalIgnoreCase))
@@ -265,6 +276,36 @@ static List<string> ValidateDataverseConnectionString(string connectionString)
     }
 
     return errors;
+}
+
+static string? NormalizeDataverseUrl(string? rawUrl)
+{
+    if (string.IsNullOrWhiteSpace(rawUrl))
+    {
+        return null;
+    }
+
+    var normalized = rawUrl.Trim();
+
+    // Algunos proveedores inyectan comillas en variables de entorno.
+    if ((normalized.StartsWith('"') && normalized.EndsWith('"'))
+        || (normalized.StartsWith('\'') && normalized.EndsWith('\'')))
+    {
+        normalized = normalized[1..^1].Trim();
+    }
+
+    // Dataverse requiere URI absoluta; si viene sólo host, asumimos https.
+    if (!normalized.Contains("://", StringComparison.Ordinal))
+    {
+        normalized = $"https://{normalized}";
+    }
+
+    if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
+    {
+        return null;
+    }
+
+    return uri.GetLeftPart(UriPartial.Authority);
 }
 
 static string SummarizeConnectionString(string connectionString)
