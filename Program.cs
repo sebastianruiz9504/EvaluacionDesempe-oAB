@@ -56,6 +56,17 @@ builder.Services.AddSingleton<ServiceClient?>(sp =>
         return null;
     }
 
+    var validationErrors = ValidateDataverseConnectionString(connString);
+    if (validationErrors.Count > 0)
+    {
+        logger.LogError(
+            "Cadena de conexión de Dataverse inválida. Problemas detectados: {ValidationErrors}. Se usará MockRepository.",
+            string.Join(" | ", validationErrors));
+        return null;
+    }
+
+    logger.LogInformation("Resumen de cadena de conexión Dataverse: {ConnectionStringSummary}", SummarizeConnectionString(connString));
+
     try
     {
         var client = new ServiceClient(connString, logger);
@@ -70,7 +81,10 @@ builder.Services.AddSingleton<ServiceClient?>(sp =>
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "No fue posible conectar a Dataverse. Se usará MockRepository.");
+        logger.LogError(
+            ex,
+            "No fue posible conectar a Dataverse. Diagnóstico: {DataverseErrorClassification}. Se usará MockRepository.",
+            ClassifyDataverseException(ex));
         return null;
     }
 });
@@ -116,14 +130,34 @@ app.Run();
 
 static string? BuildDataverseConnectionString(string connectionString, string? clientSecret, ILogger logger)
 {
-    var builder = new DbConnectionStringBuilder
-    {
-        ConnectionString = connectionString
-    };
+    DbConnectionStringBuilder builder;
 
-    var authType = builder.TryGetValue("AuthType", out var authTypeValue)
+    try
+    {
+        builder = new DbConnectionStringBuilder
+        {
+            ConnectionString = connectionString
+        };
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "La cadena de conexión de Dataverse no tiene formato válido.");
+        return null;
+    }
+
+    var originalAuthType = builder.TryGetValue("AuthType", out var authTypeValue)
         ? authTypeValue?.ToString()?.Trim()
         : null;
+
+    logger.LogInformation(
+        "Configuración inicial de Dataverse: AuthType={AuthType}, tiene Url={HasUrl}, tiene ClientId={HasClientId}, tiene TenantId={HasTenantId}, tiene ClientSecret={HasClientSecret}",
+        string.IsNullOrWhiteSpace(originalAuthType) ? "(vacío)" : originalAuthType,
+        builder.ContainsKey("Url"),
+        builder.ContainsKey("ClientId"),
+        builder.ContainsKey("TenantId"),
+        builder.ContainsKey("ClientSecret") || !string.IsNullOrWhiteSpace(clientSecret));
+
+    var authType = originalAuthType;
 
     if (string.IsNullOrWhiteSpace(authType) && !string.IsNullOrWhiteSpace(clientSecret))
     {
@@ -175,4 +209,126 @@ static string? ResolveDataverseClientSecret(IConfiguration configuration)
     return configuration["Dataverse:ClientSecret"]
         ?? configuration["ConnectionStrings:DataverseClientSecret"]
         ?? configuration["AzureAd:ClientSecret"];
+}
+
+static List<string> ValidateDataverseConnectionString(string connectionString)
+{
+    var errors = new List<string>();
+    DbConnectionStringBuilder builder;
+
+    try
+    {
+        builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+    }
+    catch (Exception ex)
+    {
+        errors.Add($"Formato inválido de cadena de conexión: {ex.Message}");
+        return errors;
+    }
+
+    string? GetValue(string key)
+        => builder.TryGetValue(key, out var value) ? value?.ToString()?.Trim() : null;
+
+    var authType = GetValue("AuthType");
+    var url = GetValue("Url");
+
+    if (string.IsNullOrWhiteSpace(authType))
+    {
+        errors.Add("Falta AuthType.");
+    }
+
+    if (string.IsNullOrWhiteSpace(url))
+    {
+        errors.Add("Falta Url.");
+    }
+    else if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
+    {
+        errors.Add("Url no es una URI absoluta válida.");
+    }
+
+    if (string.Equals(authType, "ClientSecret", StringComparison.OrdinalIgnoreCase))
+    {
+        if (string.IsNullOrWhiteSpace(GetValue("ClientId")))
+        {
+            errors.Add("Falta ClientId para AuthType=ClientSecret.");
+        }
+
+        if (string.IsNullOrWhiteSpace(GetValue("TenantId")))
+        {
+            errors.Add("Falta TenantId para AuthType=ClientSecret.");
+        }
+
+        if (string.IsNullOrWhiteSpace(GetValue("ClientSecret")))
+        {
+            errors.Add("Falta ClientSecret para AuthType=ClientSecret.");
+        }
+    }
+
+    return errors;
+}
+
+static string SummarizeConnectionString(string connectionString)
+{
+    try
+    {
+        var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+
+        string? GetValue(string key)
+            => builder.TryGetValue(key, out var value) ? value?.ToString()?.Trim() : null;
+
+        var authType = GetValue("AuthType") ?? "(vacío)";
+        var url = GetValue("Url") ?? "(vacío)";
+        var clientId = GetValue("ClientId");
+        var tenantId = GetValue("TenantId");
+
+        return $"AuthType={authType}; Url={url}; ClientId={MaskIdentifier(clientId)}; TenantId={MaskIdentifier(tenantId)}; ClientSecret={(string.IsNullOrWhiteSpace(GetValue("ClientSecret")) ? "No" : "Sí")}";
+    }
+    catch (Exception)
+    {
+        return "No se pudo resumir la cadena de conexión.";
+    }
+}
+
+static string MaskIdentifier(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return "(vacío)";
+    }
+
+    if (value.Length <= 8)
+    {
+        return "********";
+    }
+
+    return $"{value[..4]}...{value[^4..]}";
+}
+
+static string ClassifyDataverseException(Exception ex)
+{
+    Exception? current = ex;
+
+    while (current != null)
+    {
+        var message = current.Message?.ToLowerInvariant() ?? string.Empty;
+
+        if (message.Contains("unauthorized") || message.Contains("forbidden") || message.Contains("permission") || message.Contains("access denied"))
+        {
+            return "Posible problema de permisos/roles en Dataverse o en la App Registration.";
+        }
+
+        if (message.Contains("aad") || message.Contains("tenant") || message.Contains("clientsecret") || message.Contains("invalid_client") || message.Contains("invalid_grant"))
+        {
+            return "Posible error de autenticación AAD (TenantId/ClientId/ClientSecret/AuthType).";
+        }
+
+        if (message.Contains("dns") || message.Contains("host") || message.Contains("name or service not known") || message.Contains("timed out") || message.Contains("socket"))
+        {
+            return "Posible error de red o URL de Dataverse inválida/no accesible.";
+        }
+
+        current = current.InnerException;
+    }
+
+    return "Error no clasificado. Revise stack trace e InnerException para detalle.";
 }
