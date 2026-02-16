@@ -36,6 +36,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddSingleton<ServiceClient?>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
+    var logger = sp.GetRequiredService<ILogger<Program>>();
     var connString = config.GetConnectionString("Dataverse");
 
     if (string.IsNullOrWhiteSpace(connString))
@@ -44,7 +45,24 @@ builder.Services.AddSingleton<ServiceClient?>(sp =>
         return null;
     }
 
-    return new ServiceClient(connString);
+    try
+    {
+        var client = new ServiceClient(connString, logger);
+
+        if (!client.IsReady)
+        {
+            logger.LogError("No fue posible conectar con Dataverse. Se usará MockRepository. Detalle: {Error}", client.LastError);
+            client.Dispose();
+            return null;
+        }
+
+        return client;
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error al crear ServiceClient de Dataverse. Se usará MockRepository.");
+        return null;
+    }
 });
 
 // Elegir repositorio según haya (o no) Dataverse
