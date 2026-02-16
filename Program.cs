@@ -36,11 +36,14 @@ builder.Services.AddAuthorization(options =>
 //
 builder.Services.AddSingleton<ServiceClient?>(sp =>
 {
-    var config = sp.GetRequiredService<IConfiguration>();
+    var environment = sp.GetRequiredService<IHostEnvironment>();
     var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
     var logger = loggerFactory.CreateLogger("DataverseConnection");
 
-    var connString = config.GetConnectionString("Dataverse");
+    var appSettingsConfiguration = BuildAppSettingsConfiguration(environment);
+
+    // Para Dataverse se usa únicamente lo que está en appsettings*.json.
+    var connString = appSettingsConfiguration.GetConnectionString("Dataverse");
 
     if (string.IsNullOrWhiteSpace(connString))
     {
@@ -48,7 +51,7 @@ builder.Services.AddSingleton<ServiceClient?>(sp =>
         return null;
     }
 
-    var dataverseClientSecret = ResolveDataverseClientSecret(config);
+    var dataverseClientSecret = ResolveDataverseClientSecret(appSettingsConfiguration);
     connString = BuildDataverseConnectionString(connString, dataverseClientSecret, logger);
 
     if (string.IsNullOrWhiteSpace(connString))
@@ -220,6 +223,15 @@ static string? ResolveDataverseClientSecret(IConfiguration configuration)
     return configuration["Dataverse:ClientSecret"]
         ?? configuration["ConnectionStrings:DataverseClientSecret"]
         ?? configuration["AzureAd:ClientSecret"];
+}
+
+static IConfiguration BuildAppSettingsConfiguration(IHostEnvironment environment)
+{
+    return new ConfigurationBuilder()
+        .SetBasePath(environment.ContentRootPath)
+        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+        .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
+        .Build();
 }
 
 static List<string> ValidateDataverseConnectionString(string connectionString)
