@@ -21,7 +21,7 @@ namespace EvaluacionDesempenoAB.Models
         // Correo electrónico con el que se autentica el usuario/evaluador
         public string? CorreoElectronico { get; set; }
 
-        // Nombre del evaluador (texto) tal como está en crfb7_evaluadorid
+        // Correo del evaluador (texto) tal como está en crfb7_evaluadorid
         public string? EvaluadorNombre { get; set; }
          public int? TipoFormulario { get; set; }
 

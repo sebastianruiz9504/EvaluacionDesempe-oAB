@@ -12,8 +12,8 @@ namespace EvaluacionDesempenoAB.Services
         // Traer un usuario (evaluador) por su correo electrónico
         Task<UsuarioEvaluado?> GetUsuarioByCorreoAsync(string correo);
 
-        // Traer los usuarios a cargo de un evaluador (por nombre de evaluador)
-        Task<List<UsuarioEvaluado>> GetUsuariosByEvaluadorAsync(string evaluadorNombre);
+        // Traer los usuarios a cargo de un evaluador (por correo del evaluador)
+        Task<List<UsuarioEvaluado>> GetUsuariosByEvaluadorAsync(string evaluadorCorreo);
 
         // Traer todos los usuarios
         Task<List<UsuarioEvaluado>> GetUsuariosAsync();
@@ -36,8 +36,8 @@ namespace EvaluacionDesempenoAB.Services
 
         // === EVALUACIONES ===
 
-        // Evaluaciones de un evaluador (por nombre de evaluador)
-        Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorNombre);
+        // Evaluaciones de un evaluador (por correo del evaluador)
+        Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorCorreo);
 
         // Evaluaciones por usuario
         Task<List<Evaluacion>> GetEvaluacionesByUsuarioAsync(Guid usuarioId);

@@ -69,7 +69,7 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
             if (evaluador == null)
                 return Forbid();
 
-            var evals = await _repo.GetEvaluacionesByEvaluadorAsync(evaluador.NombreCompleto);
+            var evals = await _repo.GetEvaluacionesByEvaluadorAsync(evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty);
 
             var usuariosDict = new Dictionary<Guid, UsuarioEvaluado>();
             var nivelesDict = new Dictionary<Guid, NivelEvaluacion>();
@@ -294,7 +294,7 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                 FechaProximaEvaluacion = model.TipoEvaluacion == "Inicial"
                     ? model.FechaEvaluacion.AddMonths(6)
                     : null,
-                EvaluadorNombre = evaluador.NombreCompleto
+                EvaluadorNombre = evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty
             };
 
             var detalles = new List<EvaluacionDetalle>();

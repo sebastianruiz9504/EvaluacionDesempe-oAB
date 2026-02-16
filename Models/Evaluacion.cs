@@ -27,7 +27,7 @@ namespace EvaluacionDesempenoAB.Models
 
         public string? Estado { get; set; }
 
-        // Nuevo: nombre del evaluador tal como se guarda en crfb7_evaluadorid
+        // Nuevo: correo del evaluador tal como se guarda en crfb7_evaluadorid
         public string? EvaluadorNombre { get; set; }
     }
 }

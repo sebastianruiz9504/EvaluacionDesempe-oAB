@@ -64,8 +64,8 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            // Filtramos por el NOMBRE del evaluador, tal como está en crfb7_evaluadorid
-            var usuarios = await _repo.GetUsuariosByEvaluadorAsync(evaluador.NombreCompleto);
+            // Filtramos por el CORREO del evaluador, tal como está en crfb7_evaluadorid
+            var usuarios = await _repo.GetUsuariosByEvaluadorAsync(evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty);
             if (!string.IsNullOrWhiteSpace(cedula))
             {
                 usuarios = usuarios

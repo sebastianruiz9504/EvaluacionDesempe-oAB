@@ -48,15 +48,15 @@ namespace EvaluacionDesempenoAB.Services
             return entity == null ? null : MapUsuario(entity);
         }
 
-        public async Task<List<UsuarioEvaluado>> GetUsuariosByEvaluadorAsync(string evaluadorNombre)
+        public async Task<List<UsuarioEvaluado>> GetUsuariosByEvaluadorAsync(string evaluadorCorreo)
         {
             var q = new QueryExpression(UsuarioTable)
             {
                 ColumnSet = new ColumnSet(true)
             };
 
-            // Los usuarios a cargo son aquellos donde crfb7_evaluadorid = nombre del evaluador
-            q.Criteria.AddCondition("crfb7_evaluadorid", ConditionOperator.Equal, evaluadorNombre);
+            // Los usuarios a cargo son aquellos donde crfb7_evaluadorid = correo del evaluador
+            q.Criteria.AddCondition("crfb7_evaluadorid", ConditionOperator.Equal, evaluadorCorreo);
 
             var result = await _client.RetrieveMultipleAsync(q);
             return result.Entities.Select(MapUsuario).ToList();
@@ -219,15 +219,15 @@ namespace EvaluacionDesempenoAB.Services
         // EVALUACIONES (crfb7_evaluacion)
         // =====================================================
 
-        public async Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorNombre)
+        public async Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorCorreo)
         {
             var q = new QueryExpression(EvaluacionTable)
             {
                 ColumnSet = new ColumnSet(true)
             };
 
-            // Filtramos por nombre de evaluador (texto)
-            q.Criteria.AddCondition("crfb7_evaluadorid", ConditionOperator.Equal, evaluadorNombre);
+            // Filtramos por correo del evaluador (texto)
+            q.Criteria.AddCondition("crfb7_evaluadorid", ConditionOperator.Equal, evaluadorCorreo);
             q.AddOrder("createdon", OrderType.Descending);
 
             var result = await _client.RetrieveMultipleAsync(q);

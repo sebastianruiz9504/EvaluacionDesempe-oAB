@@ -49,7 +49,7 @@ namespace EvaluacionDesempenoAB.Services
                     FechaActivacionEvaluacion = DateTime.Today.AddDays(-5),
                     CorreoElectronico = "juan.perez@contoso.com",
                     // está bajo el Evaluador Demo
-                    EvaluadorNombre = evaluadorNombre,
+                    EvaluadorNombre = evaluadorCorreo,
                     TipoFormulario = 433930002, // Operativo
                     Novedades = "Pendiente documentación."
                 },
@@ -66,7 +66,7 @@ namespace EvaluacionDesempenoAB.Services
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-1).AddMonths(2),
                     FechaActivacionEvaluacion = null,
                     CorreoElectronico = "maria.lopez@contoso.com",
-                    EvaluadorNombre = evaluadorNombre,
+                    EvaluadorNombre = evaluadorCorreo,
                     Novedades = "Cambio de cargo en trámite."
                 }
             };
@@ -123,10 +123,10 @@ namespace EvaluacionDesempenoAB.Services
             return Task.FromResult(u);
         }
 
-        public Task<List<UsuarioEvaluado>> GetUsuariosByEvaluadorAsync(string evaluadorNombre)
+        public Task<List<UsuarioEvaluado>> GetUsuariosByEvaluadorAsync(string evaluadorCorreo)
         {
             var lista = _usuarios
-                .Where(x => string.Equals(x.EvaluadorNombre, evaluadorNombre, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.Equals(x.EvaluadorNombre, evaluadorCorreo, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             return Task.FromResult(lista);
@@ -181,10 +181,10 @@ namespace EvaluacionDesempenoAB.Services
 
         // === EVALUACIONES ===
 
-        public Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorNombre)
+        public Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorCorreo)
         {
             var lista = _evaluaciones
-                .Where(x => string.Equals(x.EvaluadorNombre, evaluadorNombre, StringComparison.OrdinalIgnoreCase))
+                .Where(x => string.Equals(x.EvaluadorNombre, evaluadorCorreo, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(x => x.FechaEvaluacion)
                 .ToList();
 
