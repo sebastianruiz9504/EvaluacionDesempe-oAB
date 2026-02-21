@@ -1,0 +1,87 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+.ab-nav-link {
+    font-weight: 500;
+    color: var(--ab-gray-900);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 999px;
+}
+
+.ab-nav-link:hover {
+    background-color: rgba(33, 172, 227, 0.06);
+    color: var(--ab-blue);
+}
+.ab-escala-porcentaje {
+    min-width: 280px;
+}
+
+.ab-escala-porcentaje .table {
+    margin-bottom: 0;
+}
+
+.ab-escala-box {
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-weight: 600;
+    color: #fff;
+    display: inline-block;
+    min-width: 80px;
+}
+
+.ab-escala-nunca {
+    background-color: #d9534f; /* rojo */
+}
+
+.ab-escala-casi-nunca {
+    background-color: #f0ad4e; /* naranja */
+}
+
+.ab-escala-aveces {
+    background-color: #f7e36a; /* amarillo */
+    color: #414042;
+}
+
+.ab-escala-casi-siempre {
+    background-color: #5cb85c; /* verde */
+}
+
+.ab-escala-siempre {
+    background-color: #21ACE3; /* azul manual AB */
+}
+
+
+.ab-logout-btn {
+    background-color: #21ACE3;
+    border-color: #21ACE3;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.ab-logout-btn:hover,
+.ab-logout-btn:focus,
+.ab-logout-btn:active {
+    background-color: #1a8cb9;
+    border-color: #1a8cb9;
+    color: #ffffff;
+}
