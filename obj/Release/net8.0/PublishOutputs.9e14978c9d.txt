@@ -9,6 +9,11 @@ C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Azure.Co
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Azure.Identity.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Azure.Security.KeyVault.Certificates.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Azure.Security.KeyVault.Secrets.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\ClosedXML.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\ClosedXML.Parser.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\DocumentFormat.OpenXml.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\DocumentFormat.OpenXml.Framework.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\ExcelNumberFormat.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Microsoft.AspNetCore.Authentication.JwtBearer.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Microsoft.AspNetCore.Authentication.OpenIdConnect.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Microsoft.AspNetCore.Cryptography.Internal.dll
@@ -43,10 +48,13 @@ C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Microsof
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Microsoft.Xrm.Sdk.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Microsoft.Win32.SystemEvents.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\Newtonsoft.Json.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\RBush.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\SixLabors.Fonts.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\System.ClientModel.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\System.Configuration.ConfigurationManager.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\System.Drawing.Common.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\System.IdentityModel.Tokens.Jwt.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\System.IO.Packaging.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\System.Memory.Data.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\System.Runtime.Caching.dll
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\publish\System.Security.Cryptography.Pkcs.dll

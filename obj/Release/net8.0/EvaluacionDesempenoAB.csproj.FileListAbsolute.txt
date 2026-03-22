@@ -122,3 +122,11 @@ C:\Users\SebastianRuiz\EvaluacionDesempenoAB\obj\Release\net8.0\refint\Evaluacio
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\obj\Release\net8.0\EvaluacionDesempenoAB.pdb
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\obj\Release\net8.0\EvaluacionDesempenoAB.genruntimeconfig.cache
 C:\Users\SebastianRuiz\EvaluacionDesempenoAB\obj\Release\net8.0\ref\EvaluacionDesempenoAB.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\ClosedXML.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\ClosedXML.Parser.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\DocumentFormat.OpenXml.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\DocumentFormat.OpenXml.Framework.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\ExcelNumberFormat.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\RBush.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\SixLabors.Fonts.dll
+C:\Users\SebastianRuiz\EvaluacionDesempenoAB\bin\Release\net8.0\System.IO.Packaging.dll

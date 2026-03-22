@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using ClosedXML.Excel;
 using EvaluacionDesempenoAB.Models;
 using EvaluacionDesempenoAB.Services;
 using EvaluacionDesempenoAB.ViewModels;
@@ -63,7 +65,7 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
 
         // ================== LISTADO PRINCIPAL ==================
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? cedula, string? proyecto)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
@@ -100,13 +102,41 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                     ProximaEvaluacion = e.FechaProximaEvaluacion,
                     NombreUsuario = usuario.NombreCompleto,
                     CedulaUsuario = usuario.Cedula,
+<<<<<<< ours
+<<<<<<< ours
+                    ProyectoNombre = usuario.Gerencia ?? string.Empty,
+=======
+                    ProyectoUsuario = usuario.Gerencia ?? usuario.Cargo ?? string.Empty,
+>>>>>>> theirs
+=======
+                    ProyectoUsuario = usuario.Gerencia ?? usuario.Cargo ?? string.Empty,
+>>>>>>> theirs
                     NivelNombre = nivel.Nombre,
                     NivelCodigo = nivel.Codigo,
+                    Proyecto = e.Proyecto ?? usuario.Cargo,
+                    Gerencia = e.Gerencia ?? usuario.Gerencia,
                     TipoEvaluacion = e.TipoEvaluacion,
                     ResultadoFinal = e.Total,
                     PuedeReevaluar = puedeReevaluar
                 });
             }
+
+            if (!string.IsNullOrWhiteSpace(cedula))
+            {
+                vm = vm
+                    .Where(x => x.CedulaUsuario?.Contains(cedula, StringComparison.OrdinalIgnoreCase) == true)
+                    .ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(proyecto))
+            {
+                vm = vm
+                    .Where(x => x.ProyectoUsuario?.Contains(proyecto, StringComparison.OrdinalIgnoreCase) == true)
+                    .ToList();
+            }
+
+            ViewData["CedulaFiltro"] = cedula;
+            ViewData["ProyectoFiltro"] = proyecto;
 
             return View(vm);
         }
@@ -294,7 +324,9 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                 FechaProximaEvaluacion = model.TipoEvaluacion == "Inicial"
                     ? model.FechaEvaluacion.AddMonths(6)
                     : null,
-                EvaluadorNombre = evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty
+                EvaluadorNombre = evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty,
+                Proyecto = model.Cargo,
+                Gerencia = model.Gerencia
             };
 
             var detalles = new List<EvaluacionDetalle>();
@@ -399,8 +431,11 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                     ProximaEvaluacion = e.FechaProximaEvaluacion,
                     NombreUsuario = usuario.NombreCompleto,
                     CedulaUsuario = usuario.Cedula,
+                    ProyectoUsuario = usuario.Gerencia ?? usuario.Cargo ?? string.Empty,
                     NivelNombre = nivel.Nombre,
                     NivelCodigo = nivel.Codigo,
+                    Proyecto = e.Proyecto ?? usuario.Cargo,
+                    Gerencia = e.Gerencia ?? usuario.Gerencia,
                     TipoEvaluacion = e.TipoEvaluacion,
                     ResultadoFinal = e.Total,
                     PuedeReevaluar = e.TipoEvaluacion == "Inicial"
@@ -447,6 +482,112 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                 return NotFound();
 
             return View("ReporteImpresion", vm);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportarExcel([FromQuery] List<Guid> ids)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+                return Forbid();
+
+            if (ids == null || !ids.Any())
+                return BadRequest("Debes seleccionar al menos una evaluación.");
+
+            var evaluaciones = await _repo.GetEvaluacionesByEvaluadorAsync(
+                evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty);
+
+            var seleccionadas = evaluaciones
+                .Where(e => ids.Contains(e.Id))
+                .OrderByDescending(e => e.FechaEvaluacion)
+                .ToList();
+
+            if (!seleccionadas.Any())
+                return NotFound("No se encontraron evaluaciones para exportar.");
+
+            var usuariosDict = new Dictionary<Guid, UsuarioEvaluado>();
+            var nivelesDict = new Dictionary<Guid, NivelEvaluacion>();
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Evaluaciones");
+
+            var headers = new[]
+            {
+                "Fecha evaluación",
+                "Próxima evaluación",
+                "Nombre",
+                "Cédula",
+                "Nivel",
+                "Código nivel",
+                "Tipo evaluación",
+                "Resultado final (%)"
+            };
+
+            for (var i = 0; i < headers.Length; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#DCE6F1");
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            }
+
+            var row = 2;
+            foreach (var evaluacion in seleccionadas)
+            {
+                if (!usuariosDict.TryGetValue(evaluacion.UsuarioId, out var usuario))
+                {
+                    usuario = await _repo.GetUsuarioByIdAsync(evaluacion.UsuarioId) ?? new UsuarioEvaluado();
+                    usuariosDict[evaluacion.UsuarioId] = usuario;
+                }
+
+                if (!nivelesDict.TryGetValue(evaluacion.NivelId, out var nivel))
+                {
+                    nivel = await _repo.GetNivelByIdAsync(evaluacion.NivelId) ?? new NivelEvaluacion();
+                    nivelesDict[evaluacion.NivelId] = nivel;
+                }
+
+                worksheet.Cell(row, 1).Value = evaluacion.FechaEvaluacion;
+                worksheet.Cell(row, 1).Style.DateFormat.Format = "dd/MM/yyyy";
+
+                if (evaluacion.FechaProximaEvaluacion.HasValue)
+                {
+                    worksheet.Cell(row, 2).Value = evaluacion.FechaProximaEvaluacion.Value;
+                    worksheet.Cell(row, 2).Style.DateFormat.Format = "dd/MM/yyyy";
+                }
+
+                worksheet.Cell(row, 3).Value = usuario.NombreCompleto ?? string.Empty;
+                worksheet.Cell(row, 4).Value = usuario.Cedula ?? string.Empty;
+                worksheet.Cell(row, 5).Value = nivel.Nombre ?? string.Empty;
+                worksheet.Cell(row, 6).Value = nivel.Codigo ?? string.Empty;
+                worksheet.Cell(row, 7).Value = evaluacion.TipoEvaluacion ?? string.Empty;
+                worksheet.Cell(row, 8).Value = evaluacion.Total;
+                worksheet.Cell(row, 8).Style.NumberFormat.Format = "0.00";
+
+                row++;
+            }
+
+            var usedRange = worksheet.Range(1, 1, row - 1, headers.Length);
+            usedRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            usedRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            usedRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
+
+            worksheet.SheetView.FreezeRows(1);
+            worksheet.Range(1, 1, 1, headers.Length).SetAutoFilter();
+            worksheet.Columns().AdjustToContents();
+
+            worksheet.Column(3).Width = Math.Min(worksheet.Column(3).Width + 5, 45);
+            worksheet.Column(5).Width = Math.Min(worksheet.Column(5).Width + 4, 35);
+            worksheet.Column(7).Width = Math.Min(worksheet.Column(7).Width + 3, 25);
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            stream.Position = 0;
+
+            var fileName = $"Evaluaciones_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+            const string contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            return File(stream.ToArray(), contentType, fileName);
         }
 
         // ================== GUARDAR PLAN DE ACCIÓN (DESDE REPORTE) ==================
@@ -589,6 +730,10 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                 CedulaUsuario = usuario.Cedula,
                 Cargo = usuario.Cargo,
                 Gerencia = usuario.Gerencia,
+                NombreJefeInmediatoOEvaluador = usuario.CorreoEvaluador,
+                CargoJefeInmediatoOEvaluador = usuario.CargoJefeInmediato,
+                FechaIngreso = usuario.FechaIngreso,
+                FechaGeneracionReporte = DateTime.Today,
                 FechaEvaluacion = eval.FechaEvaluacion,
                 TipoEvaluacion = eval.TipoEvaluacion,
                 NombreNivel = nivel.Nombre,

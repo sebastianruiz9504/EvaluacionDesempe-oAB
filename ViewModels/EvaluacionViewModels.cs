@@ -14,9 +14,20 @@ namespace EvaluacionDesempenoAB.ViewModels
 
         public string NombreUsuario { get; set; } = string.Empty;
         public string CedulaUsuario { get; set; } = string.Empty;
+<<<<<<< ours
+<<<<<<< ours
+        public string ProyectoNombre { get; set; } = string.Empty;
+=======
+        public string ProyectoUsuario { get; set; } = string.Empty;
+>>>>>>> theirs
+=======
+        public string ProyectoUsuario { get; set; } = string.Empty;
+>>>>>>> theirs
 
         public string? NivelNombre { get; set; }
         public string? NivelCodigo { get; set; }
+        public string? Proyecto { get; set; }
+        public string? Gerencia { get; set; }
 
         public string TipoEvaluacion { get; set; } = string.Empty;
            public decimal? ResultadoFinal { get; set; }
@@ -95,6 +106,10 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string CedulaUsuario { get; set; } = string.Empty;
         public string? Cargo { get; set; }
         public string? Gerencia { get; set; }
+ public string? NombreJefeInmediatoOEvaluador { get; set; }
+        public string? CargoJefeInmediatoOEvaluador { get; set; }
+        public DateTime? FechaIngreso { get; set; }
+        public DateTime FechaGeneracionReporte { get; set; } = DateTime.Today;
 
         public DateTime FechaEvaluacion { get; set; }
         public string TipoEvaluacion { get; set; } = string.Empty;

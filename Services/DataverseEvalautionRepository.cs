@@ -97,6 +97,8 @@ namespace EvaluacionDesempenoAB.Services
                     e.GetAttributeValue<DateTime?>("crfb7_fechaactivacionevaluacion"),
                 CorreoElectronico = e.GetAttributeValue<string>("crfb7_correoelectronico"),
                 EvaluadorNombre   = e.GetAttributeValue<string>("crfb7_evaluadorid"),
+                 CorreoEvaluador   = e.GetAttributeValue<string>("crfb7_correoevaluador"),
+                CargoJefeInmediato = e.GetAttributeValue<string>("cr3d2_cargodeljefeinmediato"),
                 TipoFormulario    = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value,
                 EsSuperAdministrador = GetBoolOrOptionSet(e, "crfb7_superadministrador"),
                 Novedades = e.GetAttributeValue<string>("crfb7_novedades")
@@ -269,7 +271,9 @@ namespace EvaluacionDesempenoAB.Services
                 Observaciones   = e.GetAttributeValue<string>("crfb7_observaciones"),
                 FechaProximaEvaluacion = e.GetAttributeValue<DateTime?>("crfb7_fechaproxima"),
                 EvaluacionOrigenId = e.GetAttributeValue<EntityReference>("crfb7_evaluacionorigen")?.Id,
-                EvaluadorNombre = e.GetAttributeValue<string>("crfb7_evaluadorid")
+                EvaluadorNombre = e.GetAttributeValue<string>("crfb7_evaluadorid"),
+                Proyecto = e.GetAttributeValue<string>("cr3d2_proyecto"),
+                Gerencia = e.GetAttributeValue<string>("cr3d2_gerencia")
             };
         }
 
@@ -285,6 +289,10 @@ namespace EvaluacionDesempenoAB.Services
 
             if (!string.IsNullOrWhiteSpace(evaluacion.EvaluadorNombre))
                 e["crfb7_evaluadorid"] = evaluacion.EvaluadorNombre;
+            if (!string.IsNullOrWhiteSpace(evaluacion.Proyecto))
+                e["cr3d2_proyecto"] = evaluacion.Proyecto;
+            if (!string.IsNullOrWhiteSpace(evaluacion.Gerencia))
+                e["cr3d2_gerencia"] = evaluacion.Gerencia;
 
             if (evaluacion.Total.HasValue)
                 e["crfb7_total"] = evaluacion.Total.Value;
@@ -322,6 +330,10 @@ namespace EvaluacionDesempenoAB.Services
 
             if (!string.IsNullOrWhiteSpace(evaluacion.EvaluadorNombre))
                 e["crfb7_evaluadorid"] = evaluacion.EvaluadorNombre;
+            if (!string.IsNullOrWhiteSpace(evaluacion.Proyecto))
+                e["cr3d2_proyecto"] = evaluacion.Proyecto;
+            if (!string.IsNullOrWhiteSpace(evaluacion.Gerencia))
+                e["cr3d2_gerencia"] = evaluacion.Gerencia;
 
             if (evaluacion.Total.HasValue)
                 e["crfb7_total"] = evaluacion.Total.Value;

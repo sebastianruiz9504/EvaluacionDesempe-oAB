@@ -169,8 +169,9 @@
                     <div class="sheet-title">@Model.NombreNivel</div>
                 </td>
                 <td style="width: 30%;">
-                    <div><strong>Ficha:</strong> @Model.TipoEvaluacion</div>
-                    <div><strong>Fecha:</strong> @Model.FechaEvaluacion.ToShortDateString()</div>
+                      <div><strong>Código:</strong> GH-FM-059</div>
+                    <div><strong>Versión:</strong> 01</div>
+                    <div><strong>Vigencia:</strong> 09-03-2021</div>
                 </td>
             </tr>
         </table>
@@ -192,6 +193,22 @@
             <tr>
                 <td class="info-label">Gerencia</td>
                 <td class="info-value">@Model.Gerencia</td>
+            </tr>
+            <tr>
+                <td class="info-label">Nombre del jefe inmediato o evaluador</td>
+                <td class="info-value">@Model.NombreJefeInmediatoOEvaluador</td>
+            </tr>
+            <tr>
+                <td class="info-label">Cargo del jefe inmediato o evaluador</td>
+                <td class="info-value">@Model.CargoJefeInmediatoOEvaluador</td>
+            </tr>
+            <tr>
+                <td class="info-label">Fecha de ingreso</td>
+                <td class="info-value">@Model.FechaIngreso?.ToString("dd/MM/yyyy")</td>
+            </tr>
+            <tr>
+                <td class="info-label">Fecha de evaluación</td>
+                <td class="info-value">@Model.FechaGeneracionReporte.ToString("dd/MM/yyyy")</td>
             </tr>
             <tr>
                 <td class="info-label">Nivel de evaluación</td>

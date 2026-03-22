@@ -3,9 +3,37 @@
 
 @{
     ViewData["Title"] = "Mis evaluaciones";
+    var cedulaFiltro = ViewData["CedulaFiltro"] as string;
+    var proyectoFiltro = ViewData["ProyectoFiltro"] as string;
 }
 
 <h2 class="mt-4">Mis evaluaciones</h2>
+
+<form method="get" class="row g-2 align-items-end mt-1 mb-2">
+    <div class="col-md-4">
+        <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cédula</label>
+        <input id="cedulaFiltro"
+               name="cedula"
+               class="form-control"
+               value="@cedulaFiltro"
+               placeholder="Ej: 1012345678" />
+    </div>
+    <div class="col-md-4">
+        <label class="form-label mb-1" for="proyectoFiltro">Filtrar por proyecto</label>
+        <input id="proyectoFiltro"
+               name="proyecto"
+               class="form-control"
+               value="@proyectoFiltro"
+               placeholder="Ej: Acueducto Norte" />
+    </div>
+    <div class="col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+        @if (!string.IsNullOrWhiteSpace(cedulaFiltro) || !string.IsNullOrWhiteSpace(proyectoFiltro))
+        {
+            <a asp-action="Index" class="btn btn-outline-secondary">Limpiar</a>
+        }
+    </div>
+</form>
 
 @if (!Model.Any())
 {
@@ -20,8 +48,17 @@ else
          data-base-reporte="@Url.Action("Reporte", "Evaluaciones")"
          data-base-imprimir="@Url.Action("ImprimirResultados", "Evaluaciones")"
          data-base-reevaluar="@Url.Action("Reevaluar", "Evaluaciones")"
+<<<<<<< ours
+<<<<<<< ours
          data-base-carpeta="@Url.Action("Detalle", "Usuarios")">
+        <span class="text-muted">Selecciona una o más evaluaciones para habilitar las acciones.</span>
+=======
+=======
+>>>>>>> theirs
+         data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
+         data-base-editar="@Url.Action("Editar", "Evaluaciones")">
         <span class="text-muted">Selecciona una evaluación para habilitar las acciones.</span>
+>>>>>>> theirs
         <a id="accionReporte"
            class="btn btn-sm btn-outline-primary disabled"
            href="#"
@@ -40,21 +77,47 @@ else
            aria-disabled="true">
             Reevaluar
         </a>
+        <a id="accionEditar"
+           class="btn btn-sm btn-outline-dark disabled"
+           href="#"
+           aria-disabled="true">
+            Editar
+        </a>
         <a id="accionCarpeta"
            class="btn btn-sm btn-outline-secondary disabled"
            href="#"
            aria-disabled="true">
             Carpeta usuario
         </a>
+        <button id="accionExportar"
+                type="button"
+                class="btn btn-sm btn-outline-dark"
+                disabled>
+            Exportar resultados
+        </button>
+    </div>
+    <div class="mt-3">
+        <input id="filtroTablaEvaluaciones"
+               type="text"
+               class="form-control"
+               placeholder="Filtrar por proyecto o cédula..." />
     </div>
     <table class="table table-striped table-bordered mt-3">
         <thead class="table-light">
             <tr>
-                <th style="width: 60px;">Seleccionar</th>
+                <th style="width: 90px;">Seleccionar</th>
                 <th>Fecha evaluación</th>
                 <th>Próxima evaluación</th>
                 <th>Nombre</th>
                 <th>Cédula</th>
+                <th>Proyecto</th>
+<<<<<<< ours
+<<<<<<< ours
+                <th>Gerencia</th>
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
                 <th>Nivel</th>
                 <th>Tipo</th>
                  <th>Resultado final</th>
@@ -65,10 +128,12 @@ else
         {
             <tr data-evaluacion-id="@e.Id"
                 data-usuario-id="@e.UsuarioId"
-                data-puede-reevaluar="@e.PuedeReevaluar.ToString().ToLower()">
+                data-puede-reevaluar="@e.PuedeReevaluar.ToString().ToLower()"
+                data-proyecto="@e.ProyectoNombre"
+                data-cedula="@e.CedulaUsuario">
                 <td class="text-center">
-                    <input type="radio"
-                           name="evaluacionSeleccionada"
+                    <input type="checkbox"
+                           name="evaluacionesSeleccionadas"
                            class="form-check-input"
                            aria-label="Seleccionar evaluación de @e.NombreUsuario" />
                 </td>
@@ -81,6 +146,16 @@ else
                 </td>
                 <td>@e.NombreUsuario</td>
                 <td>@e.CedulaUsuario</td>
+<<<<<<< ours
+<<<<<<< ours
+                <td>@e.Proyecto</td>
+                <td>@e.Gerencia</td>
+=======
+                <td>@e.ProyectoUsuario</td>
+>>>>>>> theirs
+=======
+                <td>@e.ProyectoUsuario</td>
+>>>>>>> theirs
                 <td>
                     @e.NivelNombre
                     @if (!string.IsNullOrWhiteSpace(e.NivelCodigo))
@@ -114,11 +189,26 @@ else
             const accionReporte = document.getElementById("accionReporte");
             const accionImprimir = document.getElementById("accionImprimir");
             const accionReevaluar = document.getElementById("accionReevaluar");
+            const accionEditar = document.getElementById("accionEditar");
             const accionCarpeta = document.getElementById("accionCarpeta");
+            const accionExportar = document.getElementById("accionExportar");
+<<<<<<< ours
+            const filtroTablaEvaluaciones = document.getElementById("filtroTablaEvaluaciones");
+=======
+>>>>>>> theirs
             const baseReporte = acciones?.dataset.baseReporte ?? "";
             const baseImprimir = acciones?.dataset.baseImprimir ?? "";
             const baseReevaluar = acciones?.dataset.baseReevaluar ?? "";
             const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
+<<<<<<< ours
+<<<<<<< ours
+            const baseExportar = acciones?.dataset.baseExportar ?? "";
+=======
+            const baseEditar = acciones?.dataset.baseEditar ?? "";
+>>>>>>> theirs
+=======
+            const baseEditar = acciones?.dataset.baseEditar ?? "";
+>>>>>>> theirs
 
             if (!tabla || !acciones) {
                 return;
@@ -135,41 +225,150 @@ else
                 }
             };
 
-            const updateLinks = (row) => {
+<<<<<<< ours
+            const getFilasSeleccionadas = () => {
+                return Array.from(tabla.querySelectorAll("tbody tr"))
+                    .filter((row) => row.querySelector('input[type="checkbox"]')?.checked);
+            };
+
+            const setExportDisabled = (disabled) => {
+                if (!(accionExportar instanceof HTMLButtonElement)) {
+                    return;
+                }
+                accionExportar.disabled = disabled;
+            };
+
+            const updateLinks = () => {
+                const filasSeleccionadas = getFilasSeleccionadas();
+                const haySeleccion = filasSeleccionadas.length > 0;
+                const unicaSeleccion = filasSeleccionadas.length === 1;
+                const row = unicaSeleccion ? filasSeleccionadas[0] : null;
+
                 if (!row) {
+=======
+            const updateLinks = () => {
+                const checkedInputs = Array.from(tabla.querySelectorAll("tbody input[type='checkbox']:checked"));
+                const selectedRows = checkedInputs
+                    .map((input) => input.closest("tr"))
+                    .filter((row) => row instanceof HTMLTableRowElement);
+
+                const row = selectedRows[0];
+
+                if (!row || selectedRows.length === 0) {
+>>>>>>> theirs
                     setDisabled(accionReporte, true);
                     setDisabled(accionImprimir, true);
                     setDisabled(accionReevaluar, true);
+                    setDisabled(accionEditar, true);
                     setDisabled(accionCarpeta, true);
+<<<<<<< ours
+                    setExportDisabled(!haySeleccion);
+=======
+                    setDisabled(accionExportar, true);
+>>>>>>> theirs
                     return;
                 }
 
                 const evaluacionId = row.dataset.evaluacionId;
                 const usuarioId = row.dataset.usuarioId;
-                const puedeReevaluar = row.dataset.puedeReevaluar === "true";
 
                 accionReporte.href = `${baseReporte}?id=${evaluacionId}`;
                 accionImprimir.href = `${baseImprimir}?id=${evaluacionId}`;
-                accionCarpeta.href = `${baseCarpeta}?id=${usuarioId}`;
+                accionReevaluar.href = `${baseReevaluar}?id=${evaluacionId}`;
+                accionEditar.href = `${baseEditar}?id=${evaluacionId}`;
+                accionCarpeta.href = `${baseCarpeta}?usuarioId=${usuarioId}`;
 
                 setDisabled(accionReporte, false);
                 setDisabled(accionImprimir, false);
+                setDisabled(accionReevaluar, false);
+                setDisabled(accionEditar, false);
                 setDisabled(accionCarpeta, false);
+<<<<<<< ours
+<<<<<<< ours
                 setDisabled(accionReevaluar, !puedeReevaluar);
+<<<<<<< ours
+                setExportDisabled(false);
+=======
+                setDisabled(accionExportar, false);
+>>>>>>> theirs
 
                 if (puedeReevaluar) {
                     accionReevaluar.href = `${baseReevaluar}?id=${evaluacionId}`;
                 }
+
+                const query = checkedInputs
+                    .map((input) => input.closest("tr")?.dataset.evaluacionId)
+                    .filter((id) => id)
+                    .map((id) => `ids=${encodeURIComponent(id)}`)
+                    .join("&");
+
+                accionExportar.href = `${baseExportar}?${query}`;
+            };
+
+            const buildCsvValue = (value) => {
+                const text = (value ?? "").toString().replace(/"/g, "\"\"");
+                return `"${text}"`;
+            };
+
+            const exportarSeleccion = () => {
+                const filasSeleccionadas = getFilasSeleccionadas();
+                if (!filasSeleccionadas.length) {
+                    return;
+                }
+
+                const headers = ["Fecha evaluación", "Próxima evaluación", "Nombre", "Cédula", "Proyecto", "Nivel", "Tipo", "Resultado final"];
+                const rows = filasSeleccionadas.map((row) => {
+                    const cells = Array.from(row.querySelectorAll("td")).slice(1);
+                    return cells.map((cell) => buildCsvValue(cell.textContent?.trim() ?? "")).join(",");
+                });
+
+                const csvContent = [headers.map(buildCsvValue).join(","), ...rows].join("\n");
+                const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = `evaluaciones-seleccionadas-${new Date().toISOString().slice(0, 10)}.csv`;
+                document.body.appendChild(anchor);
+                anchor.click();
+                document.body.removeChild(anchor);
+                URL.revokeObjectURL(url);
+            };
+
+            const applyFilter = () => {
+                const filtro = filtroTablaEvaluaciones instanceof HTMLInputElement
+                    ? filtroTablaEvaluaciones.value.trim().toLowerCase()
+                    : "";
+
+                const rows = Array.from(tabla.querySelectorAll("tbody tr"));
+                rows.forEach((row) => {
+                    const proyecto = (row.dataset.proyecto ?? "").toLowerCase();
+                    const cedula = (row.dataset.cedula ?? "").toLowerCase();
+                    const coincide = !filtro || proyecto.includes(filtro) || cedula.includes(filtro);
+                    row.style.display = coincide ? "" : "none";
+                });
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
             };
 
             tabla.addEventListener("change", (event) => {
                 const input = event.target;
-                if (!(input instanceof HTMLInputElement) || input.type !== "radio") {
+                if (!(input instanceof HTMLInputElement) || input.type !== "checkbox") {
                     return;
                 }
-                const row = input.closest("tr");
-                updateLinks(row);
+                updateLinks();
             });
+
+            if (accionExportar instanceof HTMLButtonElement) {
+                accionExportar.addEventListener("click", exportarSeleccion);
+            }
+
+            if (filtroTablaEvaluaciones instanceof HTMLInputElement) {
+                filtroTablaEvaluaciones.addEventListener("input", applyFilter);
+            }
+
+            updateLinks();
         })();
     </script>
 }
