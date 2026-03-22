@@ -48,17 +48,9 @@ else
          data-base-reporte="@Url.Action("Reporte", "Evaluaciones")"
          data-base-imprimir="@Url.Action("ImprimirResultados", "Evaluaciones")"
          data-base-reevaluar="@Url.Action("Reevaluar", "Evaluaciones")"
-<<<<<<< ours
-<<<<<<< ours
-         data-base-carpeta="@Url.Action("Detalle", "Usuarios")">
-        <span class="text-muted">Selecciona una o más evaluaciones para habilitar las acciones.</span>
-=======
-=======
->>>>>>> theirs
          data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
          data-base-editar="@Url.Action("Editar", "Evaluaciones")">
         <span class="text-muted">Selecciona una evaluación para habilitar las acciones.</span>
->>>>>>> theirs
         <a id="accionReporte"
            class="btn btn-sm btn-outline-primary disabled"
            href="#"
@@ -111,13 +103,6 @@ else
                 <th>Nombre</th>
                 <th>Cédula</th>
                 <th>Proyecto</th>
-<<<<<<< ours
-<<<<<<< ours
-                <th>Gerencia</th>
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
                 <th>Nivel</th>
                 <th>Tipo</th>
                  <th>Resultado final</th>
@@ -146,16 +131,7 @@ else
                 </td>
                 <td>@e.NombreUsuario</td>
                 <td>@e.CedulaUsuario</td>
-<<<<<<< ours
-<<<<<<< ours
-                <td>@e.Proyecto</td>
-                <td>@e.Gerencia</td>
-=======
                 <td>@e.ProyectoUsuario</td>
->>>>>>> theirs
-=======
-                <td>@e.ProyectoUsuario</td>
->>>>>>> theirs
                 <td>
                     @e.NivelNombre
                     @if (!string.IsNullOrWhiteSpace(e.NivelCodigo))
@@ -192,23 +168,11 @@ else
             const accionEditar = document.getElementById("accionEditar");
             const accionCarpeta = document.getElementById("accionCarpeta");
             const accionExportar = document.getElementById("accionExportar");
-<<<<<<< ours
-            const filtroTablaEvaluaciones = document.getElementById("filtroTablaEvaluaciones");
-=======
->>>>>>> theirs
             const baseReporte = acciones?.dataset.baseReporte ?? "";
             const baseImprimir = acciones?.dataset.baseImprimir ?? "";
             const baseReevaluar = acciones?.dataset.baseReevaluar ?? "";
             const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
-<<<<<<< ours
-<<<<<<< ours
-            const baseExportar = acciones?.dataset.baseExportar ?? "";
-=======
             const baseEditar = acciones?.dataset.baseEditar ?? "";
->>>>>>> theirs
-=======
-            const baseEditar = acciones?.dataset.baseEditar ?? "";
->>>>>>> theirs
 
             if (!tabla || !acciones) {
                 return;
@@ -225,27 +189,6 @@ else
                 }
             };
 
-<<<<<<< ours
-            const getFilasSeleccionadas = () => {
-                return Array.from(tabla.querySelectorAll("tbody tr"))
-                    .filter((row) => row.querySelector('input[type="checkbox"]')?.checked);
-            };
-
-            const setExportDisabled = (disabled) => {
-                if (!(accionExportar instanceof HTMLButtonElement)) {
-                    return;
-                }
-                accionExportar.disabled = disabled;
-            };
-
-            const updateLinks = () => {
-                const filasSeleccionadas = getFilasSeleccionadas();
-                const haySeleccion = filasSeleccionadas.length > 0;
-                const unicaSeleccion = filasSeleccionadas.length === 1;
-                const row = unicaSeleccion ? filasSeleccionadas[0] : null;
-
-                if (!row) {
-=======
             const updateLinks = () => {
                 const checkedInputs = Array.from(tabla.querySelectorAll("tbody input[type='checkbox']:checked"));
                 const selectedRows = checkedInputs
@@ -255,17 +198,12 @@ else
                 const row = selectedRows[0];
 
                 if (!row || selectedRows.length === 0) {
->>>>>>> theirs
                     setDisabled(accionReporte, true);
                     setDisabled(accionImprimir, true);
                     setDisabled(accionReevaluar, true);
                     setDisabled(accionEditar, true);
                     setDisabled(accionCarpeta, true);
-<<<<<<< ours
-                    setExportDisabled(!haySeleccion);
-=======
                     setDisabled(accionExportar, true);
->>>>>>> theirs
                     return;
                 }
 
@@ -283,7 +221,6 @@ else
                 setDisabled(accionReevaluar, false);
                 setDisabled(accionEditar, false);
                 setDisabled(accionCarpeta, false);
-<<<<<<< ours
 <<<<<<< ours
                 setDisabled(accionReevaluar, !puedeReevaluar);
 <<<<<<< ours
@@ -346,8 +283,6 @@ else
                     const coincide = !filtro || proyecto.includes(filtro) || cedula.includes(filtro);
                     row.style.display = coincide ? "" : "none";
                 });
-=======
->>>>>>> theirs
 =======
 >>>>>>> theirs
             };

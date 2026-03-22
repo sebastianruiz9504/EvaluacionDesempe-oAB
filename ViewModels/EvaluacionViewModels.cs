@@ -14,15 +14,7 @@ namespace EvaluacionDesempenoAB.ViewModels
 
         public string NombreUsuario { get; set; } = string.Empty;
         public string CedulaUsuario { get; set; } = string.Empty;
-<<<<<<< ours
-<<<<<<< ours
-        public string ProyectoNombre { get; set; } = string.Empty;
-=======
         public string ProyectoUsuario { get; set; } = string.Empty;
->>>>>>> theirs
-=======
-        public string ProyectoUsuario { get; set; } = string.Empty;
->>>>>>> theirs
 
         public string? NivelNombre { get; set; }
         public string? NivelCodigo { get; set; }
