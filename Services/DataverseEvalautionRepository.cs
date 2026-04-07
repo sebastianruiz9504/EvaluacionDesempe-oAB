@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using EvaluacionDesempenoAB.Models;
+using Microsoft.Crm.Sdk.Messages;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace EvaluacionDesempenoAB.Services
@@ -23,6 +28,8 @@ namespace EvaluacionDesempenoAB.Services
         private const string EvaluacionTable = "crfb7_evaluacion";
         private const string DetalleTable    = "crfb7_detalledeevaluacion";
         private const string PlanTable       = "crfb7_plandeaccion";
+        private const string ReporteFirmadoColumn = "cr3d2_reportefirmado";
+        private const string ReporteFirmadoNombreColumn = "cr3d2_reportefirmado_name";
 
         public DataverseEvaluacionRepository(ServiceClient client)
         {
@@ -55,8 +62,10 @@ namespace EvaluacionDesempenoAB.Services
                 ColumnSet = new ColumnSet(true)
             };
 
-            // Los usuarios a cargo son aquellos donde crfb7_evaluadorid = correo del evaluador
-            q.Criteria.AddCondition("crfb7_evaluadorid", ConditionOperator.Equal, evaluadorCorreo);
+            var filter = new FilterExpression(LogicalOperator.Or);
+            filter.AddCondition("crfb7_evaluadorid", ConditionOperator.Equal, evaluadorCorreo);
+            filter.AddCondition("cr3d2_correoevaluadorsst", ConditionOperator.Equal, evaluadorCorreo);
+            q.Criteria.AddFilter(filter);
 
             var result = await _client.RetrieveMultipleAsync(q);
             return result.Entities.Select(MapUsuario).ToList();
@@ -97,7 +106,8 @@ namespace EvaluacionDesempenoAB.Services
                     e.GetAttributeValue<DateTime?>("crfb7_fechaactivacionevaluacion"),
                 CorreoElectronico = e.GetAttributeValue<string>("crfb7_correoelectronico"),
                 EvaluadorNombre   = e.GetAttributeValue<string>("crfb7_evaluadorid"),
-                 CorreoEvaluador   = e.GetAttributeValue<string>("crfb7_correoevaluador"),
+                CorreoEvaluador   = e.GetAttributeValue<string>("crfb7_correoevaluador"),
+                CorreoEvaluadorSst = e.GetAttributeValue<string>("cr3d2_correoevaluadorsst"),
                 CargoJefeInmediato = e.GetAttributeValue<string>("cr3d2_cargodeljefeinmediato"),
                 TipoFormulario    = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value,
                 EsSuperAdministrador = GetBoolOrOptionSet(e, "crfb7_superadministrador"),
@@ -223,13 +233,39 @@ namespace EvaluacionDesempenoAB.Services
 
         public async Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorCorreo)
         {
+            var usuarios = await GetUsuariosByEvaluadorAsync(evaluadorCorreo);
+            var usuarioIds = usuarios
+                .Select(u => u.Id)
+                .Distinct()
+                .ToList();
+
+            if (!usuarioIds.Any())
+            {
+                return new List<Evaluacion>();
+            }
+
             var q = new QueryExpression(EvaluacionTable)
             {
                 ColumnSet = new ColumnSet(true)
             };
 
-            // Filtramos por correo del evaluador (texto)
-            q.Criteria.AddCondition("crfb7_evaluadorid", ConditionOperator.Equal, evaluadorCorreo);
+            q.Criteria.AddCondition(
+                "crfb7_usuario",
+                ConditionOperator.In,
+                usuarioIds.Cast<object>().ToArray());
+            q.AddOrder("createdon", OrderType.Descending);
+
+            var result = await _client.RetrieveMultipleAsync(q);
+            return result.Entities.Select(MapEvaluacion).ToList();
+        }
+
+        public async Task<List<Evaluacion>> GetEvaluacionesAsync()
+        {
+            var q = new QueryExpression(EvaluacionTable)
+            {
+                ColumnSet = new ColumnSet(true)
+            };
+
             q.AddOrder("createdon", OrderType.Descending);
 
             var result = await _client.RetrieveMultipleAsync(q);
@@ -273,8 +309,151 @@ namespace EvaluacionDesempenoAB.Services
                 EvaluacionOrigenId = e.GetAttributeValue<EntityReference>("crfb7_evaluacionorigen")?.Id,
                 EvaluadorNombre = e.GetAttributeValue<string>("crfb7_evaluadorid"),
                 Proyecto = e.GetAttributeValue<string>("cr3d2_proyecto"),
-                Gerencia = e.GetAttributeValue<string>("cr3d2_gerencia")
+                Gerencia = e.GetAttributeValue<string>("cr3d2_gerencia"),
+                ReporteFirmadoId = GetFileId(e, ReporteFirmadoColumn),
+                ReporteFirmadoNombre = e.GetAttributeValue<string>(ReporteFirmadoNombreColumn)
             };
+        }
+
+        private static Guid? GetFileId(Entity entity, string attributeLogicalName)
+        {
+            if (!entity.Attributes.TryGetValue(attributeLogicalName, out var rawValue) || rawValue == null)
+            {
+                return null;
+            }
+
+            if (rawValue is Guid guidValue)
+            {
+                return guidValue;
+            }
+
+            if (rawValue is string stringValue && Guid.TryParse(stringValue, out var parsedGuid))
+            {
+                return parsedGuid;
+            }
+
+            return null;
+        }
+
+        public Task UploadReporteFirmadoAsync(Guid evaluacionId, string fileName, string? contentType, Stream content)
+        {
+            var maxSizeInKb = GetFileColumnMaxSizeInKb(EvaluacionTable, ReporteFirmadoColumn);
+            if (content.CanSeek && content.Length > maxSizeInKb * 1024L)
+            {
+                throw new InvalidPluginExecutionException("El archivo supera el tamaño máximo permitido para la columna Reporte firmado.");
+            }
+
+            var target = new EntityReference(EvaluacionTable, evaluacionId);
+            var initializeRequest = new InitializeFileBlocksUploadRequest
+            {
+                Target = target,
+                FileAttributeName = ReporteFirmadoColumn,
+                FileName = fileName
+            };
+
+            var initializeResponse = (InitializeFileBlocksUploadResponse)_client.Execute(initializeRequest);
+            var token = initializeResponse.FileContinuationToken;
+            var blockIds = new List<string>();
+            var buffer = new byte[4 * 1024 * 1024];
+
+            int bytesRead;
+            while ((bytesRead = content.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                var chunk = new byte[bytesRead];
+                System.Buffer.BlockCopy(buffer, 0, chunk, 0, bytesRead);
+
+                var blockId = Convert.ToBase64String(Encoding.UTF8.GetBytes(Guid.NewGuid().ToString()));
+                blockIds.Add(blockId);
+
+                var uploadRequest = new UploadBlockRequest
+                {
+                    BlockData = chunk,
+                    BlockId = blockId,
+                    FileContinuationToken = token
+                };
+
+                _client.Execute(uploadRequest);
+            }
+
+            var commitRequest = new CommitFileBlocksUploadRequest
+            {
+                BlockList = blockIds.ToArray(),
+                FileContinuationToken = token,
+                FileName = fileName,
+                MimeType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType
+            };
+
+            _client.Execute(commitRequest);
+            return Task.CompletedTask;
+        }
+
+        public Task<ArchivoEvaluacion?> DownloadReporteFirmadoAsync(Guid evaluacionId)
+        {
+            var target = new EntityReference(EvaluacionTable, evaluacionId);
+            var initializeRequest = new InitializeFileBlocksDownloadRequest
+            {
+                Target = target,
+                FileAttributeName = ReporteFirmadoColumn
+            };
+
+            var initializeResponse = (InitializeFileBlocksDownloadResponse)_client.Execute(initializeRequest);
+            if (initializeResponse.FileSizeInBytes <= 0)
+            {
+                return Task.FromResult<ArchivoEvaluacion?>(null);
+            }
+
+            var bytes = new List<byte>((int)initializeResponse.FileSizeInBytes);
+            long remaining = initializeResponse.FileSizeInBytes;
+            long offset = 0;
+            long blockSize = initializeResponse.IsChunkingSupported
+                ? 4 * 1024 * 1024
+                : initializeResponse.FileSizeInBytes;
+
+            if (remaining < blockSize)
+            {
+                blockSize = remaining;
+            }
+
+            while (remaining > 0)
+            {
+                var downloadRequest = new DownloadBlockRequest
+                {
+                    BlockLength = blockSize,
+                    FileContinuationToken = initializeResponse.FileContinuationToken,
+                    Offset = offset
+                };
+
+                var downloadResponse = (DownloadBlockResponse)_client.Execute(downloadRequest);
+                bytes.AddRange(downloadResponse.Data);
+                remaining -= blockSize;
+                offset += blockSize;
+            }
+
+            ArchivoEvaluacion archivo = new()
+            {
+                NombreArchivo = initializeResponse.FileName ?? "reporte_firmado",
+                TipoContenido = "application/octet-stream",
+                Contenido = bytes.ToArray()
+            };
+
+            return Task.FromResult<ArchivoEvaluacion?>(archivo);
+        }
+
+        private int GetFileColumnMaxSizeInKb(string entityLogicalName, string fileColumnLogicalName)
+        {
+            var request = new RetrieveAttributeRequest
+            {
+                EntityLogicalName = entityLogicalName,
+                LogicalName = fileColumnLogicalName
+            };
+
+            var response = (RetrieveAttributeResponse)_client.Execute(request);
+            if (response.AttributeMetadata is FileAttributeMetadata fileColumn && fileColumn.MaxSizeInKB.HasValue)
+            {
+                return fileColumn.MaxSizeInKB.Value;
+            }
+
+            throw new InvalidPluginExecutionException($"{entityLogicalName}.{fileColumnLogicalName} no es una columna de archivo válida.");
         }
 
         public async Task<Guid> CreateEvaluacionAsync(Evaluacion evaluacion,
@@ -328,25 +507,23 @@ namespace EvaluacionDesempenoAB.Services
             e["crfb7_nivel"]   = new EntityReference(NivelTable, evaluacion.NivelId);
             e["crfb7_tipo"]    = evaluacion.TipoEvaluacion;
 
-            if (!string.IsNullOrWhiteSpace(evaluacion.EvaluadorNombre))
-                e["crfb7_evaluadorid"] = evaluacion.EvaluadorNombre;
-            if (!string.IsNullOrWhiteSpace(evaluacion.Proyecto))
-                e["cr3d2_proyecto"] = evaluacion.Proyecto;
-            if (!string.IsNullOrWhiteSpace(evaluacion.Gerencia))
-                e["cr3d2_gerencia"] = evaluacion.Gerencia;
-
-            if (evaluacion.Total.HasValue)
-                e["crfb7_total"] = evaluacion.Total.Value;
-
-            if (!string.IsNullOrWhiteSpace(evaluacion.Observaciones))
-                e["crfb7_observaciones"] = evaluacion.Observaciones;
-
-            if (evaluacion.FechaProximaEvaluacion.HasValue)
-                e["crfb7_fechaproxima"] = evaluacion.FechaProximaEvaluacion.Value;
-
-            if (evaluacion.EvaluacionOrigenId.HasValue)
-                e["crfb7_evaluacionorigen"] =
-                    new EntityReference(EvaluacionTable, evaluacion.EvaluacionOrigenId.Value);
+            e["crfb7_evaluadorid"] = string.IsNullOrWhiteSpace(evaluacion.EvaluadorNombre)
+                ? null
+                : evaluacion.EvaluadorNombre;
+            e["cr3d2_proyecto"] = string.IsNullOrWhiteSpace(evaluacion.Proyecto)
+                ? null
+                : evaluacion.Proyecto;
+            e["cr3d2_gerencia"] = string.IsNullOrWhiteSpace(evaluacion.Gerencia)
+                ? null
+                : evaluacion.Gerencia;
+            e["crfb7_total"] = evaluacion.Total;
+            e["crfb7_observaciones"] = string.IsNullOrWhiteSpace(evaluacion.Observaciones)
+                ? null
+                : evaluacion.Observaciones;
+            e["crfb7_fechaproxima"] = evaluacion.FechaProximaEvaluacion;
+            e["crfb7_evaluacionorigen"] = evaluacion.EvaluacionOrigenId.HasValue
+                ? new EntityReference(EvaluacionTable, evaluacion.EvaluacionOrigenId.Value)
+                : null;
 
             await _client.UpdateAsync(e);
 
@@ -453,6 +630,7 @@ namespace EvaluacionDesempenoAB.Services
             {
                 Id               = e.Id,
                 EvaluacionId     = evalId,
+                ComportamientoNombre = e.GetAttributeValue<string>("crfb7_responsable"),
                 DescripcionAccion = e.GetAttributeValue<string>("crfb7_descripciondelaaccion") ?? "",
                 Responsable      = e.GetAttributeValue<string>("crfb7_responsable"),
                 FechaCompromiso  = e.GetAttributeValue<DateTime?>("crfb7_fechacompromiso")

@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.IdentityModel.LoggingExtensions</id>
+    <version>8.15.0</version>
+    <authors>Microsoft</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <projectUrl>https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet</projectUrl>
+    <description>A package containing logging extensions to support writing Identity logs to Microsoft.Extensions.Logging.ILogger.</description>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>.NET Windows Authentication Identity Extensions Logging</tags>
+    <repository type="git" url="https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet" commit="c33522ef007464c86989ab65f22ab5719a664bbf" />
+    <dependencies>
+      <group targetFramework="net9.0">
+        <dependency id="Microsoft.IdentityModel.Abstractions" version="8.15.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="2.1.1" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework="net10.0">
+        <dependency id="Microsoft.IdentityModel.Abstractions" version="8.15.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="2.1.1" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="Microsoft.IdentityModel.Abstractions" version="8.15.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="2.1.1" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

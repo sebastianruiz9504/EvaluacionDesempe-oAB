@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.Identity.Web.UI</id>
+    <version>4.1.1</version>
+    <title>Microsoft Identity Web UI</title>
+    <authors>Microsoft</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/AzureAD/microsoft-identity-web</projectUrl>
+    <description>This package enables UI for ASP.NET Core Web apps that use Microsoft.Identity.Web.</description>
+    <releaseNotes>The release notes are available at https://github.com/AzureAD/microsoft-identity-web/releases and the roadmap at https://github.com/AzureAD/microsoft-identity-web/wiki#roadmap</releaseNotes>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>Microsoft Identity Web UI Microsoft identity platform Microsoft Identity Web .NET ASP.NET Core Web App Web API B2C Azure Active Directory AAD Identity Authentication Authorization</tags>
+    <repository type="git" url="https://github.com/AzureAD/microsoft-identity-web" commit="91dd00bc7aa83eb00903fb92e48d4a39f2cbd068" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="Microsoft.Identity.Web" version="4.1.1" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework="net9.0">
+        <dependency id="Microsoft.Identity.Web" version="4.1.1" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+    <frameworkReferences>
+      <group targetFramework="net8.0">
+        <frameworkReference name="Microsoft.AspNetCore.App" />
+      </group>
+      <group targetFramework="net9.0">
+        <frameworkReference name="Microsoft.AspNetCore.App" />
+      </group>
+    </frameworkReferences>
+  </metadata>
+</package>

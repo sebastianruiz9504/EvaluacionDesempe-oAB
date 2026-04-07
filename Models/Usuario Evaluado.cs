@@ -24,6 +24,7 @@ namespace EvaluacionDesempenoAB.Models
         // Correo del evaluador (texto) tal como está en crfb7_evaluadorid
         public string? EvaluadorNombre { get; set; }
         public string? CorreoEvaluador { get; set; }
+        public string? CorreoEvaluadorSst { get; set; }
         public string? CargoJefeInmediato { get; set; }
          public int? TipoFormulario { get; set; }
 

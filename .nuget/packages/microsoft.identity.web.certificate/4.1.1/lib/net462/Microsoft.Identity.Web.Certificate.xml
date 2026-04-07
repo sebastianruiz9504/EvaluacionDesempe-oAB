@@ -1,0 +1,359 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Microsoft.Identity.Web.Certificate</name>
+    </assembly>
+    <members>
+        <member name="T:Microsoft.Identity.Web.CertificateConstants">
+            <summary>
+            General constants for Microsoft Identity Certificates.
+            </summary>
+        </member>
+        <member name="T:Microsoft.Identity.Web.CertificateDescription">
+            <summary>
+            Description of a certificate.
+            </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.#ctor">
+            <summary>
+            Default constructor.
+            </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.#ctor(Microsoft.Identity.Abstractions.CredentialDescription)">
+            <summary>
+            Creates a certificate description from a credential description.
+            </summary>
+            <param name="credentialDescription"></param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.FromCertificate(System.Security.Cryptography.X509Certificates.X509Certificate2)">
+            <summary>
+            Creates a certificate description from a certificate (by code).
+            </summary>
+            <param name="x509certificate2">Certificate.</param>
+            <returns>A certificate description.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.FromKeyVault(System.String,System.String)">
+            <summary>
+            Creates a certificate description from Key Vault.
+            </summary>
+            <param name="keyVaultUrl">The Key Vault URL.</param>
+            <param name="keyVaultCertificateName">The name of the certificate in Key Vault.</param>
+            <returns>A certificate description.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.FromBase64Encoded(System.String)">
+            <summary>
+            Creates a certificate description from a Base64 encoded value.
+            </summary>
+            <param name="base64EncodedValue">Base64 encoded certificate value.</param>
+            <returns>A certificate description.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.FromBase64Encoded(System.String,System.String)">
+            <summary>
+            Creates a certificate description from a Base64 encoded value.
+            </summary>
+            <param name="base64EncodedValue">Base64 encoded certificate value.</param>
+            <param name="password">The password to use when decoding the certificate.</param>
+            <returns>A certificate description.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.FromPath(System.String,System.String)">
+            <summary>
+            Creates a certificate description from path on disk.
+            </summary>
+            <param name="path">Path where to find the certificate file.</param>
+            <param name="password">Certificate password.</param>
+            <returns>A certificate description.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.FromStoreWithThumbprint(System.String,System.Security.Cryptography.X509Certificates.StoreLocation,System.Security.Cryptography.X509Certificates.StoreName)">
+            <summary>
+            Creates a certificate description from a thumbprint and store location (Certificate Manager on Windows, for instance).
+            </summary>
+            <param name="certificateThumbprint">Certificate thumbprint.</param>
+            <param name="certificateStoreLocation">Store location where to find the certificate.</param>
+            <param name="certificateStoreName">Store name where to find the certificate.</param>
+            <returns>A certificate description.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateDescription.FromStoreWithDistinguishedName(System.String,System.Security.Cryptography.X509Certificates.StoreLocation,System.Security.Cryptography.X509Certificates.StoreName)">
+            <summary>
+            Creates a certificate description from a certificate distinguished name (such as CN=name)
+            and store location (Certificate Manager on Windows, for instance).
+            </summary>
+            <param name="certificateDistinguishedName">Certificate distinguished named.</param>
+            <param name="certificateStoreLocation">Store location where to find the certificate.</param>
+            <param name="certificateStoreName">Store name where to find the certificate.</param>
+            <returns>A certificate description.</returns>
+        </member>
+        <member name="P:Microsoft.Identity.Web.CertificateDescription.X509KeyStorageFlags">
+            <summary>
+             Defines where and how to import the private key of an X.509 certificate.
+            </summary>
+        </member>
+        <member name="P:Microsoft.Identity.Web.CertificateDescription.Certificate">
+            <summary>
+            <inheritdoc/>.
+            </summary>
+        </member>
+        <member name="P:Microsoft.Identity.Web.CertificateDescription.SourceType">
+            <summary>
+            <inheritdoc/>.
+            </summary>
+        </member>
+        <member name="T:Microsoft.Identity.Web.CertificateErrorMessage">
+            <summary>
+            Constants related to the error messages.
+            </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.CertificateLoaderHelper.FindCertificateByCriterium(System.Security.Cryptography.X509Certificates.X509Store,System.Security.Cryptography.X509Certificates.X509FindType,System.String)">
+            <summary>
+            Find a certificate by criteria.
+            </summary>
+        </member>
+        <member name="T:Microsoft.Identity.Web.CertificateSource">
+            <summary>
+            Source for a certificate.
+            </summary>
+        </member>
+        <member name="F:Microsoft.Identity.Web.CertificateSource.Certificate">
+            <summary>
+            Certificate itself.
+            </summary>
+        </member>
+        <member name="F:Microsoft.Identity.Web.CertificateSource.KeyVault">
+            <summary>
+            From an Azure Key Vault.
+            </summary>
+        </member>
+        <member name="F:Microsoft.Identity.Web.CertificateSource.Base64Encoded">
+            <summary>
+            Base64 encoded string directly from the configuration.
+            </summary>
+        </member>
+        <member name="F:Microsoft.Identity.Web.CertificateSource.Path">
+            <summary>
+            From local path on disk.
+            </summary>
+        </member>
+        <member name="F:Microsoft.Identity.Web.CertificateSource.StoreWithThumbprint">
+            <summary>
+            From the certificate store, described by its thumbprint.
+            </summary>
+        </member>
+        <member name="F:Microsoft.Identity.Web.CertificateSource.StoreWithDistinguishedName">
+            <summary>
+            From the certificate store, described by its distinguished name.
+            </summary>
+        </member>
+        <member name="T:Microsoft.Identity.Web.DefaultCertificateLoader">
+             <summary>
+             Certificate Loader.
+             Only use when loading a certificate from a daemon application, or an ASP NET app, using MSAL .NET directly.
+             For an ASP NET Core app, <b>Microsoft Identity Web will handle the certificate loading</b> for you.
+             <example><code>
+             IConfidentialClientApplication app;
+             ICertificateLoader certificateLoader = new DefaultCertificateLoader();
+                 certificateLoader.LoadIfNeeded(config.CertificateDescription);
+            
+                app = ConfidentialClientApplicationBuilder.Create(config.ClientId)
+                       .WithCertificate(config.CertificateDescription.Certificate)
+                       .WithAuthority(new Uri(config.Authority))
+                       .Build();
+             </code></example>
+             </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.#ctor(Microsoft.Extensions.Logging.ILogger{Microsoft.Identity.Web.DefaultCertificateLoader})">
+            <summary>
+            Constructor with a logger.
+            </summary>
+            <param name="logger"></param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.#ctor">
+            <summary>
+            Default constuctor.
+            </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.#ctor(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.ICustomSignedAssertionProvider},Microsoft.Extensions.Logging.ILogger{Microsoft.Identity.Web.DefaultCertificateLoader})">
+            <summary>
+            Constructor with custom signed assertion providers.
+            </summary>
+            <param name="customSignedAssertionProviders">List of providers of custom signed assertions</param>
+            <param name="logger">ILogger.</param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.#ctor(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.ICredentialSourceLoader},Microsoft.Extensions.Logging.ILogger{Microsoft.Identity.Web.DefaultCertificateLoader})">
+            <summary>
+            Constructor with a logger and custom credential source loaders.
+            </summary>
+            <param name="credentialSourceLoaders">Additional credential source loaders. Can override built-in loaders.</param>
+            <param name="logger">Logger instance</param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.#ctor(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.ICredentialSourceLoader},System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.ICustomSignedAssertionProvider},Microsoft.Extensions.Logging.ILogger{Microsoft.Identity.Web.DefaultCertificateLoader})">
+            <summary>
+            Constructor with both custom signed assertion providers and custom credential source loaders.
+            </summary>
+            <param name="credentialSourceLoaders">Additional credential source loaders. Can override built-in loaders.</param>
+            <param name="customSignedAssertionProviders">List of providers of custom signed assertions</param>
+            <param name="logger">ILogger.</param>
+        </member>
+        <member name="P:Microsoft.Identity.Web.DefaultCertificateLoader.UserAssignedManagedIdentityClientId">
+            <summary>
+             This default is overridable at the level of the credential description (for the certificate from KeyVault).
+            </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.LoadFirstCertificate(System.Collections.Generic.IEnumerable{Microsoft.Identity.Web.CertificateDescription})">
+            <summary>
+            Load the first certificate from the certificate description list.
+            </summary>
+            <param name="certificateDescriptions">Description of the certificates.</param>
+            <returns>First certificate in the certificate description list.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.LoadFirstCertificateAsync(System.Collections.Generic.IEnumerable{Microsoft.Identity.Web.CertificateDescription})">
+            <summary>
+            Load the first certificate from the certificate description list.
+            </summary>
+            <param name="certificateDescriptions">Description of the certificates.</param>
+            <returns>First certificate in the certificate description list.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.LoadAllCertificates(System.Collections.Generic.IEnumerable{Microsoft.Identity.Web.CertificateDescription})">
+            <summary>
+            Load all the certificates from the certificate description list.
+            </summary>
+            <param name="certificateDescriptions">Description of the certificates.</param>
+            <returns>All the certificates in the certificate description list.</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.LoadCertificates(System.Collections.Generic.IEnumerable{Microsoft.Identity.Web.CertificateDescription})">
+            <summary>
+            Load the certificates from the certificate description list.
+            </summary>
+            <param name="certificateDescriptions"></param>
+            <returns>a collection of certificates</returns>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.ResetCertificates(System.Collections.Generic.IEnumerable{Microsoft.Identity.Web.CertificateDescription})">
+            <summary>
+            Resets all the certificates in the certificate description list.
+            Use, for example, before a retry.
+            </summary>
+            <param name="certificateDescriptions">Description of the certificates.</param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.ResetCertificates(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.CredentialDescription})">
+            <summary>
+            Resets all the certificates in the certificate description list.
+            Use, for example, before a retry.
+            </summary>
+            <param name="credentialDescription">Description of the certificates.</param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.LoadIfNeeded(Microsoft.Identity.Web.CertificateDescription)">
+            <summary>
+            Load the certificate from the description, if needed.
+            </summary>
+            <param name="certificateDescription">Description of the certificate.</param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCertificateLoader.LoadIfNeededAsync(Microsoft.Identity.Web.CertificateDescription)">
+            <summary>
+            Load the certificate from the description, if needed.
+            </summary>
+            <param name="certificateDescription">Description of the certificate.</param>
+        </member>
+        <member name="T:Microsoft.Identity.Web.DefaultCredentialsLoader">
+            <summary>
+            Default credentials loader.
+            </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCredentialsLoader.#ctor(Microsoft.Extensions.Logging.ILogger{Microsoft.Identity.Web.DefaultCredentialsLoader})">
+            <summary>
+            Constructor with a logger
+            </summary>
+            <param name="logger"></param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCredentialsLoader.#ctor(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.ICredentialSourceLoader},Microsoft.Extensions.Logging.ILogger{Microsoft.Identity.Web.DefaultCredentialsLoader})">
+            <summary>
+            Constructor with a logger and custom credential source loaders
+            </summary>
+            <param name="credentialSourceLoaders">Additional credential source loaders. Can override built-in loaders.</param>
+            <param name="logger">Logger instance</param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCredentialsLoader.#ctor">
+            <summary>
+            Default constructor (for backward compatibility)
+            </summary>
+        </member>
+        <member name="P:Microsoft.Identity.Web.DefaultCredentialsLoader.CredentialSourceLoaders">
+            <summary>
+            Dictionary of credential loaders per credential source. The application can add more to 
+            process additional credential sources(like dSMS).
+            </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCredentialsLoader.LoadCredentialsIfNeededAsync(Microsoft.Identity.Abstractions.CredentialDescription,Microsoft.Identity.Abstractions.CredentialSourceLoaderParameters)">
+            <inheritdoc/>
+            Load the credentials from the description, if needed. 
+            Important: Ignores SKIP flag, propagates exceptions.
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCredentialsLoader.LoadFirstValidCredentialsAsync(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.CredentialDescription},Microsoft.Identity.Abstractions.CredentialSourceLoaderParameters)">
+            <inheritdoc/>
+            Loads first valid credential which is not marked as Skipped. 
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCredentialsLoader.ResetCredentials(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.CredentialDescription})">
+            <inheritdoc/>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCredentialsLoader.#ctor(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.ICustomSignedAssertionProvider},Microsoft.Extensions.Logging.ILogger{Microsoft.Identity.Web.DefaultCredentialsLoader})">
+            <summary>
+            Constructor for DefaultCredentialsLoader when using custom signed assertion provider source loaders.
+            </summary>
+            <param name="customSignedAssertionProviders">Set of custom signed assertion providers.</param>
+            <param name="logger">ILogger.</param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.DefaultCredentialsLoader.#ctor(System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.ICredentialSourceLoader},System.Collections.Generic.IEnumerable{Microsoft.Identity.Abstractions.ICustomSignedAssertionProvider},Microsoft.Extensions.Logging.ILogger{Microsoft.Identity.Web.DefaultCredentialsLoader})">
+            <summary>
+            Constructor for DefaultCredentialsLoader with both custom signed assertion providers and custom credential source loaders.
+            </summary>
+            <param name="credentialSourceLoaders">Additional credential source loaders. Can override built-in loaders.</param>
+            <param name="customSignedAssertionProviders">Set of custom signed assertion providers.</param>
+            <param name="logger">ILogger.</param>
+        </member>
+        <member name="P:Microsoft.Identity.Web.DefaultCredentialsLoader.CustomSignedAssertionCredentialSourceLoaders">
+            <summary>
+            Dictionary of custom signed assertion credential source loaders, by name (either ICustomSignedAssertionProvider.Name or the fully qualified type name).
+            The application can add more to process additional credential sources.
+            </summary>
+        </member>
+        <member name="T:Microsoft.Identity.Web.ICertificateLoader">
+             <summary>
+             Interface to implement loading of a certificate.
+             Only use when loading a certificate from a daemon application, or an ASP NET app, using MSAL .NET directly.
+             For an ASP NET Core app, <b>Microsoft Identity Web will handle the certificate loading</b> for you.
+             <example><code>
+             IConfidentialClientApplication app;
+             ICertificateLoader certificateLoader = new DefaultCertificateLoader();
+                 certificateLoader.LoadIfNeeded(config.CertificateDescription);
+            
+                app = ConfidentialClientApplicationBuilder.Create(config.ClientId)
+                       .WithCertificate(config.CertificateDescription.Certificate)
+                       .WithAuthority(new Uri(config.Authority))
+                       .Build();
+             </code></example>
+             </summary>
+        </member>
+        <member name="M:Microsoft.Identity.Web.ICertificateLoader.LoadIfNeeded(Microsoft.Identity.Web.CertificateDescription)">
+            <summary>
+            Load the certificate from the description, if needed.
+            </summary>
+            <param name="certificateDescription">Description of the certificate.</param>
+        </member>
+        <member name="M:Microsoft.Identity.Web.KeyVaultCertificateLoader.LoadFromKeyVaultAsync(System.String,System.String,System.String,System.Security.Cryptography.X509Certificates.X509KeyStorageFlags)">
+            <summary>
+            Load a certificate from Key Vault, including the private key.
+            </summary>
+            <param name="keyVaultUrl">URL of Key Vault.</param>
+            <param name="certificateName">Name of the certificate.</param>
+            <param name="managedIdentityClientId"></param>
+            <param name="x509KeyStorageFlags">Defines where and how to import the private key of an X.509 certificate.</param>
+            <returns>An <see cref="T:System.Security.Cryptography.X509Certificates.X509Certificate2"/> certificate.</returns>
+            <remarks>This code is inspired by Heath Stewart's code in:
+            https://github.com/heaths/azsdk-sample-getcert/blob/master/Program.cs#L46-L82.
+            </remarks>
+        </member>
+        <member name="M:Microsoft.Identity.Web.SignedAssertionFilePathCredentialsLoader.#ctor(Microsoft.Extensions.Logging.ILogger)">
+            <summary>
+            Constructor
+            </summary>
+            <param name="logger">Optional logger.</param>
+        </member>
+    </members>
+</doc>

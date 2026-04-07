@@ -1,0 +1,566 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.PowerPlatform.Dataverse.Client</id>
+    <version>1.2.10</version>
+    <authors>Microsoft</authors>
+    <owners>crmsdk,Microsoft</owners>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <licenseUrl>https://go.microsoft.com/fwlink/?linkid=2108407</licenseUrl>
+    <icon>images\Dataverse.128x128.png</icon>
+    <projectUrl>https://github.com/microsoft/PowerPlatform-DataverseServiceClient</projectUrl>
+    <description>This package contains the .net core Dataverse ServiceClient. Used to connect to Microsoft Dataverse. This Package has been authored by the Microsoft Dataverse SDK team.</description>
+    <summary>Dataverse ServiceClient and supporting libraries for use in building client applications to interact with the Dataverse</summary>
+    <releaseNotes>Notice:
+    This package is intended to work with .net full framework 4.6.2, 4.7.2 and 4.8, and 6.0
+    General Documentation can be found here:
+        https://docs.microsoft.com/en-us/dotnet/api/microsoft.powerplatform.dataverse.client?view=dataverse-sdk-latest
+    Connection String Docs can be found here:
+        https://docs.microsoft.com/en-us/powerapps/developer/common-data-service/xrm-tooling/use-connection-strings-xrm-tooling-connect
+    Note: Only AD on FullFramework, OAuth, Certificate, ClientSecret Authentication types are supported at this time.
+
+1.2.10:
+Add Support SolutionComponetOptions during import to support auto sharing of Cavas, PowerAutomate, and Copilot Agents during import
+Updated additional retry flags for some dataverse operations. GIT: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/490
+Speculative fix for Object Not found errors when errors occur when communicating with dataverse.
+
+1.2.9:
+Add a new configuration option UseExponentialRetryDelayForConcurrencyThrottle to use exponential retry delay for concurrency throttling, instead of the server-specified Retry-After header where applicable. Default is False.
+
+1.2.7:
+Fix for CancellationToken not canceling retries during delays Git: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/508
+
+1.2.5:
+Fix for Null ILogger passed to the AzAuth Client Creators causing a fault.  Git: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/481
+Fix for Memory Leak in Retrieve Multiple. Git: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/463
+Fix for Memory bloat issue caused by not releasing lastErrorMessage property. 
+Updated Error messages verbosity when checking for authority from Dataverse during onboard auth phase.
+Dependency changes:
+    System.ServiceModel.Http updated to 8.1.2 
+    REMOVED .net 6.0 Targets. .net 6.0 is no longer in support. 
+
+1.2.3:
+RequestId on OrganizationRequest is not overridden by random Guid if present. RequestId from ClientRequestBuilder still takes precedence over OrganizationRequest.RequestId
+Dependency changes:
+    Microsoft.Identity.Client updated to 4.66.1
+    System.Text.Json updated to 8.0.5
+    Azure.Identity updated to 1.31.1
+
+
+1.2.2: 
+***** POSSIBLE Breaking Changes *****
+    Minor Release Bump, 
+        Added .net 8.0 Target. 
+        .net 6.0 Target will be removed in a subsequent release. 
+    Removed dependence on Microsoft.Rest.Client.  this was primary used for exception handling, and the necessary components have been reworked in to DVSC Exception management classes.
+
+Fix memory consumption when too many exception are throw by DV client. Git: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/474
+Dependency Changes:
+    Modified:
+        System.Text.Json to 8.0.4
+    Removed: 
+        Microsoft.Rest.Client - Necessary carried over in client.
+
+1.1.32: 
+Fix for endless retry loop issue in WebAPI calls when specific error states are encountered.
+Fix for Logging MSAL telemetry when using ILogger
+    Previously, Logs for MSAL were not written to the configured ILogger, they would only go to Trace Source and InMemory Logs.
+Fix for RequestBuilder to properly honor CrmUserId and AADOid in request builder requests. 
+Fix for ForceServerMetadataCacheConsistency not being effective until an operation to retrieve current organization version has been executed.
+    If this us set to a value before any organization detail related information is retrieved, it will now cause the organization info to be retrieved from Dataverse. This is done only once. 
+Updated ServiceClient retry logic to use the server specified RetryAfter for Time and Concurrency throttling fault codes, in addition to Burst.
+Updated ConnectionService retry logic to parse RetryAfter header as seconds instead of hours.
+Dependency Changes:
+    Modified:
+        Microsoft.Identity.Client to 4.61.3
+
+1.1.22:
+Fix for Retry hang introduced in 1.1.21:
+Dependency Changes:
+    Added: 
+        System.ServiceModel.Http 4.10.3
+        System.ServiceModel.Primitives 4.10.3
+
+1.1.21:
+Updated Core SDK to 9.2.24044.9795
+Added new ServiceClient method for creating requests called "RequestBuilder" - will allow you to create a request and customized header, user, and other properties as part of there request generation.
+Dependency Changes:
+    Removed 
+        System.Security.Cryptography.Algorithms
+        System.Security.Cryptography.ProtectedData
+        System.Drawing.Common
+    Modified
+        System.Configuration.ConfigurationManager to 6.0.0
+
+1.1.17:
+Fix for Request ID not reflecting correctly for some requests. 
+Fix for RequestAdditionalHeadersAsync interface not being forwarded to Cloned copies of DVSC.  GitHub Reported - Fix #419
+Fix for Clone being called concurrently causing unnecessary calls to dataverse. GitHub reported - Fix #422 
+Fix for invalid filenames and paths being created for token cache path when using user interactive mode.  Git Hub reported - Fix #406 
+RENAME (Possible breaking change) MaxBufferPoolSizeOveride parameter name spelling issue, corrected to MaxBufferPoolSizeOverride
+
+
+1.1.16: 
+Updated Core SDK
+Added new properties to Organization detail to report Schema Type and Deployment Type. 
+Fixed bug in creating file to user token cache when host name contains invalid characters. Fixes #406
+Dependency changes:
+    System.Text.Json moved to 7.0.3
+    Microsoft.Identity.Client moved to 4.56.0
+    Microsoft.Identity.Client.Extensions.Msal moved to 4.56.0
+    Removed System.Security.Cryptography.Xml was transitive include to support CVE which is no longer necessary due to depending package updates
+    Removed System.Security.Cryptography.Pkcs was transitive include to support CVE which is no longer necessary due to depending package updates
+
+
+1.1.14:
+Updated Core SDK Libs
+Fixed issue with DataCenter ID not populating in Organization Detail object returned by the client.
+Fixed a hang problem when parsing multi layered exceptions 
+
+1.1.12:
+Refactored CurrentAccessToken property to avoid async call. 
+Fix for min version of default client, pre-connection so it is recognized by features that require 9.0 or greater.
+Fix for notification of unsupported features when not 'breaking' to alert as 'warnings' in log vs information. 
+Dependency changes:
+    Microsoft.Rest.Client moved to 2.3.24 due to CVE-2022-26907.
+
+
+1.1.9: 
+REMOVED .net 3.1 and .net 5 support as they are out of support frameworks. 
+Added new DiscoverOnlineOrganizationsAsync which supports CancellationToken
+Added new RetrieveSolutionImportResultAsync for retrieving solution import result from Dataverse
+Added StageSolution API to Deployment Extensions. 
+Added Support for "StageSolution" as source for import solution.  to use it, you must first stage the solution, then call importsolution passing the staged solution id.
+Added GetAsyncOperationStatus API to Deployment Extensions. This provides a simple way to get the status of an async operation. 
+Added async version of ExecuteWebRequest. Git: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/354
+Updated telemetry behavior to remove some unnecessary log noise when cloning connections. 
+Updated auth flow to reduce access token acquire frequency. Git: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/377  
+Updated min version of DV required for SessionID Support.
+Updated Async via sync calls to support more current patterns. Git: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/372
+Fix for cleaning up Last Error reported by Git: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/359
+Fix for Object Null exception that occurs when using .Clone under request load in a multi threaded use case. Git issue: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/362
+Dependency changes:
+    System.ServiceModel.Security moved to 4.10.2 due min dependency (transient dependency is vulnerable to CVE-2022-34716).
+    System.ServiceModel.Http moved to 4.10.2 due min dependency (transient dependency is vulnerable to CVE-2022-34716).
+
+
+1.0.39:
+Added .net 6.0 Target for the Client.
+Added implementation for CreateAndReturnAsync variations.
+Updated  Default Login flow to use WebAPI to allow for detecting Admin Mode on server during login.
+    A Environment in Admin mode will now throw DataverseConnectionException an error with the text "One or more errors occurred. (User does not have required privileges (or role membership) to access the org when it is in Admin Only mode.)"
+Updated Improved error reporting of standard HTTP status codes
+Updated ServiceClient Bootstrap to improve startup time.
+Fix (Speculative) for Memory Leak in Retrieve Multiple
+Fix for issue with cross thread calls and dispose were External authentication is used.     
+Fix for inappropriate retry operations. Unauthorized errors are no longer retried during WebAPI calls
+Fix to enabled GZip Compression for WebAPI requests.
+Dependency changes:
+    System.Text.Json moved to 6.0.7 min dependency (transient dependency is vulnerable to CVE-2022-34716).
+    System.ServiceModel.Http moved to 4.10.0 due min dependency (transient dependency is vulnerable to CVE-2021-24112).
+
+1.0.26:
+Fix by Git user matkov accepted for crash during create when an invalid timespan is passed from a configuration file to the ServiceClient Constructor. See https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/326 for details.
+Fix by GIT user 0xced accepted for bug in Integrated user security setting,  Code will now properly honor integrated security when attempting to authenticate. See https://github.com/microsoft/PowerPlatform-DataverseServiceClient/pull/324 for details. 
+Fixed a number of places where Async Calls did not have a .ConfigureAwait specification. Thanks to user 0xced for prompting this fix. 
+Fixed a misleading warning message "Client ID not supplied, using SDK Sample Client ID for this connection" that would be incorrectly shown when ExternalAuthentication type was used. Fixes https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/314, Thanks for your report! 
+Fixed a possible thread contention issue when managing connection context across multiple concurrent threads in the same client.  Git issue: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/304 Thanks for your report ! 
+Fixed a memory leak when caused by a logger not being cleaned up when a the creation of the ServiceClient fails. Git issue: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/322
+Fixed issue where calling the IOrganizationService* interfaces after the client has been disposed would throw a NullReferenceException. Taking this action will now throw an ObjectDisposedException
+Removed a set of exception catch and rethrows to preserve the full callstack to caller. Thanks to Git user 0xceed for prompting ( and sticking with getting us to ) this fix. See: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/pull/248 for details.
+
+
+1.0.23:
+Added Async version of ExecuteOrganizationRequest to allow for requests to be made bounded with a custom logging message.
+Update Default settings for "UseWebAPI" in preparation for future work. 
+    Note: for Create or Update operations that make extensive use of related entities you may need to reconfigure UseWebAPI to "true". 
+
+1.0.9:
+Fixed an issue with Custom User Agent headers incorrectly causing a format error when .net core is used. Proper User-Agent format must be used to send requests including the user agent. 
+Fixed an issue with an Empty OptionSetValue collection causing an ArgumentOutOfRangeException. Empty OptionSetValue collections will now be mapped to Null. Fixes https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/292 Thanks for your report! 
+Fixed an issue where EntityReference based operations do not propagate RowVersion when using WebAPI protocol.  Fixes https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/296 
+
+1.0.4: 
+Fixed an issue with External Authentication and Connection and configuration constructor where external auth was not being respected correctly.
+Fixed a bug on clone where Ilogger was not being propagated to the cloned connection correctly
+Removed a call to WhoAmI during login flow as process of talking to Dataverse to verify the connection is delt with during get environment information call. 
+Updated Newtonsoft dependencies to 13.0.1 per https://github.com/advisories/GHSA-5crp-9r3c-p9vr
+
+1.0.1:
+Fixed a "Duplicate Key Error" issue created when manually adding some request parameters to an organization request, while also setting the appropriate property in the client 
+Fix formatting issue with RequestId and Session Id.
+Fix exponential back off issue for WebAPI based calls when retrying based on a throttled connection.
+Added implementation for Connection and Configuration constructor. 
+    - Allows for a instance of the service client to be created and configured without initialization the client.  The client can then be initialized later using the .Connect() method.
+    - This constructor accepts 3 parameters
+        - connectionOptions (ConnectionOptions) = Options necessary to create the connection.
+        - deferConnection (bool) defaulted to false = When set to true, will configure but not create the connection until .Connect() is called. 
+        - serviceClientConfiguration (ConfigurationOptions) defaulted to null = When populated, pre-configures the connection configuration. 
+    - If deferred connection is set to true, .Connect() must be called before the client is useable. 
+Added Connect() method for use with the deferred behavior of the Connection and Configuration Constructor.
+Activated support for adding additional headers to request when using the Configuration Constructor. 
+    Note: Dataverse will only allow specific headers to be used. Use of this capability requires foreknowledge of this capability and agreement with Power Platform Dataverse team.
+
+0.6.6:
+Accepted fixes requested by Git user 0xced -  thanks for your contrib's! 
+Fixed Null ref bug for missing redirect URI (if it gets that far) https://github.com/microsoft/PowerPlatform-DataverseServiceClient/pull/246
+Fixed Missing ConfigureAwait's on some Async methods in auth chain. https://github.com/microsoft/PowerPlatform-DataverseServiceClient/pull/247
+Fixed several issues with Alternate Keys being used for entity references relating to use of Int's OptionSets and DateTime alt Key types.  Git Issues #244 and #231
+Fixed issue with suppress duplicate detection header not working correctly via WebAPI path Git Issue #266
+Fixed an issue with DateTime's being incorrectly formatted on non english hosts. Git Issue #216
+Speculative Fix for Date Only types not correctly interpreting TimeZone Offset when in a UTC + Timezone. Git Issue #143
+Added Discovery Filter support for Korea and Norway GEO's
+
+
+0.6.1:
+Minor Bump to 0.6.x - *Should* be last bump prior to 1.0. 
+
+Added initial support for AD auth for OnPremise.  This will work for full framework only. 
+Added new constructor that will accept a ConnectionOptions class and a ConfigurationOptions Options Object.  This constructor is currently not fully implemented. 
+    This is prep work for a builder process and intended to unify the connection flow to a single constructor at some point in the future. 
+    The goal of this work will be to resolve the issues caused by lazy loading hosts. 
+Fixed a bug in Logger when working with Connection Strings where log events would not be correctly generated. 
+Speculative fix for GIT issue #219 and #220
+Fixed a bug where LastError was not properly reset, fixed Git #229
+Fixed Error message issue between onPrem and onLine , Fixed Git #232
+Added configuration support to allow for better memory management of very large return sets,  Git #207 
+    New AppSetting is called "MaxBufferPoolSizeOveride" - there is currently not a way to set this via code at runtime. 
+    Support for configuration of this will be added as part of the new Constructor for .net core, .net framework can use it by setting the appsetting value now.
+Fixed exceptions not being thrown from several paths during login flows. 
+
+-- WARNING -- 
+.net 3.0 Target Removed from Nuget packages. 
+REFACTORED helpers and utilities for the DataverseServiceClient into the Microsoft.PowerPlatform.Dataverse.Client.Extensions Namespace of the DataverseClient.
+Dependency changes:
+    Removed Microsoft.Dynamics.Messages.Sdk.nuspec for Dynamics messages at this time.  This will return in the future in some form. 
+    Removed Microsoft.Cds.Sdk.Proxy.dll from Package and replaced with Microsoft.Crm.Sdk.Proxy.dll in package. 
+    System.Text.Json moved to 6.0.2 min dependency.
+        -- Note: As of this writing, when using Azure functions you cannot use Microsoft.Net.Sdk.Functions.3.0.12 or .3.0.13 due to blocks on System.Text.Json dependencies.  You need to either use .3.0.11 or move up to 4.x 
+    System.ServiceModel.Http moved to 4.9.0 due to internal dependencies on Microsoft.Xrm.Sdk
+
+
+0.5.17:
+ Accepted fix requested here: https://github.com/microsoft/PowerPlatform-DataverseServiceClient/issues/205
+  fixing delete by alternate key request in client. 
+ Fixed dependency issue for System.Security.Permissions  (git #203)  
+ Refactored AuthorityResolver to discover AAD authentication authorities to allow for direct access by other clients. 
+
+
+0.5.10:
+Added new property "RecommendedDegreesOfParallelism". 
+    This property will report the recommended number of threads for communicating with Dataverse.
+
+0.5.8:
+Changed internal dependencies to better align with Dataverse Server.
+Fixed an issue with updating ManyToOneRelationship based attributes.
+Fixed an issue with activity parties relationships.
+
+0.5.7:
+Removed Sealed attribute from the Service Client Class. 
+Fixed an issue with null values being sent to the API causing a null exception to be raised. 
+Fixed missing nuget dependency for Microsoft.Identity.Client.Extensions.Msal, Nuget now properly includes that package. 
+
+0.5.5: 
+Fixed a nuget dependency issue for Microsoft.Extensions.Caching.Memory
+    Microsoft.Extensions.Caching.Memory, min version 3.1.8
+
+0.5.4:
+Fixed and issue with the client being non-castable to IOrganizationServiceAsync, Client will now cast again. (Internal Report)
+    Special note: 
+        IOrganizationServiceAsync has async methods without cancellation support. this is required for service mapping as the dataverse server does not natively support this feature. 
+        IOrganizationServiceAsync2 has async methods WITH cancellation support.  
+        This surfaces in the client as 2 forms of each async method and is currently necessary to support internal auto generation of contracts for service communication. We will work to improve this in the future.
+        Cancellation events will currently raise an OperationCancelled Exception, this can either be the topmost exception, or embedded in a DataverseException.
+        Cancellation methods are 'preferred' if you need to support cancellation in your application.
+Fixed an issue with External authentication type not being properly passed though to cloned clients.  (git #162)
+
+0.5.2:
+***** Breaking Changes *****
+Removed the constructor:
+    public ServiceClient(OrganizationWebProxyClient externalOrgWebProxyClient, ILogger logger = null)
+        Removed as we are refactoring how we will accept an external created client for internal use cases.
+Contract change:
+    Added Support to set token file storage location back to connection string and constructors supporting User Authentication.
+    Modified DiscoverOrganizationsAsync to return a new return object called DiscoverOrganizationsResult
+    Modified Exception type thrown when external authentication fail to return DataverseOperationExecption vs general exception.
+
+Updates:
+Accepted suggestion to Updated logic to detect SDK runtime version for client.  Thanks to GitHub user 0xced
+Updated behavior of Token refresh to reduce cache hits, Optimized token lookup for cache hits over network calls.
+Added Handlers to support timeouts from AAD Token service. (GIT #148)
+Added InMemory Token Cache system for S2S flows. (GIT #144)
+    This pulls a new dependency on Microsoft.Extensions.Caching.Memory, min version 5.0.0
+Added FileToken Storage Provider back into Client - works for User Access flows only... Does not work for S2S accounts.
+Added configuration override support for setting MSAL Token Acquire Timeout, Retry Count, and MSALPIILogger
+    MSAL Token Timeout control : appsetting = MSALRequestTimeoutOverride,  default is 30 seconds.
+    MSAL Token Acquire retry count: appsetting = MSALRequestRetryCountOverride, default is 3.
+    MSAL Allow PII in Log data: appsetting = MSALLogPII, default is false
+Updated Async Implementation older SDK flow ( non-OData ) which should improve thread support. (Git #146)
+Updated Internal interaction behaviors for communication to Dataverse Server
+    Added temp properties to allow for field control of this if the behavior does not work as intended. 
+Fixed an issue where an Guid.Empty Session ID was set the server.
+Fixed an issue where Create and Update Operations would not properly respect API allowed fields for create or update. (Git #163)
+Fixed an issue where logical name was being used instead of Schema name for Activity parties (Git #166)
+
+0.4.20:
+Fixed Connection Creation "Hang" behavior that could occur when trying to create a Dataverse Service Client inside a thread.
+Fixed an issue with ILogger not propagating correctly when used with connection string flows.
+Fixed an issue when attempting to Null a lookup that would cause a Microsoft.OData.ODataException: Does not support untyped value in non-open type error
+Changed the behavior of Update message to be consistent with Organization Service Update behavior instead of an Upsert behavior.
+Added compensating code to deal with a null ref issue when logging which could cause a client crash.
+Added optional WebAPI support during login and solution import &amp; export operations
+Refactored ServiceClient and ConnectionService
+
+0.4.19:
+Updated behavior of ImportSolutionAsync to leverage updated Dataverse behavior post 9.2 release.
+Updated Display name for Northamerica 2 Region to reflect that it is more commonly know as GCC.
+Updated Newtonsoft.Json to v11.0.2 to match server.
+Fixed an issue with ActivityParty when using an Entity Array vs an EntityCollection for ActivityParties
+
+0.4.12:
+Fixed an issue raised when updating some entities\attributes values to null.
+Fixed and issue with DataTime formatting for Timezone independent, Timezone specific, and 'normal' DateTime types.
+Update for Current Dataverse System Messages.
+
+0.4.11:
+Update for Current Dataverse System Messages.
+Fixed an issue where authentication could fail during throttling due to token not being refreshed on retry.
+Adding Exception behaviors for all Metadata Operations.
+Adding EnableAffinityCookie to allow for override of Affinity behavior when interacting with Dataverse.
+    In general, users should not manipulate this property. more details can be found here: https://docs.microsoft.com/en-us/powerapps/developer/data-platform/api-limits#remove-the-affinity-cookie
+Adding support for enhanced features for solution import.
+
+0.4.6:
+Exposing ILogger support on all constructors and Static API commands.
+
+0.4.4:
+Added support for related entity create as part of general "create" operation.
+Updated Async Operations to return task's for async methods that were returning void's
+Updated DataverseOperationException to include HttpOperationResponse, where it exists.
+Fixed issue with Cloned Connections not refreshing their tokens on token expiration
+Updated Logger to remove string builder property
+Added Initial code for ILogger implementation. (Not exposed as of yet but coming soon)
+Corrected an issue when using the Entity myEnt = new Entity(string, guid) not properly setting the primary id.
+
+0.4.1:
+Supersedes Microsoft.PowerPlatform.Cds.Client,  Previous nuget has been retired.
+***** MAJOR Breaking Changes *****
+Complete renaming of CdsServiceClient for Dataverse naming.
+Major differences:
+    Namespace: Microsoft.PowerPlatform.Cds.Client =&gt;  Microsoft.PowerPlatform.Dataverse.Client
+    CdsServiceClient is now ServiceClient
+    All methods in CdsServiceClient that had Cds in the name have been updated to remove cds Name
+    Exception's have been updated to
+        CdsConnectionException =&gt; DataverseConnectionException
+        CdsOperationException =&gt; DataverseOperationException
+
+
+0.3.10-Alpha:
+Initial async implementation of SDK Client. - note this is a WORK IN PROGRESS and may not work as expected under all circumstances.
+    Please report bugs or behaviors issues in the normal way
+Fixes and issue with exceptions being thrown by code that is supposed to log exceptions.
+Corrected issue with DateOnly data types when using CUD events.
+Included additions to logging when failures occur during connection string based login. - credit to GIT:@nicknow for the suggestion of fix.
+
+0.3.6-Alpha:
+Fixed an issue where Activity Party types were not being properly processed
+Fixed an issue where the incorrect format was used for Data only types.
+Fixed an issue where BypassPluginExecution property on request was not being understood properly by the server.
+
+0.3.1-Alpha
+***** Breaking Changes *****
+
+MSAL Port completed.
+    Auth processes have been ported to MSAL.
+    UserID/PW flows are now enabled on .net core for login where possible ( per AAD security rules and host OS)
+    Auth flow Logging capture is still under development.
+
+Authentication constructors are now updated to remove some ADAL.net patterns
+Removed Token Cache path from constructors and ignore on connection string at this time
+    Token Cache handle support will be revisited, however if you have a pressing need, we recommend you use the external token management constructor in the mean time and self manage that.
+    For now, only MSAL In-Memory support will be provided for token cache
+Refactored to support Shared HTTPClientFactory for WebAPI connections to cut down on some noise for folks that are doing repeated logins.
+Refactored code a bit to help with clarity on various functional areas.
+Renamed/Refactored Discovery methods to as Async methods.
+
+
+0.2.31-Alpha:
+Rerouted all Upsert Request to use OrganizationService API.
+Added new InMemory Logging Options to support returning Logs captured either as Array of Tuples or a string list.
+Added new public property for OrganizationDetail Information called "OrganizationDetail" for the currently connected environment.
+Added new enum for ImportSolution additional property options called "ImportSolutionProperties" - this contains valid options for additional properties for the ImportSolution handler
+Fixed an issue with telemetry for the client that was using incorrect format for useragent content
+Updated Core CDS Sdk assemblies
+
+0.2.24-Alpha:
+Fixed an issue with .Clone not correctly supporting adding telemetry handlers to cloned connections
+
+0.2.23-Alpha:
+Adding Switzerland Geo to Regions List.
+Added support for Alternate key use on entity references as part of Create Update Delete Operations running over the webAPI.
+Added concurrency support to Create Update Delete Operations running over the webAPI.
+
+0.2.17-Alpha:
+***BREAKING CHANGE***
+Renamed Exception CdsConnectionException to CdsClientConnectionException.  No other change to the Exception
+***
+Improved handling of cached connection retrieval failures from memory when an invalid object is returned.
+Fixed a bug where a WebAPI navigation property did not match with its metadata descriptor.
+Fixed Retry delay issue when making calls to the CDS WebAPI – thanks to GIT user stvonolf for the catch of this issue.
+Added new Exception, CdsClientOperationException - this will be used when an exception is raised via the CDSClient when CDSClient is using WebAPI.
+Added IntelliSense Doc Support
+Added support for bypassing custom Plug-in Execution during SDK Operation.
+    This is a special use capability that requires a specialized permission in the CDS infrastructure to use.
+    Currently this is only permitted for use by users that have the System Administrator Security Role.
+
+0.2.16-Alpha:
+Fixed issue when CUD via WebAPI when entity contains a entity reference that is a polymorphic reference. ( IE customer data type )
+
+0.2.15-Alpha:
+Corrected a bug in Org request to WebAPI operation when attempting to set fields to null values.
+Added initial support for in memory log capture support.
+
+0.2.14-Alpha:
+Update to internal support libraries
+
+0.2.8-Alpha:
+Fixed an issue with sovereign cloud discovery reference data that would prevent a future login control from picking the correct global discovery server.
+
+0.2.7-Alpha:
+Fixed missing ConfigureAwait on ADAL Authority acquire flow.
+Added some additional logging to understand what version of ADAL is being used.
+Fixed an issue with translation of Money types to WebAPI requests.
+
+0.2.5-Alpha:
+ Fixed Authority property data loss post clone process
+ Added temp logic to run upsert requests that have anything other than string keys via the Native OrgAPI vs webAPI, this is a workaround for an open issue with the webAPI where it does not support none string key's on upsert(patch) requests that result in a create operation.
+ Rerouted CdsServiceClient Helpers to use WebAPI path for CUD requests.
+
+0.2.2-Alpha:
+Several updates to Create / Update / Delete operations to move the underlying features over to use the WebAPI.
+Please report any bugs that you run into with this.  This has been "mostly" tested with our current test suite, however we have not full tested all data type translation at this point.
+
+0.2.1-Alpha:
+BREAKING CHANGE!!!
+Altering Nuget Version to 3 digit semantic version
+Namespace change from Microsoft.Powerplatform.xxxx to Microsoft.PowerPlatform.xxxx
+Fixed an error with setting CallerId when ClientSecret Auth type is used.
+    Thanks for all the bug reports on this and repro's that really helped us run it down.
+
+0.0.1.11-Alpha:
+Fixed a number of discovery related issue that were broken during the port.
+Added new forms of DiscoveryGlobalOrganziations to allow for a token function to be passed to enabled this for use in WebSites and functions where it makes sense.
+Updated several sovereign GEO's configs to reflect use of Global discovery for those GEOs
+Fixed a bug in LinQ create methods that would appear on non-windows deployments.
+    This would manifest as a missing method exception when trying to create a sequential guid.
+
+0.0.1.9-Alpha:
+Fixes a bug in using ExecuteCdsWebRequest that blocked connections using clientSecretAuth types.
+
+0.0.1.8-Alpha:
+Removed IOverrideAuthHookWrapper and property and replaced with a new constructor form.
+    This capability was replaced with a new constructor that accepts a function pointer as a parameter to the constructor.
+    This user provided function takes the form of string FunctionName (string InstanceUri),  When called, the current instance URI will be
+    passed in and the function is expected to return an access token for access to that instance.
+    This form allows an given instance of the CdsServiceClient to be associated with a Auth Processor vs having the auth processor at the process level.
+
+Fixed a bug reported in .clone in .net core builds.  When cloning a connection in .net core, the system would think you were using an invalid auth type.
+
+Known issues:
+    None at this time.. Please report any issues on the GitHub Issues site.
+
+
+0.0.1.7-Alpha
+    Fixed a Nuget Package dependency issue in Microsoft.Dynamics.Sdk.Messages
+
+0.0.1.6-Alpha
+Intial Alpha release of Microsoft.Cds.Client.CdsServiceClient
+    WARNING: This is an ALPHA release.
+    This library is a rename and renamespace of the Microsoft.Xrm.Tooling.Connector.CrmSeriviceClient.
+    If you are familiar with the CrmServiceClient,  By Renaming each occurrence of Crm to Cds, you should find that API's match up.
+    Major changes from CrmServiceClient:
+        This library does not support User Interactive or User Password Auth flows in .net core.
+        This library does not support AD or ADFS login to OnPremise,
+            to use against an onPrem instance of CDS, your instance must be configured with
+            ADFS + OAuth and the application ID you wish to use registered.
+        This library removes several Dynamics specific helper methods from CrmServiceClient.
+            this additional methods can be found by include the nuget package Microsoft.Cds.Client.Dynamics</releaseNotes>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>Dynamics CommonDataService CDS PowerApps PowerPlatform ServiceClient Dataverse</tags>
+    <dependencies>
+      <group targetFramework=".NETFramework4.6.2">
+        <dependency id="Microsoft.Extensions.DependencyInjection" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Http" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Caching.Memory" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Identity.Client" version="4.66.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Identity.Client.Extensions.Msal" version="4.66.1" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.1" exclude="Build,Analyzers" />
+        <dependency id="System.Text.Json" version="8.0.5" exclude="Build,Analyzers" />
+        <dependency id="System.ServiceModel.Http" version="4.10.3" />
+        <dependency id="System.ServiceModel.Primitives" version="4.10.3" />
+      </group>
+      <group targetFramework=".NETFramework4.7.2">
+        <dependency id="Microsoft.Extensions.DependencyInjection" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Http" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Caching.Memory" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Identity.Client" version="4.66.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Identity.Client.Extensions.Msal" version="4.66.1" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.1" exclude="Build,Analyzers" />
+        <dependency id="System.Text.Json" version="8.0.5" exclude="Build,Analyzers" />
+        <dependency id="System.ServiceModel.Http" version="4.10.3" />
+        <dependency id="System.ServiceModel.Primitives" version="4.10.3" />
+      </group>
+      <group targetFramework=".NETFramework4.8">
+        <dependency id="Microsoft.Extensions.DependencyInjection" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Http" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Caching.Memory" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Identity.Client" version="4.66.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Identity.Client.Extensions.Msal" version="4.66.1" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.1" exclude="Build,Analyzers" />
+        <dependency id="System.Text.Json" version="8.0.5" exclude="Build,Analyzers" />
+        <dependency id="System.ServiceModel.Http" version="4.10.3" />
+        <dependency id="System.ServiceModel.Primitives" version="4.10.3" />
+      </group>
+      <group targetFramework="net8.0">
+        <dependency id="System.Collections" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Globalization" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Linq" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Linq.Expressions" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Private.DataContractSerialization" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Reflection" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Reflection.Extensions" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Reflection.TypeExtensions" version="4.7.0" exclude="Build,Analyzers" />
+        <dependency id="System.Runtime.Serialization.Primitives" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Runtime.Serialization.Xml" version="4.3.0" exclude="Build,Analyzers" />
+        <dependency id="System.Security.Permissions" version="6.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.ServiceModel.Http" version="8.1.2" exclude="Build,Analyzers" />
+        <dependency id="System.ServiceModel.Primitives" version="8.1.2" exclude="Build,Analyzers" />
+        <dependency id="System.Text.Json" version="8.0.5" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.DependencyInjection" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Http" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Caching.Memory" version="3.1.8" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Identity.Client" version="4.66.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Identity.Client.Extensions.Msal" version="4.66.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.VisualBasic" version="10.3.0" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.1" exclude="Build,Analyzers" />
+        <dependency id="System.Configuration.ConfigurationManager" version="6.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Runtime.Caching" version="4.7.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+    <frameworkAssemblies>
+      <frameworkAssembly assemblyName="System.Web" targetFramework=".NETFramework4.6.20.0" />
+      <frameworkAssembly assemblyName="System.IO" targetFramework=".NETFramework4.7.20.0" />
+      <frameworkAssembly assemblyName="System.Linq" targetFramework=".NETFramework4.7.20.0" />
+      <frameworkAssembly assemblyName="System.Linq.Expressions" targetFramework=".NETFramework4.7.20.0" />
+      <frameworkAssembly assemblyName="System.Reflection" targetFramework=".NETFramework4.7.20.0" />
+      <frameworkAssembly assemblyName="System.Runtime" targetFramework=".NETFramework4.7.20.0" />
+      <frameworkAssembly assemblyName="System.Runtime.Serialization.Primitives" targetFramework=".NETFramework4.7.20.0" />
+      <frameworkAssembly assemblyName="System.Runtime.Serialization.Xml" targetFramework=".NETFramework4.7.20.0" />
+      <frameworkAssembly assemblyName="System.Xml.XmlDocument" targetFramework=".NETFramework4.7.20.0" />
+    </frameworkAssemblies>
+  </metadata>
+</package>

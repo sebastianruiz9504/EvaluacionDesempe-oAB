@@ -39,10 +39,15 @@ namespace EvaluacionDesempenoAB.Services
         // Evaluaciones de un evaluador (por correo del evaluador)
         Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorCorreo);
 
+        // Todas las evaluaciones
+        Task<List<Evaluacion>> GetEvaluacionesAsync();
+
         // Evaluaciones por usuario
         Task<List<Evaluacion>> GetEvaluacionesByUsuarioAsync(Guid usuarioId);
 
         Task<Evaluacion?> GetEvaluacionByIdAsync(Guid id);
+        Task UploadReporteFirmadoAsync(Guid evaluacionId, string fileName, string? contentType, Stream content);
+        Task<ArchivoEvaluacion?> DownloadReporteFirmadoAsync(Guid evaluacionId);
 
         Task<Guid> CreateEvaluacionAsync(Evaluacion evaluacion,
                                          List<EvaluacionDetalle> detalles,

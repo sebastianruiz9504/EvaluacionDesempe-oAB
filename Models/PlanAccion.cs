@@ -4,6 +4,8 @@ namespace EvaluacionDesempenoAB.Models
     {
         public Guid Id { get; set; }               // dt_planaccionid
         public Guid EvaluacionId { get; set; }     // dt_evaluacionid
+        public Guid? ComportamientoId { get; set; }
+        public string? ComportamientoNombre { get; set; }
 
         public string DescripcionAccion { get; set; } = "";
         public string? Responsable { get; set; }

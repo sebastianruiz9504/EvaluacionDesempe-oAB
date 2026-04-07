@@ -2,8 +2,13 @@
 @model EvaluacionReporteViewModel
 
 @{
-    ViewData["Title"] = "Reporte de evaluación";
+    ViewData["Title"] = "Reporte de evaluacion";
+    var opcionesPlanPorCompetencia = Model.OpcionesPlanAccion
+        .GroupBy(o => o.Competencia)
+        .OrderBy(g => g.Key)
+        .ToList();
 }
+
 @functions {
     private (string Texto, string Clase) ObtenerNivelInfo(int? puntaje)
     {
@@ -37,27 +42,25 @@
 }
 
 <div class="container mt-4">
-
-    <h2>Reporte de evaluación de desempeño</h2>
+    <h2>Reporte de evaluacion de desempeno</h2>
 
     <div class="card mt-3">
         <div class="card-body">
             <h5 class="card-title">@Model.NombreUsuario (@Model.CedulaUsuario)</h5>
-            <p class="card-text mb-1">
-                <strong>Cargo:</strong> @Model.Cargo
-            </p>
-            <p class="card-text mb-1">
-                <strong>Gerencia:</strong> @Model.Gerencia
-            </p>
-            <p class="card-text mb-1">
-                <strong>Nivel de evaluación:</strong> @Model.NombreNivel
-            </p>
-            <p class="card-text mb-1">
-                <strong>Tipo de evaluación:</strong> @Model.TipoEvaluacion
-            </p>
-            <p class="card-text mb-1">
-                <strong>Fecha de evaluación:</strong> @Model.FechaEvaluacion.ToShortDateString()
-            </p>
+            <p class="card-text mb-1"><strong>Cargo:</strong> @Model.Cargo</p>
+            <p class="card-text mb-1"><strong>Gerencia:</strong> @Model.Gerencia</p>
+            <p class="card-text mb-1"><strong>Nivel de evaluacion:</strong> @Model.NombreNivel</p>
+            <p class="card-text mb-1"><strong>Tipo de evaluacion:</strong> @Model.TipoEvaluacion</p>
+            <p class="card-text mb-1"><strong>Fecha de evaluacion:</strong> @Model.FechaEvaluacion.ToShortDateString()</p>
+            <p class="card-text mb-1"><strong>Alcance actual:</strong> @Model.AlcanceEvaluadorActual</p>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <span class="badge @(Model.EvaluacionNormalCompleta ? "bg-success" : "bg-secondary")">
+                    Evaluacion normal: @(Model.EvaluacionNormalCompleta ? "Completada" : "Pendiente")
+                </span>
+                <span class="badge @(Model.EvaluacionSstCompleta ? "bg-success" : "bg-secondary")">
+                    Evaluacion SST: @(Model.EvaluacionSstCompleta ? "Completada" : "Pendiente")
+                </span>
+            </div>
             <p class="card-text">
                 <strong>Promedio general:</strong>
                 @if (Model.PromedioGeneral.HasValue)
@@ -71,6 +74,13 @@
             </p>
         </div>
     </div>
+
+    @if (!Model.EvaluacionNormalCompleta || !Model.EvaluacionSstCompleta)
+    {
+        <div class="alert alert-info mt-3">
+            El resultado final se calculara cuando la evaluacion normal y la evaluacion SST esten completas.
+        </div>
+    }
 
     <h4 class="mt-4">Detalle por competencia</h4>
 
@@ -156,112 +166,81 @@
         </div>
     }
 
-    <h4 class="mt-4">Plan de acción</h4>
+    <h4 class="mt-4">Plan de accion</h4>
 
     <p>
-        Define el plan de acción a partir de los resultados de la evaluación y las oportunidades de mejora.
+        Define el plan de accion para los comportamientos del bloque que te corresponde evaluar.
     </p>
-
-  @{
-      var oportunidadesPorCompetencia = Model.OportunidadesMejora
-            .GroupBy(o => o.Competencia)
-            .OrderBy(g => g.Key)
-            .ToList();
-
-        var oportunidades = oportunidadesPorCompetencia
-            .SelectMany(g => g.Select(o => o.Comportamiento))
-            .Distinct()
-            .ToList();
-    }
 
     <form asp-action="GuardarPlanAccion" method="post" class="mt-2">
         @Html.AntiForgeryToken()
-
         <input asp-for="EvaluacionId" type="hidden" />
 
         <table class="table table-striped">
             <thead class="table-light">
                 <tr>
-                       <th style="width: 50%;">Oportunidad de mejora</th>
+                    <th style="width: 50%;">Comportamiento</th>
                     <th style="width: 50%;">Acciones</th>
                 </tr>
             </thead>
-             <tbody id="plan-accion-body">
+            <tbody id="plan-accion-body">
             @for (int i = 0; i < Model.PlanAccion.Count; i++)
             {
                 <tr>
                     <td>
-                           <select asp-for="PlanAccion[@i].Comportamiento" class="form-select plan-accion-comportamiento">
-                            <option value="">Seleccione una oportunidad</option>
-                           @foreach (var grupo in oportunidadesPorCompetencia)
+                        <select asp-for="PlanAccion[@i].ComportamientoId" class="form-select plan-accion-comportamiento">
+                            <option value="">Seleccione un comportamiento</option>
+                            @foreach (var grupo in opcionesPlanPorCompetencia)
                             {
                                 <optgroup label="@grupo.Key">
-                                    @foreach (var oportunidad in grupo.Select(o => o.Comportamiento).Distinct().OrderBy(c => c))
+                                    @foreach (var opcion in grupo)
                                     {
-                                        <option value="@oportunidad"
-                                                selected="@(Model.PlanAccion[i].Comportamiento == oportunidad ? "selected" : null)">
-                                            @oportunidad
-                                        </option>
+                                        <option value="@opcion.ComportamientoId">@opcion.Comportamiento</option>
                                     }
                                 </optgroup>
                             }
-                            @if (!string.IsNullOrWhiteSpace(Model.PlanAccion[i].Comportamiento) &&
-                                 !oportunidades.Contains(Model.PlanAccion[i].Comportamiento))
+                            @if (Model.PlanAccion[i].ComportamientoId is Guid comportamientoSeleccionadoId &&
+                                 !Model.OpcionesPlanAccion.Any(o => o.ComportamientoId == comportamientoSeleccionadoId))
                             {
-                                <option value="@Model.PlanAccion[i].Comportamiento" selected="selected">
+                                <option value="@comportamientoSeleccionadoId" selected="selected">
                                     @Model.PlanAccion[i].Comportamiento
                                 </option>
                             }
                         </select>
                         <input asp-for="PlanAccion[@i].Id" type="hidden" />
+                        <input asp-for="PlanAccion[@i].Comportamiento" type="hidden" />
                     </td>
                     <td>
-                                      <textarea asp-for="PlanAccion[@i].Descripcion"
-                                  class="form-control plan-accion-descripcion"
-                                  maxlength="1000"
-                                  rows="2"></textarea>
+                        <textarea asp-for="PlanAccion[@i].Descripcion" class="form-control plan-accion-descripcion" maxlength="1000" rows="2"></textarea>
                     </td>
                 </tr>
             }
             </tbody>
         </table>
 
-       <div class="mt-3 d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-outline-primary" id="agregar-accion" disabled>
-                Añadir otra oportunidad
+        <div class="mt-3 d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-primary" id="agregar-accion" disabled>Añadir otra oportunidad</button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalProximaEvaluacion">
+                Guardar plan de accion
             </button>
-            <button type="button"
-                    class="btn btn-primary"
-                    data-bs-toggle="modal"
-                    data-bs-target="#modalProximaEvaluacion">
-                Guardar plan de acción
-            </button>
-            <a asp-action="Index" class="btn btn-secondary ms-2">
-                Volver al listado
-            </a>
+            <a asp-action="Index" class="btn btn-secondary ms-2">Volver al listado</a>
         </div>
 
         <div class="modal fade" id="modalProximaEvaluacion" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Fecha estimada de reevaluación</h5>
+                        <h5 class="modal-title">Fecha estimada de reevaluacion</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <label asp-for="FechaProximaEvaluacion" class="form-label">
-                            Selecciona la fecha para reevaluar al usuario
-                        </label>
+                        <label asp-for="FechaProximaEvaluacion" class="form-label">Selecciona la fecha para reevaluar al usuario</label>
                         <input asp-for="FechaProximaEvaluacion" type="date" class="form-control" required />
                         <span asp-validation-for="FechaProximaEvaluacion" class="text-danger"></span>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                            Cancelar
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            Confirmar y guardar
-                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Confirmar y guardar</button>
                     </div>
                 </div>
             </div>
@@ -271,25 +250,23 @@
     <template id="plan-accion-row-template">
         <tr>
             <td>
-                <select name="PlanAccion[__index__].Comportamiento" class="form-select plan-accion-comportamiento">
-                    <option value="">Seleccione una oportunidad</option>
-                     @foreach (var grupo in oportunidadesPorCompetencia)
+                <select name="PlanAccion[__index__].ComportamientoId" class="form-select plan-accion-comportamiento">
+                    <option value="">Seleccione un comportamiento</option>
+                    @foreach (var grupo in opcionesPlanPorCompetencia)
                     {
                         <optgroup label="@grupo.Key">
-                            @foreach (var oportunidad in grupo.Select(o => o.Comportamiento).Distinct().OrderBy(c => c))
+                            @foreach (var opcion in grupo)
                             {
-                                <option value="@oportunidad">@oportunidad</option>
+                                <option value="@opcion.ComportamientoId">@opcion.Comportamiento</option>
                             }
                         </optgroup>
                     }
                 </select>
                 <input type="hidden" name="PlanAccion[__index__].Id" value="" />
+                <input type="hidden" name="PlanAccion[__index__].Comportamiento" value="" />
             </td>
             <td>
-                <textarea name="PlanAccion[__index__].Descripcion"
-                          class="form-control plan-accion-descripcion"
-                          maxlength="1000"
-                          rows="2"></textarea>
+                <textarea name="PlanAccion[__index__].Descripcion" class="form-control plan-accion-descripcion" maxlength="1000" rows="2"></textarea>
             </td>
         </tr>
     </template>
@@ -300,15 +277,11 @@
             const addButton = document.getElementById("agregar-accion");
             const rowTemplate = document.getElementById("plan-accion-row-template");
             let rowIndex = planBody ? planBody.children.length : 0;
-
-            const hasOportunidades = @oportunidades.Any().ToString().ToLower();
+            const hasPlanOptions = @Model.OpcionesPlanAccion.Any().ToString().ToLower();
 
             const updateAddButtonState = () => {
-                if (!addButton || !planBody) {
-                    return;
-                }
-
-                if (!hasOportunidades) {
+                if (!addButton || !planBody) return;
+                if (!hasPlanOptions) {
                     addButton.disabled = true;
                     return;
                 }
@@ -323,30 +296,35 @@
                 addButton.disabled = !lastSelect || !lastSelect.value;
             };
 
-            const addRow = () => {
-                if (!rowTemplate || !planBody) {
-                    return;
-                }
+            const syncComportamientoLabel = (row) => {
+                if (!(row instanceof HTMLTableRowElement)) return;
+                const select = row.querySelector(".plan-accion-comportamiento");
+                const hidden = row.querySelector('input[name$=".Comportamiento"]');
+                if (!(select instanceof HTMLSelectElement) || !(hidden instanceof HTMLInputElement)) return;
+                hidden.value = select.options[select.selectedIndex]?.text ?? "";
+            };
 
+            const addRow = () => {
+                if (!rowTemplate || !planBody) return;
                 const html = rowTemplate.innerHTML.replace(/__index__/g, rowIndex);
                 planBody.insertAdjacentHTML("beforeend", html);
                 rowIndex += 1;
+                syncComportamientoLabel(planBody.lastElementChild);
                 updateAddButtonState();
             };
 
             if (planBody) {
+                planBody.querySelectorAll("tr").forEach((row) => syncComportamientoLabel(row));
                 planBody.addEventListener("change", (event) => {
-                    if (event.target instanceof HTMLSelectElement &&
-                        event.target.classList.contains("plan-accion-comportamiento")) {
+                    if (event.target instanceof HTMLSelectElement && event.target.classList.contains("plan-accion-comportamiento")) {
+                        syncComportamientoLabel(event.target.closest("tr"));
                         updateAddButtonState();
                     }
                 });
             }
 
             if (addButton) {
-                addButton.addEventListener("click", () => {
-                    addRow();
-                });
+                addButton.addEventListener("click", addRow);
             }
 
             updateAddButtonState();

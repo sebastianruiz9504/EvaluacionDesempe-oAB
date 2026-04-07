@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using EvaluacionDesempenoAB.Models;
@@ -15,12 +16,15 @@ namespace EvaluacionDesempenoAB.Services
         private readonly List<Evaluacion> _evaluaciones;
         private readonly List<EvaluacionDetalle> _detalles;
         private readonly List<PlanAccion> _planes;
+        private readonly Dictionary<Guid, ArchivoEvaluacion> _reportesFirmados;
 
         public MockRepository()
         {
             // Evaluador demo
             var evaluadorNombre = "Evaluador Demo";
             var evaluadorCorreo = "evaluador.demo@contoso.com";
+            var evaluadorSstNombre = "Evaluador SST Demo";
+            var evaluadorSstCorreo = "evaluador.sst@contoso.com";
 
             _usuarios = new List<UsuarioEvaluado>
             {
@@ -39,6 +43,17 @@ namespace EvaluacionDesempenoAB.Services
                 new UsuarioEvaluado
                 {
                     Id = Guid.NewGuid(),
+                    NombreCompleto = evaluadorSstNombre,
+                    Cedula = "2222222222",
+                    Cargo = "Lider SST",
+                    Gerencia = "SST",
+                    CorreoElectronico = evaluadorSstCorreo,
+                    EvaluadorNombre = null,
+                    EsSuperAdministrador = false
+                },
+                new UsuarioEvaluado
+                {
+                    Id = Guid.NewGuid(),
                     NombreCompleto = "Juan Pérez",
                     Cedula = "123456789",
                     Cargo = "Operario",
@@ -50,6 +65,7 @@ namespace EvaluacionDesempenoAB.Services
                     CorreoElectronico = "juan.perez@contoso.com",
                     // está bajo el Evaluador Demo
                     EvaluadorNombre = evaluadorCorreo,
+                    CorreoEvaluadorSst = evaluadorSstCorreo,
                     TipoFormulario = 433930002, // Operativo
                     Novedades = "Pendiente documentación."
                 },
@@ -67,6 +83,7 @@ namespace EvaluacionDesempenoAB.Services
                     FechaActivacionEvaluacion = null,
                     CorreoElectronico = "maria.lopez@contoso.com",
                     EvaluadorNombre = evaluadorCorreo,
+                    CorreoEvaluadorSst = evaluadorSstCorreo,
                     Novedades = "Cambio de cargo en trámite."
                 }
             };
@@ -82,7 +99,8 @@ namespace EvaluacionDesempenoAB.Services
             _competencias = new List<Competencia>
             {
                 new Competencia { Id = Guid.NewGuid(), Nombre = "Trabajo en equipo", Orden = 1 },
-                new Competencia { Id = Guid.NewGuid(), Nombre = "Orientación al servicio", Orden = 2 }
+                new Competencia { Id = Guid.NewGuid(), Nombre = "Orientación al servicio", Orden = 2 },
+                new Competencia { Id = Guid.NewGuid(), Nombre = "CULTURA SST", Orden = 3 }
             };
 
             _comportamientos = new List<Comportamiento>();
@@ -112,6 +130,7 @@ namespace EvaluacionDesempenoAB.Services
             _evaluaciones = new List<Evaluacion>();
             _detalles = new List<EvaluacionDetalle>();
             _planes = new List<PlanAccion>();
+            _reportesFirmados = new Dictionary<Guid, ArchivoEvaluacion>();
         }
 
         // === USUARIOS ===
@@ -126,7 +145,9 @@ namespace EvaluacionDesempenoAB.Services
         public Task<List<UsuarioEvaluado>> GetUsuariosByEvaluadorAsync(string evaluadorCorreo)
         {
             var lista = _usuarios
-                .Where(x => string.Equals(x.EvaluadorNombre, evaluadorCorreo, StringComparison.OrdinalIgnoreCase))
+                .Where(x =>
+                    string.Equals(x.EvaluadorNombre, evaluadorCorreo, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(x.CorreoEvaluadorSst, evaluadorCorreo, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             return Task.FromResult(lista);
@@ -183,8 +204,24 @@ namespace EvaluacionDesempenoAB.Services
 
         public Task<List<Evaluacion>> GetEvaluacionesByEvaluadorAsync(string evaluadorCorreo)
         {
+            var usuarioIds = _usuarios
+                .Where(x =>
+                    string.Equals(x.EvaluadorNombre, evaluadorCorreo, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(x.CorreoEvaluadorSst, evaluadorCorreo, StringComparison.OrdinalIgnoreCase))
+                .Select(x => x.Id)
+                .ToHashSet();
+
             var lista = _evaluaciones
-                .Where(x => string.Equals(x.EvaluadorNombre, evaluadorCorreo, StringComparison.OrdinalIgnoreCase))
+                .Where(x => usuarioIds.Contains(x.UsuarioId))
+                .OrderByDescending(x => x.FechaEvaluacion)
+                .ToList();
+
+            return Task.FromResult(lista);
+        }
+
+        public Task<List<Evaluacion>> GetEvaluacionesAsync()
+        {
+            var lista = _evaluaciones
                 .OrderByDescending(x => x.FechaEvaluacion)
                 .ToList();
 
@@ -205,6 +242,32 @@ namespace EvaluacionDesempenoAB.Services
         {
             var e = _evaluaciones.FirstOrDefault(x => x.Id == id);
             return Task.FromResult(e);
+        }
+
+        public async Task UploadReporteFirmadoAsync(Guid evaluacionId, string fileName, string? contentType, Stream content)
+        {
+            using var memory = new MemoryStream();
+            await content.CopyToAsync(memory);
+
+            _reportesFirmados[evaluacionId] = new ArchivoEvaluacion
+            {
+                NombreArchivo = fileName,
+                TipoContenido = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+                Contenido = memory.ToArray()
+            };
+
+            var evaluacion = _evaluaciones.FirstOrDefault(x => x.Id == evaluacionId);
+            if (evaluacion != null)
+            {
+                evaluacion.ReporteFirmadoId = Guid.NewGuid();
+                evaluacion.ReporteFirmadoNombre = fileName;
+            }
+        }
+
+        public Task<ArchivoEvaluacion?> DownloadReporteFirmadoAsync(Guid evaluacionId)
+        {
+            _reportesFirmados.TryGetValue(evaluacionId, out var archivo);
+            return Task.FromResult(archivo);
         }
 
         public Task<Guid> CreateEvaluacionAsync(Evaluacion evaluacion,

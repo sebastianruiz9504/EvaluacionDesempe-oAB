@@ -11,7 +11,7 @@
 
 <form method="get" class="row g-2 align-items-end mt-1 mb-2">
     <div class="col-md-4">
-        <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cédula</label>
+        <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cedula</label>
         <input id="cedulaFiltro"
                name="cedula"
                class="form-control"
@@ -38,25 +38,19 @@
 @if (!Model.Any())
 {
     <div class="alert alert-info mt-3">
-        No se han registrado evaluaciones aún.
+        No se han registrado evaluaciones aun.
     </div>
 }
 else
 {
     <div class="d-flex flex-wrap gap-2 align-items-center mt-3"
          data-evaluaciones-acciones
-         data-base-reporte="@Url.Action("Reporte", "Evaluaciones")"
          data-base-imprimir="@Url.Action("ImprimirResultados", "Evaluaciones")"
          data-base-reevaluar="@Url.Action("Reevaluar", "Evaluaciones")"
          data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
-         data-base-editar="@Url.Action("Editar", "Evaluaciones")">
-        <span class="text-muted">Selecciona una evaluación para habilitar las acciones.</span>
-        <a id="accionReporte"
-           class="btn btn-sm btn-outline-primary disabled"
-           href="#"
-           aria-disabled="true">
-            Ver reporte
-        </a>
+         data-base-exportar="@Url.Action("ExportarExcel", "Evaluaciones")"
+         data-base-subir-reporte="@Url.Action("SubirReporteFirmado", "Evaluaciones")">
+        <span class="text-muted">Selecciona una evaluacion para habilitar las acciones.</span>
         <a id="accionImprimir"
            class="btn btn-sm btn-outline-success disabled"
            href="#"
@@ -68,12 +62,6 @@ else
            href="#"
            aria-disabled="true">
             Reevaluar
-        </a>
-        <a id="accionEditar"
-           class="btn btn-sm btn-outline-dark disabled"
-           href="#"
-           aria-disabled="true">
-            Editar
         </a>
         <a id="accionCarpeta"
            class="btn btn-sm btn-outline-secondary disabled"
@@ -87,6 +75,12 @@ else
                 disabled>
             Exportar resultados
         </button>
+        <button id="accionSubirReporte"
+                type="button"
+                class="btn btn-sm btn-outline-primary"
+                disabled>
+            Subir reporte
+        </button>
     </div>
     <div class="mt-3">
         <input id="filtroTablaEvaluaciones"
@@ -98,14 +92,18 @@ else
         <thead class="table-light">
             <tr>
                 <th style="width: 90px;">Seleccionar</th>
-                <th>Fecha evaluación</th>
-                <th>Próxima evaluación</th>
+                <th>Fecha evaluacion</th>
+                <th>Proxima evaluacion</th>
                 <th>Nombre</th>
-                <th>Cédula</th>
+                <th>Cedula</th>
+                <th>Gerencia</th>
                 <th>Proyecto</th>
                 <th>Nivel</th>
                 <th>Tipo</th>
-                 <th>Resultado final</th>
+                <th>Resultado final</th>
+                <th>Evaluacion normal</th>
+                <th>Evaluacion SST</th>
+                <th>Reporte firmado</th>
             </tr>
         </thead>
         <tbody>
@@ -114,13 +112,13 @@ else
             <tr data-evaluacion-id="@e.Id"
                 data-usuario-id="@e.UsuarioId"
                 data-puede-reevaluar="@e.PuedeReevaluar.ToString().ToLower()"
-                data-proyecto="@e.ProyectoNombre"
+                data-proyecto="@e.ProyectoUsuario"
                 data-cedula="@e.CedulaUsuario">
                 <td class="text-center">
                     <input type="checkbox"
                            name="evaluacionesSeleccionadas"
                            class="form-check-input"
-                           aria-label="Seleccionar evaluación de @e.NombreUsuario" />
+                           aria-label="Seleccionar evaluacion de @e.NombreUsuario" />
                 </td>
                 <td>@e.FechaEvaluacion.ToShortDateString()</td>
                 <td>
@@ -131,6 +129,7 @@ else
                 </td>
                 <td>@e.NombreUsuario</td>
                 <td>@e.CedulaUsuario</td>
+                <td>@e.GerenciaUsuario</td>
                 <td>@e.ProyectoUsuario</td>
                 <td>
                     @e.NivelNombre
@@ -140,7 +139,7 @@ else
                     }
                 </td>
                 <td>@e.TipoEvaluacion</td>
-                 <td>
+                <td>
                     @if (e.ResultadoFinal.HasValue)
                     {
                         @e.ResultadoFinal.Value.ToString("0.##")<span>%</span>
@@ -150,11 +149,53 @@ else
                         <span>-</span>
                     }
                 </td>
+                <td class="text-center">
+                    @if (e.EvaluacionNormalCompleta)
+                    {
+                        <span class="badge bg-success">Completada</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Pendiente</span>
+                    }
+                </td>
+                <td class="text-center">
+                    @if (e.EvaluacionSstCompleta)
+                    {
+                        <span class="badge bg-success">Completada</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Pendiente</span>
+                    }
+                </td>
+                <td class="reporte-firmado-cell">
+                    @if (e.TieneReporteFirmado)
+                    {
+                        <a class="reporte-firmado-link"
+                           href="@Url.Action("DescargarReporteFirmado", "Evaluaciones", new { id = e.Id })"
+                           data-file-name="@e.ReporteFirmadoNombre">
+                            @e.ReporteFirmadoNombre
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="text-muted reporte-firmado-empty">Sin adjunto</span>
+                    }
+                </td>
             </tr>
         }
         </tbody>
     </table>
 }
+
+<form id="subirReporteFirmadoToken" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+<input id="archivoReporteFirmadoInput"
+       type="file"
+       class="d-none"
+       accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" />
 
 @section Scripts
 {
@@ -162,17 +203,18 @@ else
         (() => {
             const tabla = document.querySelector("table");
             const acciones = document.querySelector("[data-evaluaciones-acciones]");
-            const accionReporte = document.getElementById("accionReporte");
+            const filtroTablaEvaluaciones = document.getElementById("filtroTablaEvaluaciones");
             const accionImprimir = document.getElementById("accionImprimir");
             const accionReevaluar = document.getElementById("accionReevaluar");
-            const accionEditar = document.getElementById("accionEditar");
             const accionCarpeta = document.getElementById("accionCarpeta");
             const accionExportar = document.getElementById("accionExportar");
-            const baseReporte = acciones?.dataset.baseReporte ?? "";
+            const accionSubirReporte = document.getElementById("accionSubirReporte");
+            const archivoReporteFirmadoInput = document.getElementById("archivoReporteFirmadoInput");
             const baseImprimir = acciones?.dataset.baseImprimir ?? "";
             const baseReevaluar = acciones?.dataset.baseReevaluar ?? "";
             const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
-            const baseEditar = acciones?.dataset.baseEditar ?? "";
+            const baseExportar = acciones?.dataset.baseExportar ?? "";
+            const baseSubirReporte = acciones?.dataset.baseSubirReporte ?? "";
 
             if (!tabla || !acciones) {
                 return;
@@ -182,93 +224,141 @@ else
                 if (!element) {
                     return;
                 }
+
                 element.classList.toggle("disabled", disabled);
                 element.setAttribute("aria-disabled", disabled ? "true" : "false");
+
                 if (disabled) {
                     element.setAttribute("href", "#");
                 }
             };
 
-            const updateLinks = () => {
-                const checkedInputs = Array.from(tabla.querySelectorAll("tbody input[type='checkbox']:checked"));
-                const selectedRows = checkedInputs
+            const setExportDisabled = (disabled) => {
+                if (accionExportar instanceof HTMLButtonElement) {
+                    accionExportar.disabled = disabled;
+                }
+            };
+
+            const setUploadDisabled = (disabled) => {
+                if (accionSubirReporte instanceof HTMLButtonElement) {
+                    accionSubirReporte.disabled = disabled;
+                }
+            };
+
+            const getFilasSeleccionadas = () =>
+                Array.from(tabla.querySelectorAll("tbody input[type='checkbox']:checked"))
                     .map((input) => input.closest("tr"))
                     .filter((row) => row instanceof HTMLTableRowElement);
 
+            const getIdsSeleccionados = () =>
+                getFilasSeleccionadas()
+                    .map((row) => row.dataset.evaluacionId)
+                    .filter((id) => !!id);
+
+            const updateLinks = () => {
+                const selectedRows = getFilasSeleccionadas();
                 const row = selectedRows[0];
 
-                if (!row || selectedRows.length === 0) {
-                    setDisabled(accionReporte, true);
+                if (!row) {
                     setDisabled(accionImprimir, true);
                     setDisabled(accionReevaluar, true);
-                    setDisabled(accionEditar, true);
                     setDisabled(accionCarpeta, true);
-                    setDisabled(accionExportar, true);
+                    setExportDisabled(true);
+                    setUploadDisabled(true);
                     return;
                 }
 
                 const evaluacionId = row.dataset.evaluacionId;
                 const usuarioId = row.dataset.usuarioId;
+                const puedeReevaluar = row.dataset.puedeReevaluar === "true";
+                const singleSelection = selectedRows.length === 1;
 
-                accionReporte.href = `${baseReporte}?id=${evaluacionId}`;
                 accionImprimir.href = `${baseImprimir}?id=${evaluacionId}`;
-                accionReevaluar.href = `${baseReevaluar}?id=${evaluacionId}`;
-                accionEditar.href = `${baseEditar}?id=${evaluacionId}`;
                 accionCarpeta.href = `${baseCarpeta}?usuarioId=${usuarioId}`;
+                accionReevaluar.href = puedeReevaluar ? `${baseReevaluar}?id=${evaluacionId}` : "#";
 
-                setDisabled(accionReporte, false);
                 setDisabled(accionImprimir, false);
-                setDisabled(accionReevaluar, false);
-                setDisabled(accionEditar, false);
                 setDisabled(accionCarpeta, false);
-<<<<<<< ours
                 setDisabled(accionReevaluar, !puedeReevaluar);
-<<<<<<< ours
                 setExportDisabled(false);
-=======
-                setDisabled(accionExportar, false);
->>>>>>> theirs
-
-                if (puedeReevaluar) {
-                    accionReevaluar.href = `${baseReevaluar}?id=${evaluacionId}`;
-                }
-
-                const query = checkedInputs
-                    .map((input) => input.closest("tr")?.dataset.evaluacionId)
-                    .filter((id) => id)
-                    .map((id) => `ids=${encodeURIComponent(id)}`)
-                    .join("&");
-
-                accionExportar.href = `${baseExportar}?${query}`;
-            };
-
-            const buildCsvValue = (value) => {
-                const text = (value ?? "").toString().replace(/"/g, "\"\"");
-                return `"${text}"`;
+                setUploadDisabled(!singleSelection);
             };
 
             const exportarSeleccion = () => {
-                const filasSeleccionadas = getFilasSeleccionadas();
-                if (!filasSeleccionadas.length) {
+                const idsSeleccionados = getIdsSeleccionados();
+                if (!idsSeleccionados.length || !baseExportar) {
                     return;
                 }
 
-                const headers = ["Fecha evaluación", "Próxima evaluación", "Nombre", "Cédula", "Proyecto", "Nivel", "Tipo", "Resultado final"];
-                const rows = filasSeleccionadas.map((row) => {
-                    const cells = Array.from(row.querySelectorAll("td")).slice(1);
-                    return cells.map((cell) => buildCsvValue(cell.textContent?.trim() ?? "")).join(",");
-                });
+                const query = idsSeleccionados
+                    .map((id) => `ids=${encodeURIComponent(id)}`)
+                    .join("&");
 
-                const csvContent = [headers.map(buildCsvValue).join(","), ...rows].join("\n");
-                const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-                const url = URL.createObjectURL(blob);
-                const anchor = document.createElement("a");
-                anchor.href = url;
-                anchor.download = `evaluaciones-seleccionadas-${new Date().toISOString().slice(0, 10)}.csv`;
-                document.body.appendChild(anchor);
-                anchor.click();
-                document.body.removeChild(anchor);
-                URL.revokeObjectURL(url);
+                window.location.href = `${baseExportar}?${query}`;
+            };
+
+            const actualizarCeldaReporte = (evaluacionId, fileName, downloadUrl) => {
+                const row = tabla.querySelector(`tbody tr[data-evaluacion-id="${evaluacionId}"]`);
+                const cell = row?.querySelector(".reporte-firmado-cell");
+                if (!row || !cell) {
+                    return;
+                }
+
+                row.dataset.tieneReporteFirmado = "true";
+                cell.innerHTML = "";
+
+                const link = document.createElement("a");
+                link.className = "reporte-firmado-link";
+                link.href = downloadUrl;
+                link.dataset.fileName = fileName;
+                link.textContent = fileName;
+                cell.appendChild(link);
+            };
+
+            const subirReporte = async (file) => {
+                const filasSeleccionadas = getFilasSeleccionadas();
+                if (filasSeleccionadas.length !== 1 || !baseSubirReporte) {
+                    return;
+                }
+
+                const row = filasSeleccionadas[0];
+                const evaluacionId = row.dataset.evaluacionId;
+                const tokenInput = document.querySelector('#subirReporteFirmadoToken input[name="__RequestVerificationToken"]');
+                if (!evaluacionId || !tokenInput || !(file instanceof File)) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("id", evaluacionId);
+                formData.append("archivo", file);
+
+                accionSubirReporte.disabled = true;
+                accionSubirReporte.textContent = "Subiendo...";
+
+                try {
+                    const response = await fetch(baseSubirReporte, {
+                        method: "POST",
+                        headers: {
+                            "RequestVerificationToken": tokenInput.value
+                        },
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("No fue posible subir el reporte.");
+                    }
+
+                    const data = await response.json();
+                    actualizarCeldaReporte(evaluacionId, data.fileName, data.downloadUrl);
+                } catch (error) {
+                    window.alert("No fue posible subir el reporte firmado.");
+                } finally {
+                    accionSubirReporte.textContent = "Subir reporte";
+                    updateLinks();
+                    if (archivoReporteFirmadoInput instanceof HTMLInputElement) {
+                        archivoReporteFirmadoInput.value = "";
+                    }
+                }
             };
 
             const applyFilter = () => {
@@ -283,8 +373,6 @@ else
                     const coincide = !filtro || proyecto.includes(filtro) || cedula.includes(filtro);
                     row.style.display = coincide ? "" : "none";
                 });
-=======
->>>>>>> theirs
             };
 
             tabla.addEventListener("change", (event) => {
@@ -292,11 +380,43 @@ else
                 if (!(input instanceof HTMLInputElement) || input.type !== "checkbox") {
                     return;
                 }
+
                 updateLinks();
+            });
+
+            [accionImprimir, accionReevaluar, accionCarpeta].forEach((accion) => {
+                accion?.addEventListener("click", (event) => {
+                    if (accion.getAttribute("aria-disabled") === "true") {
+                        event.preventDefault();
+                    }
+                });
             });
 
             if (accionExportar instanceof HTMLButtonElement) {
                 accionExportar.addEventListener("click", exportarSeleccion);
+            }
+
+            if (accionSubirReporte instanceof HTMLButtonElement && archivoReporteFirmadoInput instanceof HTMLInputElement) {
+                accionSubirReporte.addEventListener("click", () => {
+                    if (accionSubirReporte.disabled) {
+                        return;
+                    }
+
+                    if (getFilasSeleccionadas().length !== 1) {
+                        return;
+                    }
+
+                    archivoReporteFirmadoInput.click();
+                });
+
+                archivoReporteFirmadoInput.addEventListener("change", () => {
+                    const file = archivoReporteFirmadoInput.files?.[0];
+                    if (!file) {
+                        return;
+                    }
+
+                    subirReporte(file);
+                });
             }
 
             if (filtroTablaEvaluaciones instanceof HTMLInputElement) {
@@ -304,6 +424,7 @@ else
             }
 
             updateLinks();
+            applyFilter();
         })();
     </script>
 }

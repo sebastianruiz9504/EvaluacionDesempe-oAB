@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
+using EvaluacionDesempenoAB.Helpers;
 using EvaluacionDesempenoAB.Models;
 using EvaluacionDesempenoAB.Services;
 using EvaluacionDesempenoAB.ViewModels;
@@ -18,19 +19,26 @@ namespace EvaluacionDesempenoAB.Controllers
     {
         private readonly IEvaluacionRepository _repo;
 
- private static readonly Dictionary<int, (string Codigo, string Nombre)> TipoFormularioNiveles = new()
+        private static readonly Dictionary<int, (string Codigo, string Nombre)> TipoFormularioNiveles = new()
         {
             { 433930001, ("OPEADM", "Operativo Administrativo") },
             { 433930000, ("TACT", "Táctico") },
             { 433930003, ("ESTR", "Estratégico") },
             { 433930002, ("OPE", "Operativo") }
         };
+
+        private sealed class EvaluacionCoberturaInfo
+        {
+            public bool EvaluacionNormalCompleta { get; init; }
+            public bool EvaluacionSstCompleta { get; init; }
+            public decimal? TotalCalculado { get; init; }
+            public bool AmbasPartesCompletas => EvaluacionNormalCompleta && EvaluacionSstCompleta;
+        }
+
         public EvaluacionesController(IEvaluacionRepository repo)
         {
             _repo = repo;
         }
-
-        // ================== HELPERS ==================
 
         private string? GetUserEmail()
         {
@@ -39,28 +47,288 @@ namespace EvaluacionDesempenoAB.Controllers
                    ?? User.FindFirst(ClaimTypes.Upn)?.Value;
         }
 
+        private string GetCorreoActual(UsuarioEvaluado evaluador)
+            => evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty;
+
         private async Task<UsuarioEvaluado?> GetEvaluadorActualAsync()
         {
             var email = GetUserEmail();
             if (string.IsNullOrWhiteSpace(email))
+            {
                 return null;
+            }
 
             return await _repo.GetUsuarioByCorreoAsync(email);
         }
-private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
+
+        private async Task<List<Evaluacion>> GetEvaluacionesVisiblesAsync(UsuarioEvaluado evaluador)
+        {
+            if (evaluador.EsSuperAdministrador)
+            {
+                return await _repo.GetEvaluacionesAsync();
+            }
+
+            return await _repo.GetEvaluacionesByEvaluadorAsync(GetCorreoActual(evaluador));
+        }
+
+        private TipoParteEvaluacion GetParteEvaluador(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
+            => EvaluacionRolesHelper.ResolveParte(
+                usuarioObjetivo,
+                GetCorreoActual(evaluadorActual),
+                evaluadorActual.EsSuperAdministrador);
+
+        private bool PuedeAccederAUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
+            => evaluadorActual.EsSuperAdministrador || EvaluacionRolesHelper.TieneAcceso(GetParteEvaluador(evaluadorActual, usuarioObjetivo));
+
+        private async Task<bool> PuedeAccederAEvaluacionAsync(UsuarioEvaluado evaluadorActual, Evaluacion evaluacion)
+        {
+            if (evaluadorActual.EsSuperAdministrador)
+            {
+                return true;
+            }
+
+            var usuario = await _repo.GetUsuarioByIdAsync(evaluacion.UsuarioId);
+            return usuario != null && PuedeAccederAUsuario(evaluadorActual, usuario);
+        }
+
+        private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
             UsuarioEvaluado usuario,
             IEnumerable<NivelEvaluacion> niveles)
         {
             if (!usuario.TipoFormulario.HasValue)
+            {
                 return null;
+            }
 
             if (!TipoFormularioNiveles.TryGetValue(usuario.TipoFormulario.Value, out var nivelInfo))
+            {
                 return null;
+            }
 
             return niveles.FirstOrDefault(n =>
                        string.Equals(n.Codigo, nivelInfo.Codigo, StringComparison.OrdinalIgnoreCase))
                    ?? niveles.FirstOrDefault(n =>
                        string.Equals(n.Nombre, nivelInfo.Nombre, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static Dictionary<Guid, Competencia> BuildCompetenciasLookup(IEnumerable<Competencia> competencias)
+            => competencias
+                .GroupBy(c => c.Id)
+                .ToDictionary(g => g.Key, g => g.First());
+
+        private static Dictionary<string, Comportamiento> BuildComportamientosPorDescripcion(IEnumerable<Comportamiento> comportamientos)
+        {
+            var dict = new Dictionary<string, Comportamiento>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var comportamiento in comportamientos)
+            {
+                if (string.IsNullOrWhiteSpace(comportamiento.Descripcion) || dict.ContainsKey(comportamiento.Descripcion))
+                {
+                    continue;
+                }
+
+                dict[comportamiento.Descripcion] = comportamiento;
+            }
+
+            return dict;
+        }
+
+        private static HashSet<Guid> GetComportamientosPermitidos(
+            TipoParteEvaluacion parte,
+            IEnumerable<Comportamiento> comportamientos,
+            IReadOnlyDictionary<Guid, Competencia> competenciasById)
+        {
+            if (parte == (TipoParteEvaluacion.Normal | TipoParteEvaluacion.Sst))
+            {
+                return comportamientos.Select(c => c.Id).ToHashSet();
+            }
+
+            return comportamientos
+                .Where(c =>
+                {
+                    competenciasById.TryGetValue(c.CompetenciaId, out var competencia);
+                    return EvaluacionRolesHelper.DebeVerCompetencia(parte, competencia?.Nombre);
+                })
+                .Select(c => c.Id)
+                .ToHashSet();
+        }
+
+        private static List<Comportamiento> FilterComportamientosPermitidos(
+            TipoParteEvaluacion parte,
+            IEnumerable<Comportamiento> comportamientos,
+            IReadOnlyDictionary<Guid, Competencia> competenciasById)
+        {
+            var permitidos = GetComportamientosPermitidos(parte, comportamientos, competenciasById);
+            return comportamientos
+                .Where(c => permitidos.Contains(c.Id))
+                .OrderBy(c =>
+                {
+                    competenciasById.TryGetValue(c.CompetenciaId, out var competencia);
+                    return competencia?.Orden ?? int.MaxValue;
+                })
+                .ThenBy(c => c.Orden)
+                .ToList();
+        }
+
+        private static EvaluacionCoberturaInfo BuildCobertura(
+            IReadOnlyCollection<EvaluacionDetalle> detalles,
+            IReadOnlyCollection<Competencia> competencias,
+            IReadOnlyCollection<Comportamiento> comportamientos)
+        {
+            var competenciasById = BuildCompetenciasLookup(competencias);
+            var comportamientosNormales = new HashSet<Guid>();
+            var comportamientosSst = new HashSet<Guid>();
+
+            foreach (var comportamiento in comportamientos)
+            {
+                competenciasById.TryGetValue(comportamiento.CompetenciaId, out var competencia);
+                if (EvaluacionRolesHelper.EsCompetenciaSst(competencia?.Nombre))
+                {
+                    comportamientosSst.Add(comportamiento.Id);
+                }
+                else
+                {
+                    comportamientosNormales.Add(comportamiento.Id);
+                }
+            }
+
+            var respondidos = detalles
+                .Where(d => d.ComportamientoId != Guid.Empty)
+                .Select(d => d.ComportamientoId)
+                .ToHashSet();
+
+            var evaluacionNormalCompleta = comportamientosNormales.Count == 0 || comportamientosNormales.All(respondidos.Contains);
+            var evaluacionSstCompleta = comportamientosSst.Count == 0 || comportamientosSst.All(respondidos.Contains);
+
+            decimal? totalCalculado = null;
+            if (evaluacionNormalCompleta && evaluacionSstCompleta && detalles.Any())
+            {
+                totalCalculado = Math.Round(detalles.Average(d => (decimal)d.Puntaje), 2);
+            }
+
+            return new EvaluacionCoberturaInfo
+            {
+                EvaluacionNormalCompleta = evaluacionNormalCompleta,
+                EvaluacionSstCompleta = evaluacionSstCompleta,
+                TotalCalculado = totalCalculado
+            };
+        }
+
+        private static List<EvaluacionDetalle> MergeDetalles(
+            IEnumerable<EvaluacionDetalle> existentes,
+            IEnumerable<EvaluacionDetalle> nuevos,
+            IReadOnlySet<Guid> comportamientosParteActual)
+        {
+            return existentes
+                .Where(d => !comportamientosParteActual.Contains(d.ComportamientoId))
+                .Concat(nuevos)
+                .GroupBy(d => d.ComportamientoId)
+                .Select(g => g.Last())
+                .ToList();
+        }
+
+        private static Guid? ResolveComportamientoId(
+            PlanAccion plan,
+            IReadOnlyDictionary<string, Comportamiento> comportamientosPorDescripcion)
+        {
+            if (plan.ComportamientoId.HasValue)
+            {
+                return plan.ComportamientoId.Value;
+            }
+
+            var nombre = plan.ComportamientoNombre ?? plan.Responsable;
+            if (string.IsNullOrWhiteSpace(nombre))
+            {
+                return null;
+            }
+
+            return comportamientosPorDescripcion.TryGetValue(nombre, out var comportamiento)
+                ? comportamiento.Id
+                : null;
+        }
+
+        private static bool PlanPerteneceAParte(
+            PlanAccion plan,
+            IReadOnlySet<Guid> comportamientosParteActual,
+            IReadOnlyDictionary<string, Comportamiento> comportamientosPorDescripcion)
+        {
+            var comportamientoId = ResolveComportamientoId(plan, comportamientosPorDescripcion);
+            return comportamientoId.HasValue && comportamientosParteActual.Contains(comportamientoId.Value);
+        }
+
+        private static List<PlanAccion> MergePlanes(
+            IEnumerable<PlanAccion> existentes,
+            IEnumerable<PlanAccion> nuevos,
+            IReadOnlySet<Guid> comportamientosParteActual,
+            IReadOnlyDictionary<string, Comportamiento> comportamientosPorDescripcion)
+        {
+            var merged = existentes
+                .Where(p => !PlanPerteneceAParte(p, comportamientosParteActual, comportamientosPorDescripcion))
+                .ToList();
+
+            merged.AddRange(nuevos);
+            return merged;
+        }
+
+        private static List<PlanAccionOpcionVm> BuildPlanOptions(
+            TipoParteEvaluacion parte,
+            IEnumerable<Competencia> competencias,
+            IEnumerable<Comportamiento> comportamientos)
+        {
+            var competenciasById = BuildCompetenciasLookup(competencias);
+
+            return comportamientos
+                .Where(c =>
+                {
+                    competenciasById.TryGetValue(c.CompetenciaId, out var competencia);
+                    return EvaluacionRolesHelper.DebeVerCompetencia(parte, competencia?.Nombre);
+                })
+                .OrderBy(c =>
+                {
+                    competenciasById.TryGetValue(c.CompetenciaId, out var competencia);
+                    return competencia?.Orden ?? int.MaxValue;
+                })
+                .ThenBy(c => c.Orden)
+                .ThenBy(c => c.Descripcion)
+                .Select(c => new PlanAccionOpcionVm
+                {
+                    ComportamientoId = c.Id,
+                    Competencia = competenciasById.TryGetValue(c.CompetenciaId, out var competencia)
+                        ? competencia.Nombre
+                        : string.Empty,
+                    Comportamiento = c.Descripcion
+                })
+                .ToList();
+        }
+
+        private async Task<Evaluacion?> GetEvaluacionEnCursoAsync(Guid usuarioId)
+        {
+            var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuarioId);
+            if (!evaluaciones.Any())
+            {
+                return null;
+            }
+
+            var competencias = await _repo.GetCompetenciasAsync();
+            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
+
+            foreach (var evaluacion in evaluaciones.OrderByDescending(e => e.FechaEvaluacion))
+            {
+                if (!comportamientosPorNivel.TryGetValue(evaluacion.NivelId, out var comportamientos))
+                {
+                    comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
+                    comportamientosPorNivel[evaluacion.NivelId] = comportamientos;
+                }
+
+                var detalles = await _repo.GetDetallesByEvaluacionAsync(evaluacion.Id);
+                var cobertura = BuildCobertura(detalles, competencias, comportamientos);
+                if (!cobertura.AmbasPartesCompletas)
+                {
+                    return evaluacion;
+                }
+            }
+
+            return null;
         }
 
         // ================== LISTADO PRINCIPAL ==================
@@ -69,55 +337,63 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
-            var evals = await _repo.GetEvaluacionesByEvaluadorAsync(evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty);
-
+            var evals = await GetEvaluacionesVisiblesAsync(evaluador);
+            var competencias = await _repo.GetCompetenciasAsync();
             var usuariosDict = new Dictionary<Guid, UsuarioEvaluado>();
             var nivelesDict = new Dictionary<Guid, NivelEvaluacion>();
-
+            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
             var vm = new List<EvaluacionListaViewModel>();
 
-            foreach (var e in evals)
+            foreach (var evaluacion in evals)
             {
-                if (!usuariosDict.TryGetValue(e.UsuarioId, out var usuario))
+                if (!usuariosDict.TryGetValue(evaluacion.UsuarioId, out var usuario))
                 {
-                    usuario = await _repo.GetUsuarioByIdAsync(e.UsuarioId) ?? new UsuarioEvaluado();
-                    usuariosDict[e.UsuarioId] = usuario;
+                    usuario = await _repo.GetUsuarioByIdAsync(evaluacion.UsuarioId) ?? new UsuarioEvaluado();
+                    usuariosDict[evaluacion.UsuarioId] = usuario;
                 }
 
-                if (!nivelesDict.TryGetValue(e.NivelId, out var nivel))
+                if (!nivelesDict.TryGetValue(evaluacion.NivelId, out var nivel))
                 {
-                    nivel = await _repo.GetNivelByIdAsync(e.NivelId) ?? new NivelEvaluacion();
-                    nivelesDict[e.NivelId] = nivel;
+                    nivel = await _repo.GetNivelByIdAsync(evaluacion.NivelId) ?? new NivelEvaluacion();
+                    nivelesDict[evaluacion.NivelId] = nivel;
                 }
 
-                var puedeReevaluar = e.TipoEvaluacion == "Inicial";
+                if (!comportamientosPorNivel.TryGetValue(evaluacion.NivelId, out var comportamientos))
+                {
+                    comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
+                    comportamientosPorNivel[evaluacion.NivelId] = comportamientos;
+                }
+
+                var detalles = await _repo.GetDetallesByEvaluacionAsync(evaluacion.Id);
+                var cobertura = BuildCobertura(detalles, competencias, comportamientos);
 
                 vm.Add(new EvaluacionListaViewModel
                 {
-                    Id = e.Id,
-                    UsuarioId = e.UsuarioId,
-                    FechaEvaluacion = e.FechaEvaluacion,
-                    ProximaEvaluacion = e.FechaProximaEvaluacion,
+                    Id = evaluacion.Id,
+                    UsuarioId = evaluacion.UsuarioId,
+                    FechaEvaluacion = evaluacion.FechaEvaluacion,
+                    ProximaEvaluacion = evaluacion.FechaProximaEvaluacion,
                     NombreUsuario = usuario.NombreCompleto,
                     CedulaUsuario = usuario.Cedula,
-<<<<<<< ours
-<<<<<<< ours
-                    ProyectoNombre = usuario.Gerencia ?? string.Empty,
-=======
-                    ProyectoUsuario = usuario.Gerencia ?? usuario.Cargo ?? string.Empty,
->>>>>>> theirs
-=======
-                    ProyectoUsuario = usuario.Gerencia ?? usuario.Cargo ?? string.Empty,
->>>>>>> theirs
+                    GerenciaUsuario = evaluacion.Gerencia ?? usuario.Gerencia ?? string.Empty,
+                    ProyectoUsuario = evaluacion.Proyecto ?? string.Empty,
                     NivelNombre = nivel.Nombre,
                     NivelCodigo = nivel.Codigo,
-                    Proyecto = e.Proyecto ?? usuario.Cargo,
-                    Gerencia = e.Gerencia ?? usuario.Gerencia,
-                    TipoEvaluacion = e.TipoEvaluacion,
-                    ResultadoFinal = e.Total,
-                    PuedeReevaluar = puedeReevaluar
+                    Proyecto = evaluacion.Proyecto ?? usuario.Cargo,
+                    Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
+                    TipoEvaluacion = evaluacion.TipoEvaluacion,
+                    ResultadoFinal = cobertura.AmbasPartesCompletas
+                        ? evaluacion.Total ?? cobertura.TotalCalculado
+                        : null,
+                    EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
+                    EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
+                    PuedeReevaluar = evaluacion.TipoEvaluacion == "Inicial",
+                    TieneReporteFirmado = evaluacion.TieneReporteFirmado,
+                    ReporteFirmadoNombre = evaluacion.ReporteFirmadoNombre
                 });
             }
 
@@ -141,31 +417,44 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
             return View(vm);
         }
 
-        // ================== NUEVA EVALUACIÓN: SELECCIÓN DE NIVEL ==================
+        // ================== NUEVA EVALUACIÓN ==================
 
         [HttpGet]
         public async Task<IActionResult> Nueva(Guid usuarioId)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
             var usuario = await _repo.GetUsuarioByIdAsync(usuarioId);
             if (usuario == null)
+            {
                 return NotFound();
+            }
+
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
+
+            var evaluacionEnCurso = await GetEvaluacionEnCursoAsync(usuarioId);
+            if (evaluacionEnCurso != null)
+            {
+                return RedirectToAction(nameof(Editar), new { id = evaluacionEnCurso.Id });
+            }
 
             var niveles = await _repo.GetNivelesActivosAsync();
-
- var nivelAuto = ResolveNivelPorTipoFormulario(usuario, niveles);
+            var nivelAuto = ResolveNivelPorTipoFormulario(usuario, niveles);
             if (nivelAuto != null)
             {
-                return RedirectToAction("Formulario", new { usuarioId = usuario.Id, nivelId = nivelAuto.Id });
+                return RedirectToAction(nameof(Formulario), new { usuarioId = usuario.Id, nivelId = nivelAuto.Id });
             }
-            
+
             ViewBag.Usuario = usuario;
             ViewBag.Niveles = niveles;
-
-            return View(); // Views/Evaluaciones/Nueva.cshtml
+            return View();
         }
 
         // ================== FORMULARIO (CREAR / SEGUIMIENTO) ==================
@@ -175,16 +464,41 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
             var usuario = await _repo.GetUsuarioByIdAsync(usuarioId);
             var nivel = await _repo.GetNivelByIdAsync(nivelId);
 
             if (usuario == null || nivel == null)
+            {
                 return NotFound();
+            }
+
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
+
+            var evaluacionesUsuario = await _repo.GetEvaluacionesByUsuarioAsync(usuarioId);
+            if (evaluacionOrigenId.HasValue)
+            {
+                var seguimientoExistente = evaluacionesUsuario
+                    .OrderByDescending(e => e.FechaEvaluacion)
+                    .FirstOrDefault(e => e.EvaluacionOrigenId == evaluacionOrigenId);
+
+                if (seguimientoExistente != null)
+                {
+                    return RedirectToAction(nameof(Editar), new { id = seguimientoExistente.Id });
+                }
+            }
 
             var competencias = await _repo.GetCompetenciasAsync();
+            var competenciasById = BuildCompetenciasLookup(competencias);
             var comportamientos = await _repo.GetComportamientosByNivelAsync(nivelId);
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            var comportamientosPermitidos = FilterComportamientosPermitidos(parteActual, comportamientos, competenciasById);
 
             var vm = new EvaluacionFormularioViewModel
             {
@@ -195,33 +509,39 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                 Cargo = usuario.Cargo,
                 Gerencia = usuario.Gerencia,
                 NombreNivel = nivel.Nombre,
+                AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
                 TipoEvaluacion = evaluacionOrigenId.HasValue ? "Seguimiento" : "Inicial",
                 EvaluacionOrigenId = evaluacionOrigenId,
                 FechaEvaluacion = DateTime.Today
             };
 
-            foreach (var comp in competencias.OrderBy(c => c.Orden))
+            foreach (var competencia in competencias.OrderBy(c => c.Orden))
             {
+                if (!EvaluacionRolesHelper.DebeVerCompetencia(parteActual, competencia.Nombre))
+                {
+                    continue;
+                }
+
                 var compVm = new CompetenciaEvaluacionVm
                 {
-                    Nombre = comp.Nombre
+                    Nombre = competencia.Nombre
                 };
 
-                var comps = comportamientos
-                    .Where(x => x.CompetenciaId == comp.Id)
-                    .OrderBy(x => x.Orden);
-
-                foreach (var c in comps)
+                foreach (var comportamiento in comportamientosPermitidos
+                             .Where(x => x.CompetenciaId == competencia.Id)
+                             .OrderBy(x => x.Orden))
                 {
                     compVm.Comportamientos.Add(new ComportamientoEvaluacionVm
                     {
-                        ComportamientoId = c.Id,
-                        Descripcion = c.Descripcion
+                        ComportamientoId = comportamiento.Id,
+                        Descripcion = comportamiento.Descripcion
                     });
                 }
 
                 if (compVm.Comportamientos.Any())
+                {
                     vm.Competencias.Add(compVm);
+                }
             }
 
             return View("Formulario", vm);
@@ -234,64 +554,87 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
-            var eval = await _repo.GetEvaluacionByIdAsync(id);
-            if (eval == null)
+            var evaluacion = await _repo.GetEvaluacionByIdAsync(id);
+            if (evaluacion == null)
+            {
                 return NotFound();
+            }
 
-            var usuario = await _repo.GetUsuarioByIdAsync(eval.UsuarioId);
-            var nivel = await _repo.GetNivelByIdAsync(eval.NivelId);
-
+            var usuario = await _repo.GetUsuarioByIdAsync(evaluacion.UsuarioId);
+            var nivel = await _repo.GetNivelByIdAsync(evaluacion.NivelId);
             if (usuario == null || nivel == null)
+            {
                 return NotFound();
+            }
+
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
 
             var detalles = await _repo.GetDetallesByEvaluacionAsync(id);
             var competencias = await _repo.GetCompetenciasAsync();
-            var comportamientos = await _repo.GetComportamientosByNivelAsync(eval.NivelId);
+            var competenciasById = BuildCompetenciasLookup(competencias);
+            var comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            var comportamientosPermitidos = FilterComportamientosPermitidos(parteActual, comportamientos, competenciasById);
+            var cobertura = BuildCobertura(detalles, competencias, comportamientos);
 
             var vm = new EvaluacionFormularioViewModel
             {
-                Id = eval.Id,
+                Id = evaluacion.Id,
                 UsuarioId = usuario.Id,
                 NivelId = nivel.Id,
                 NombreUsuario = usuario.NombreCompleto,
                 CedulaUsuario = usuario.Cedula,
                 Cargo = usuario.Cargo,
                 Gerencia = usuario.Gerencia,
-                FechaEvaluacion = eval.FechaEvaluacion,
                 NombreNivel = nivel.Nombre,
-                ObservacionesGenerales = eval.Observaciones,
-                TipoEvaluacion = eval.TipoEvaluacion,
-                EvaluacionOrigenId = eval.EvaluacionOrigenId
+                AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
+                EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
+                EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
+                FechaEvaluacion = evaluacion.FechaEvaluacion,
+                ObservacionesGenerales = evaluacion.Observaciones,
+                TipoEvaluacion = evaluacion.TipoEvaluacion,
+                EvaluacionOrigenId = evaluacion.EvaluacionOrigenId
             };
 
-            foreach (var comp in competencias.OrderBy(c => c.Orden))
+            foreach (var competencia in competencias.OrderBy(c => c.Orden))
             {
-                var compVm = new CompetenciaEvaluacionVm { Nombre = comp.Nombre };
-                var comps = comportamientos
-                    .Where(x => x.CompetenciaId == comp.Id)
-                    .OrderBy(x => x.Orden);
-
-                foreach (var c in comps)
+                if (!EvaluacionRolesHelper.DebeVerCompetencia(parteActual, competencia.Nombre))
                 {
-                    var det = detalles.FirstOrDefault(d => d.ComportamientoId == c.Id);
+                    continue;
+                }
+
+                var compVm = new CompetenciaEvaluacionVm
+                {
+                    Nombre = competencia.Nombre
+                };
+
+                foreach (var comportamiento in comportamientosPermitidos
+                             .Where(x => x.CompetenciaId == competencia.Id)
+                             .OrderBy(x => x.Orden))
+                {
+                    var detalle = detalles.FirstOrDefault(d => d.ComportamientoId == comportamiento.Id);
 
                     compVm.Comportamientos.Add(new ComportamientoEvaluacionVm
                     {
-                        ComportamientoId = c.Id,
-                        Descripcion = c.Descripcion,
-                        Puntaje = det?.Puntaje,
-                        Comentario = det?.Comentario
+                        ComportamientoId = comportamiento.Id,
+                        Descripcion = comportamiento.Descripcion,
+                        Puntaje = detalle?.Puntaje,
+                        Comentario = detalle?.Comentario
                     });
                 }
 
                 if (compVm.Comportamientos.Any())
+                {
                     vm.Competencias.Add(compVm);
+                }
             }
-
-            // OJO: el plan de acción ya NO se edita en el formulario,
-            // solo en el Reporte, así que no lo cargamos aquí.
 
             return View("Formulario", vm);
         }
@@ -304,74 +647,120 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
+
+            var usuario = await _repo.GetUsuarioByIdAsync(model.UsuarioId);
+            var nivel = await _repo.GetNivelByIdAsync(model.NivelId);
+            if (usuario == null || nivel == null)
+            {
+                return NotFound();
+            }
+
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
+
+            var competencias = await _repo.GetCompetenciasAsync();
+            var competenciasById = BuildCompetenciasLookup(competencias);
+            var comportamientos = await _repo.GetComportamientosByNivelAsync(model.NivelId);
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
+
+            model.AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual);
 
             if (!ModelState.IsValid)
+            {
                 return View("Formulario", model);
-
-            var evaluacionId = model.Id ?? Guid.NewGuid();
-
-            var evaluacion = new Evaluacion
-            {
-                Id = evaluacionId,
-                UsuarioId = model.UsuarioId,
-                NivelId = model.NivelId,
-                FechaEvaluacion = model.FechaEvaluacion,
-                TipoEvaluacion = model.TipoEvaluacion,
-                EvaluacionOrigenId = model.EvaluacionOrigenId,
-                Observaciones = model.ObservacionesGenerales,
-                Estado = accion == "finalizar" ? "Finalizada" : "Borrador",
-                FechaProximaEvaluacion = model.TipoEvaluacion == "Inicial"
-                    ? model.FechaEvaluacion.AddMonths(6)
-                    : null,
-                EvaluadorNombre = evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty,
-                Proyecto = model.Cargo,
-                Gerencia = model.Gerencia
-            };
-
-            var detalles = new List<EvaluacionDetalle>();
-            foreach (var comp in model.Competencias)
-            {
-                foreach (var c in comp.Comportamientos)
-                {
-                    if (c.Puntaje.HasValue)
-                    {
-                        detalles.Add(new EvaluacionDetalle
-                        {
-                            Id = Guid.NewGuid(),
-                            EvaluacionId = evaluacion.Id,
-                            ComportamientoId = c.ComportamientoId,
-                            Puntaje = c.Puntaje.Value,
-                            Comentario = c.Comentario
-                        });
-                    }
-                }
             }
 
-            if (detalles.Any())
+            Evaluacion? evaluacionExistente = null;
+            if (model.Id.HasValue)
             {
-                var prom = detalles.Average(d => d.Puntaje);
-                evaluacion.Total = (decimal?)Math.Round(prom, 2);
+                evaluacionExistente = await _repo.GetEvaluacionByIdAsync(model.Id.Value);
             }
-
-            // 🔴 IMPORTANTE:
-            // Ya NO se guarda plan de acción desde el formulario.
-            // - Si es una nueva evaluación → no tiene planes todavía.
-            // - Si es edición → conservamos los planes existentes.
-
-            if (model.Id == null)
+            else if (model.EvaluacionOrigenId.HasValue)
             {
-                var planesVacios = new List<PlanAccion>();
-                await _repo.CreateEvaluacionAsync(evaluacion, detalles, planesVacios);
+                evaluacionExistente = (await _repo.GetEvaluacionesByUsuarioAsync(model.UsuarioId))
+                    .OrderByDescending(e => e.FechaEvaluacion)
+                    .FirstOrDefault(e => e.EvaluacionOrigenId == model.EvaluacionOrigenId);
             }
             else
             {
-                var planesExistentes = await _repo.GetPlanesByEvaluacionAsync(evaluacion.Id);
-                await _repo.UpdateEvaluacionAsync(evaluacion, detalles, planesExistentes);
+                evaluacionExistente = await GetEvaluacionEnCursoAsync(model.UsuarioId);
+            }
+
+            var detallesExistentes = evaluacionExistente != null
+                ? await _repo.GetDetallesByEvaluacionAsync(evaluacionExistente.Id)
+                : new List<EvaluacionDetalle>();
+
+            var planesExistentes = evaluacionExistente != null
+                ? await _repo.GetPlanesByEvaluacionAsync(evaluacionExistente.Id)
+                : new List<PlanAccion>();
+
+            var nuevosDetalles = model.Competencias
+                .SelectMany(comp => comp.Comportamientos)
+                .Where(c => c.Puntaje.HasValue && comportamientosParteActual.Contains(c.ComportamientoId))
+                .Select(c => new EvaluacionDetalle
+                {
+                    Id = Guid.NewGuid(),
+                    EvaluacionId = evaluacionExistente?.Id ?? Guid.Empty,
+                    ComportamientoId = c.ComportamientoId,
+                    Puntaje = c.Puntaje!.Value,
+                    Comentario = c.Comentario
+                })
+                .ToList();
+
+            var detallesFinales = MergeDetalles(detallesExistentes, nuevosDetalles, comportamientosParteActual);
+            var cobertura = BuildCobertura(detallesFinales, competencias, comportamientos);
+
+            var fechaProxima = evaluacionExistente?.FechaProximaEvaluacion
+                               ?? (model.TipoEvaluacion == "Inicial"
+                                   ? model.FechaEvaluacion.AddMonths(6)
+                                   : null);
+
+            var observaciones = string.IsNullOrWhiteSpace(model.ObservacionesGenerales)
+                ? evaluacionExistente?.Observaciones
+                : model.ObservacionesGenerales;
+
+            var evaluacion = new Evaluacion
+            {
+                Id = evaluacionExistente?.Id ?? model.Id ?? Guid.NewGuid(),
+                UsuarioId = model.UsuarioId,
+                NivelId = model.NivelId,
+                FechaEvaluacion = evaluacionExistente != null
+                    ? evaluacionExistente.FechaEvaluacion
+                    : model.FechaEvaluacion,
+                TipoEvaluacion = model.TipoEvaluacion,
+                EvaluacionOrigenId = model.EvaluacionOrigenId,
+                Observaciones = observaciones,
+                Estado = cobertura.AmbasPartesCompletas
+                    ? "Finalizada"
+                    : (accion == "finalizar" ? "Parcial" : "Borrador"),
+                FechaProximaEvaluacion = fechaProxima,
+                EvaluadorNombre = usuario.EvaluadorNombre ?? evaluacionExistente?.EvaluadorNombre ?? GetCorreoActual(evaluador),
+                Proyecto = model.Cargo,
+                Gerencia = model.Gerencia,
+                Total = cobertura.TotalCalculado,
+                ReporteFirmadoId = evaluacionExistente?.ReporteFirmadoId,
+                ReporteFirmadoNombre = evaluacionExistente?.ReporteFirmadoNombre
+            };
+
+            if (evaluacionExistente == null)
+            {
+                await _repo.CreateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
+            }
+            else
+            {
+                await _repo.UpdateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
             }
 
             if (accion == "finalizar")
+            {
                 return RedirectToAction(nameof(Reporte), new { id = evaluacion.Id });
+            }
 
             return RedirectToAction(nameof(Index));
         }
@@ -383,17 +772,35 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
-            var evalOriginal = await _repo.GetEvaluacionByIdAsync(id);
-            if (evalOriginal == null)
+            var evaluacionOriginal = await _repo.GetEvaluacionByIdAsync(id);
+            if (evaluacionOriginal == null)
+            {
                 return NotFound();
+            }
+
+            if (!await PuedeAccederAEvaluacionAsync(evaluador, evaluacionOriginal))
+            {
+                return Forbid();
+            }
+
+            var seguimientoExistente = (await _repo.GetEvaluacionesByUsuarioAsync(evaluacionOriginal.UsuarioId))
+                .OrderByDescending(e => e.FechaEvaluacion)
+                .FirstOrDefault(e => e.EvaluacionOrigenId == evaluacionOriginal.Id);
+
+            if (seguimientoExistente != null)
+            {
+                return RedirectToAction(nameof(Editar), new { id = seguimientoExistente.Id });
+            }
 
             return RedirectToAction(nameof(Formulario), new
             {
-                usuarioId = evalOriginal.UsuarioId,
-                nivelId = evalOriginal.NivelId,
-                evaluacionOrigenId = evalOriginal.Id
+                usuarioId = evaluacionOriginal.UsuarioId,
+                nivelId = evaluacionOriginal.NivelId,
+                evaluacionOrigenId = evaluacionOriginal.Id
             });
         }
 
@@ -404,41 +811,67 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
             var usuario = await _repo.GetUsuarioByIdAsync(usuarioId);
             if (usuario == null)
+            {
                 return NotFound();
+            }
 
-            var evals = await _repo.GetEvaluacionesByUsuarioAsync(usuarioId);
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
 
+            var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuarioId);
+            var competencias = await _repo.GetCompetenciasAsync();
             var nivelesDict = new Dictionary<Guid, NivelEvaluacion>();
+            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
             var lista = new List<EvaluacionListaViewModel>();
 
-            foreach (var e in evals)
+            foreach (var evaluacion in evaluaciones)
             {
-                if (!nivelesDict.TryGetValue(e.NivelId, out var nivel))
+                if (!nivelesDict.TryGetValue(evaluacion.NivelId, out var nivel))
                 {
-                    nivel = await _repo.GetNivelByIdAsync(e.NivelId) ?? new NivelEvaluacion();
-                    nivelesDict[e.NivelId] = nivel;
+                    nivel = await _repo.GetNivelByIdAsync(evaluacion.NivelId) ?? new NivelEvaluacion();
+                    nivelesDict[evaluacion.NivelId] = nivel;
                 }
+
+                if (!comportamientosPorNivel.TryGetValue(evaluacion.NivelId, out var comportamientos))
+                {
+                    comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
+                    comportamientosPorNivel[evaluacion.NivelId] = comportamientos;
+                }
+
+                var detalles = await _repo.GetDetallesByEvaluacionAsync(evaluacion.Id);
+                var cobertura = BuildCobertura(detalles, competencias, comportamientos);
 
                 lista.Add(new EvaluacionListaViewModel
                 {
-                    Id = e.Id,
-                    UsuarioId = e.UsuarioId,
-                    FechaEvaluacion = e.FechaEvaluacion,
-                    ProximaEvaluacion = e.FechaProximaEvaluacion,
+                    Id = evaluacion.Id,
+                    UsuarioId = evaluacion.UsuarioId,
+                    FechaEvaluacion = evaluacion.FechaEvaluacion,
+                    ProximaEvaluacion = evaluacion.FechaProximaEvaluacion,
                     NombreUsuario = usuario.NombreCompleto,
                     CedulaUsuario = usuario.Cedula,
-                    ProyectoUsuario = usuario.Gerencia ?? usuario.Cargo ?? string.Empty,
+                    GerenciaUsuario = evaluacion.Gerencia ?? usuario.Gerencia ?? string.Empty,
+                    ProyectoUsuario = evaluacion.Proyecto ?? string.Empty,
                     NivelNombre = nivel.Nombre,
                     NivelCodigo = nivel.Codigo,
-                    Proyecto = e.Proyecto ?? usuario.Cargo,
-                    Gerencia = e.Gerencia ?? usuario.Gerencia,
-                    TipoEvaluacion = e.TipoEvaluacion,
-                    ResultadoFinal = e.Total,
-                    PuedeReevaluar = e.TipoEvaluacion == "Inicial"
+                    Proyecto = evaluacion.Proyecto ?? usuario.Cargo,
+                    Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
+                    TipoEvaluacion = evaluacion.TipoEvaluacion,
+                    ResultadoFinal = cobertura.AmbasPartesCompletas
+                        ? evaluacion.Total ?? cobertura.TotalCalculado
+                        : null,
+                    EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
+                    EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
+                    PuedeReevaluar = evaluacion.TipoEvaluacion == "Inicial",
+                    TieneReporteFirmado = evaluacion.TieneReporteFirmado,
+                    ReporteFirmadoNombre = evaluacion.ReporteFirmadoNombre
                 });
             }
 
@@ -454,18 +887,22 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
             return View(vm);
         }
 
-        // ================== REPORTE (VER RESULTADOS) ==================
+        // ================== REPORTE ==================
 
         [HttpGet]
         public async Task<IActionResult> Reporte(Guid id)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
-           var vm = await BuildReporteViewModelAsync(id);
+            var vm = await BuildReporteViewModelAsync(id, evaluador);
             if (vm == null)
+            {
                 return NotFound();
+            }
 
             return View("Reporte", vm);
         }
@@ -475,13 +912,93 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
-            var vm = await BuildReporteViewModelAsync(id);
+            var vm = await BuildReporteViewModelAsync(id, evaluador);
             if (vm == null)
+            {
                 return NotFound();
+            }
 
             return View("ReporteImpresion", vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubirReporteFirmado(Guid id, IFormFile? archivo)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            if (id == Guid.Empty)
+            {
+                return BadRequest("Evaluación inválida.");
+            }
+
+            if (archivo == null || archivo.Length == 0)
+            {
+                return BadRequest("Debes adjuntar un archivo.");
+            }
+
+            var evaluacion = await _repo.GetEvaluacionByIdAsync(id);
+            if (evaluacion == null)
+            {
+                return NotFound();
+            }
+
+            if (!await PuedeAccederAEvaluacionAsync(evaluador, evaluacion))
+            {
+                return Forbid();
+            }
+
+            await using var stream = archivo.OpenReadStream();
+            await _repo.UploadReporteFirmadoAsync(id, archivo.FileName, archivo.ContentType, stream);
+
+            return Json(new
+            {
+                ok = true,
+                fileName = archivo.FileName,
+                downloadUrl = Url.Action(nameof(DescargarReporteFirmado), new { id })
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> DescargarReporteFirmado(Guid id)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            var evaluacion = await _repo.GetEvaluacionByIdAsync(id);
+            if (evaluacion == null)
+            {
+                return NotFound();
+            }
+
+            if (!await PuedeAccederAEvaluacionAsync(evaluador, evaluacion))
+            {
+                return Forbid();
+            }
+
+            if (!evaluacion.TieneReporteFirmado)
+            {
+                return NotFound("La evaluación no tiene un reporte firmado adjunto.");
+            }
+
+            var archivo = await _repo.DownloadReporteFirmadoAsync(id);
+            if (archivo == null || archivo.Contenido.Length == 0)
+            {
+                return NotFound("La evaluación no tiene un reporte firmado adjunto.");
+            }
+
+            return File(archivo.Contenido, archivo.TipoContenido, archivo.NombreArchivo);
         }
 
         [HttpGet]
@@ -489,24 +1006,30 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
             if (ids == null || !ids.Any())
+            {
                 return BadRequest("Debes seleccionar al menos una evaluación.");
+            }
 
-            var evaluaciones = await _repo.GetEvaluacionesByEvaluadorAsync(
-                evaluador.CorreoElectronico ?? GetUserEmail() ?? string.Empty);
-
+            var evaluaciones = await GetEvaluacionesVisiblesAsync(evaluador);
             var seleccionadas = evaluaciones
                 .Where(e => ids.Contains(e.Id))
                 .OrderByDescending(e => e.FechaEvaluacion)
                 .ToList();
 
             if (!seleccionadas.Any())
+            {
                 return NotFound("No se encontraron evaluaciones para exportar.");
+            }
 
+            var competencias = await _repo.GetCompetenciasAsync();
             var usuariosDict = new Dictionary<Guid, UsuarioEvaluado>();
             var nivelesDict = new Dictionary<Guid, NivelEvaluacion>();
+            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
 
             using var workbook = new XLWorkbook();
             var worksheet = workbook.Worksheets.Add("Evaluaciones");
@@ -548,6 +1071,15 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                     nivelesDict[evaluacion.NivelId] = nivel;
                 }
 
+                if (!comportamientosPorNivel.TryGetValue(evaluacion.NivelId, out var comportamientos))
+                {
+                    comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
+                    comportamientosPorNivel[evaluacion.NivelId] = comportamientos;
+                }
+
+                var detalles = await _repo.GetDetallesByEvaluacionAsync(evaluacion.Id);
+                var cobertura = BuildCobertura(detalles, competencias, comportamientos);
+
                 worksheet.Cell(row, 1).Value = evaluacion.FechaEvaluacion;
                 worksheet.Cell(row, 1).Style.DateFormat.Format = "dd/MM/yyyy";
 
@@ -562,7 +1094,9 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
                 worksheet.Cell(row, 5).Value = nivel.Nombre ?? string.Empty;
                 worksheet.Cell(row, 6).Value = nivel.Codigo ?? string.Empty;
                 worksheet.Cell(row, 7).Value = evaluacion.TipoEvaluacion ?? string.Empty;
-                worksheet.Cell(row, 8).Value = evaluacion.Total;
+                worksheet.Cell(row, 8).Value = cobertura.AmbasPartesCompletas
+                    ? evaluacion.Total ?? cobertura.TotalCalculado
+                    : null;
                 worksheet.Cell(row, 8).Style.NumberFormat.Format = "0.00";
 
                 row++;
@@ -590,7 +1124,7 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
             return File(stream.ToArray(), contentType, fileName);
         }
 
-        // ================== GUARDAR PLAN DE ACCIÓN (DESDE REPORTE) ==================
+        // ================== GUARDAR PLAN DE ACCIÓN ==================
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -598,125 +1132,173 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
+            {
                 return Forbid();
+            }
 
-            var eval = await _repo.GetEvaluacionByIdAsync(model.EvaluacionId);
-            if (eval == null)
+            var evaluacion = await _repo.GetEvaluacionByIdAsync(model.EvaluacionId);
+            if (evaluacion == null)
+            {
                 return NotFound();
+            }
+
+            var usuario = await _repo.GetUsuarioByIdAsync(evaluacion.UsuarioId);
+            if (usuario == null)
+            {
+                return NotFound();
+            }
+
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
+
+            var competencias = await _repo.GetCompetenciasAsync();
+            var comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
+            var competenciasById = BuildCompetenciasLookup(competencias);
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
+            var comportamientosPorDescripcion = BuildComportamientosPorDescripcion(comportamientos);
 
             var detalles = await _repo.GetDetallesByEvaluacionAsync(model.EvaluacionId);
+            var planesExistentes = await _repo.GetPlanesByEvaluacionAsync(model.EvaluacionId);
 
-            var planes = model.PlanAccion
-                .Where(p => !string.IsNullOrWhiteSpace(p.Descripcion) &&
-                            !string.IsNullOrWhiteSpace(p.Comportamiento))
-                .Select(p => new PlanAccion
+            var comportamientosPermitidos = comportamientos
+                .Where(c => comportamientosParteActual.Contains(c.Id))
+                .ToDictionary(c => c.Id, c => c);
+
+            var planesActualizados = model.PlanAccion
+                .Where(p =>
+                    p.ComportamientoId.HasValue &&
+                    comportamientosPermitidos.ContainsKey(p.ComportamientoId.Value) &&
+                    !string.IsNullOrWhiteSpace(p.Descripcion))
+                .Select(p =>
                 {
-                    Id = p.Id ?? Guid.NewGuid(),
-                    EvaluacionId = model.EvaluacionId,
-                    DescripcionAccion = p.Descripcion!,
-                       Responsable = p.Comportamiento
-                }).ToList();
- eval.FechaProximaEvaluacion = model.FechaProximaEvaluacion;
+                    var comportamiento = comportamientosPermitidos[p.ComportamientoId!.Value];
+                    return new PlanAccion
+                    {
+                        Id = p.Id ?? Guid.NewGuid(),
+                        EvaluacionId = model.EvaluacionId,
+                        ComportamientoId = comportamiento.Id,
+                        ComportamientoNombre = comportamiento.Descripcion,
+                        DescripcionAccion = p.Descripcion!,
+                        Responsable = comportamiento.Descripcion
+                    };
+                })
+                .ToList();
 
-            // Reutilizamos UpdateEvaluacionAsync para actualizar solo el plan:
-            await _repo.UpdateEvaluacionAsync(eval, detalles, planes);
+            var planesFinales = MergePlanes(
+                planesExistentes,
+                planesActualizados,
+                comportamientosParteActual,
+                comportamientosPorDescripcion);
+
+            var cobertura = BuildCobertura(detalles, competencias, comportamientos);
+            evaluacion.Total = cobertura.TotalCalculado;
+            evaluacion.Estado = cobertura.AmbasPartesCompletas ? "Finalizada" : evaluacion.Estado;
+            evaluacion.FechaProximaEvaluacion = model.FechaProximaEvaluacion;
+
+            await _repo.UpdateEvaluacionAsync(evaluacion, detalles, planesFinales);
 
             return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId });
         }
 
-        private async Task<EvaluacionReporteViewModel?> BuildReporteViewModelAsync(Guid id)
+        private async Task<EvaluacionReporteViewModel?> BuildReporteViewModelAsync(Guid id, UsuarioEvaluado evaluadorActual)
         {
-            var eval = await _repo.GetEvaluacionByIdAsync(id);
-            if (eval == null)
+            var evaluacion = await _repo.GetEvaluacionByIdAsync(id);
+            if (evaluacion == null)
+            {
                 return null;
+            }
 
-            var usuario = await _repo.GetUsuarioByIdAsync(eval.UsuarioId);
-            var nivel = await _repo.GetNivelByIdAsync(eval.NivelId);
+            var usuario = await _repo.GetUsuarioByIdAsync(evaluacion.UsuarioId);
+            var nivel = await _repo.GetNivelByIdAsync(evaluacion.NivelId);
             if (usuario == null || nivel == null)
+            {
                 return null;
+            }
+
+            if (!PuedeAccederAUsuario(evaluadorActual, usuario))
+            {
+                return null;
+            }
 
             var detalles = await _repo.GetDetallesByEvaluacionAsync(id);
             var planes = await _repo.GetPlanesByEvaluacionAsync(id);
-
             var competencias = await _repo.GetCompetenciasAsync();
-            var comportamientos = await _repo.GetComportamientosByNivelAsync(eval.NivelId);
+            var competenciasById = BuildCompetenciasLookup(competencias);
+            var comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
+            var comportamientosPorDescripcion = BuildComportamientosPorDescripcion(comportamientos);
+            var parteActual = GetParteEvaluador(evaluadorActual, usuario);
+            var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
+            var cobertura = BuildCobertura(detalles, competencias, comportamientos);
 
             var competenciasVm = new List<CompetenciaReporteVm>();
 
-            foreach (var comp in competencias.OrderBy(c => c.Orden))
+            foreach (var competencia in competencias.OrderBy(c => c.Orden))
             {
-                var compComps = comportamientos
-                    .Where(x => x.CompetenciaId == comp.Id)
+                var comportamientosCompetencia = comportamientos
+                    .Where(x => x.CompetenciaId == competencia.Id)
                     .OrderBy(x => x.Orden)
                     .ToList();
 
-                if (!compComps.Any())
+                if (!comportamientosCompetencia.Any())
+                {
                     continue;
+                }
 
                 var compVm = new CompetenciaReporteVm
                 {
-                    Nombre = comp.Nombre
+                    Nombre = competencia.Nombre
                 };
 
                 var puntajes = new List<int>();
 
-                foreach (var compo in compComps)
+                foreach (var comportamiento in comportamientosCompetencia)
                 {
-                    var det = detalles.FirstOrDefault(d => d.ComportamientoId == compo.Id);
-
-                    var puntaje = det?.Puntaje ?? 0;
-                    if (puntaje > 0)
-                        puntajes.Add(puntaje);
+                    var detalle = detalles.FirstOrDefault(d => d.ComportamientoId == comportamiento.Id);
+                    if (detalle != null)
+                    {
+                        puntajes.Add(detalle.Puntaje);
+                    }
 
                     compVm.Comportamientos.Add(new ComportamientoReporteVm
                     {
-                        Descripcion = compo.Descripcion,
-                        Puntaje = det?.Puntaje,
-                        Comentario = det?.Comentario
+                        Descripcion = comportamiento.Descripcion,
+                        Puntaje = detalle?.Puntaje,
+                        Comentario = detalle?.Comentario
                     });
                 }
 
                 if (puntajes.Any())
                 {
-                    var promedio = puntajes.Select(p => (decimal)p).Average();
-                    compVm.Promedio = Math.Round(promedio, 2);
+                    compVm.Promedio = Math.Round(puntajes.Select(p => (decimal)p).Average(), 2);
                     competenciasVm.Add(compVm);
                 }
             }
 
-            decimal? promedioGeneral = null;
-            if (competenciasVm.Any())
-            {
-                promedioGeneral = Math.Round(
-                    competenciasVm.Average(c => c.Promedio),
-                    2
-                );
-            }
-
-            var oportunidades = new List<OportunidadMejoraVm>();
-
-            foreach (var comp in competenciasVm)
-            {
-                foreach (var c in comp.Comportamientos)
-                {
-                    if (c.Puntaje.HasValue && c.Puntaje.Value < 76)
+            var oportunidades = competenciasVm
+                .SelectMany(comp => comp.Comportamientos
+                    .Where(c => c.Puntaje.HasValue && c.Puntaje.Value < 76)
+                    .Select(c => new OportunidadMejoraVm
                     {
-                        oportunidades.Add(new OportunidadMejoraVm
-                        {
-                            Competencia = comp.Nombre,
-                            Comportamiento = c.Descripcion,
-                            Puntaje = c.Puntaje.Value
-                        });
-                    }
-                }
-            }
+                        Competencia = comp.Nombre,
+                        Comportamiento = c.Descripcion,
+                        Puntaje = c.Puntaje!.Value
+                    }))
+                .ToList();
 
-            var planVm = planes.Select(p => new PlanAccionItemVm
-            {
-                Id = p.Id,
-                 Comportamiento = p.Responsable,
-                Descripcion = p.DescripcionAccion
-            }).ToList();
+            var planOptions = BuildPlanOptions(parteActual, competencias, comportamientos);
+            var planVm = planes
+                .Where(p => PlanPerteneceAParte(p, comportamientosParteActual, comportamientosPorDescripcion))
+                .Select(p => new PlanAccionItemVm
+                {
+                    Id = p.Id,
+                    ComportamientoId = ResolveComportamientoId(p, comportamientosPorDescripcion),
+                    Comportamiento = p.ComportamientoNombre ?? p.Responsable,
+                    Descripcion = p.DescripcionAccion
+                })
+                .ToList();
 
             if (!planVm.Any())
             {
@@ -725,24 +1307,31 @@ private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
 
             return new EvaluacionReporteViewModel
             {
-                EvaluacionId = eval.Id,
+                EvaluacionId = evaluacion.Id,
                 NombreUsuario = usuario.NombreCompleto,
                 CedulaUsuario = usuario.Cedula,
                 Cargo = usuario.Cargo,
-                Gerencia = usuario.Gerencia,
+                Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
+                Proyecto = evaluacion.Proyecto,
                 NombreJefeInmediatoOEvaluador = usuario.CorreoEvaluador,
                 CargoJefeInmediatoOEvaluador = usuario.CargoJefeInmediato,
                 FechaIngreso = usuario.FechaIngreso,
                 FechaGeneracionReporte = DateTime.Today,
-                FechaEvaluacion = eval.FechaEvaluacion,
-                TipoEvaluacion = eval.TipoEvaluacion,
+                FechaEvaluacion = evaluacion.FechaEvaluacion,
+                TipoEvaluacion = evaluacion.TipoEvaluacion,
                 NombreNivel = nivel.Nombre,
-                PromedioGeneral = promedioGeneral,
+                AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
+                PromedioGeneral = cobertura.AmbasPartesCompletas
+                    ? evaluacion.Total ?? cobertura.TotalCalculado
+                    : null,
+                EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
+                EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
                 Competencias = competenciasVm,
                 OportunidadesMejora = oportunidades,
                 PlanAccion = planVm,
-                   ObservacionesGenerales = eval.Observaciones,
-                FechaProximaEvaluacion = eval.FechaProximaEvaluacion
+                OpcionesPlanAccion = planOptions,
+                ObservacionesGenerales = evaluacion.Observaciones,
+                FechaProximaEvaluacion = evaluacion.FechaProximaEvaluacion
             };
         }
     }

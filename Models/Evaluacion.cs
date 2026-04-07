@@ -32,5 +32,16 @@ namespace EvaluacionDesempenoAB.Models
 
         public string? Proyecto { get; set; }
         public string? Gerencia { get; set; }
+
+        public Guid? ReporteFirmadoId { get; set; }
+        public string? ReporteFirmadoNombre { get; set; }
+        public bool TieneReporteFirmado => ReporteFirmadoId.HasValue;
+    }
+
+    public class ArchivoEvaluacion
+    {
+        public string NombreArchivo { get; set; } = string.Empty;
+        public string TipoContenido { get; set; } = "application/octet-stream";
+        public byte[] Contenido { get; set; } = Array.Empty<byte>();
     }
 }

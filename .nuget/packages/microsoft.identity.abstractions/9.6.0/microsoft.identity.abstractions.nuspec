@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.Identity.Abstractions</id>
+    <version>9.6.0</version>
+    <title>Microsoft Identity Abstractions</title>
+    <authors>Microsoft</authors>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/AzureAD/microsoft-identity-abstractions-for-dotnet</projectUrl>
+    <description>Interface for higher level API for confidential client applications.</description>
+    <releaseNotes>The release notes are available at https://github.com/AzureAD/microsoft-identity-abstractions-for-dotnet/releases and the roadmap at https://github.com/AzureAD/microsoft-identity-abstractions-for-dotnet/wiki#roadmap</releaseNotes>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>Microsoft Identity Abstractions for dotnet Microsoft identity platform Microsoft Identity Web .NET ASP.NET Core Web App Web API B2C Azure Active Directory AAD Identity Authentication Authorization</tags>
+    <repository type="git" url="https://github.com/AzureAD/microsoft-identity-abstractions-for-dotnet" commit="35845ee8d662be389802d538802535a6d40607c0" />
+    <dependencies>
+      <group targetFramework=".NETFramework4.6.2" />
+      <group targetFramework="net8.0" />
+      <group targetFramework="net9.0" />
+      <group targetFramework="net10.0" />
+      <group targetFramework=".NETStandard2.0" />
+      <group targetFramework=".NETStandard2.1" />
+    </dependencies>
+    <frameworkAssemblies>
+      <frameworkAssembly assemblyName="System.Net.Http" targetFramework=".NETFramework4.6.2" />
+    </frameworkAssemblies>
+  </metadata>
+</package>

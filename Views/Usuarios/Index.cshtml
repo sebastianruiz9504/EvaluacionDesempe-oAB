@@ -1,27 +1,20 @@
-@using EvaluacionDesempenoAB.Models
-@model IEnumerable<UsuarioEvaluado>
+@using EvaluacionDesempenoAB.ViewModels
+@model IEnumerable<UsuarioPortalEvaluadorViewModel>
 
 @{
     ViewData["Title"] = "Usuarios a mi cargo";
-}
-
-<h2 class="mt-4">Usuarios a mi cargo</h2>
-
-@{
     var cedulaFiltro = ViewData["CedulaFiltro"] as string;
     var hayUsuarios = Model.Any();
 }
+
+<h2 class="mt-4">Usuarios a mi cargo</h2>
 
 <div class="row g-3 mt-1 align-items-end">
     <div class="col-12 col-lg-6">
         <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
             <div class="flex-grow-1">
-                <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cédula</label>
-                <input id="cedulaFiltro"
-                       name="cedula"
-                       class="form-control"
-                       value="@cedulaFiltro"
-                       placeholder="Ingresa la cédula" />
+                <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cedula</label>
+                <input id="cedulaFiltro" name="cedula" class="form-control" value="@cedulaFiltro" placeholder="Ingresa la cedula" />
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
@@ -37,13 +30,10 @@
         <form asp-controller="Evaluaciones" asp-action="Nueva" method="get" class="d-flex flex-wrap gap-2 align-items-end justify-content-lg-end">
             <input type="hidden" id="usuarioEvaluacionId" name="usuarioId" />
             <button type="submit" class="btn btn-primary" id="iniciarEvaluacionBtn" @(hayUsuarios ? "" : "disabled")>
-                Iniciar evaluación
+                Iniciar evaluacion
             </button>
-            <button type="button"
-                    class="btn btn-outline-primary d-none"
-                    id="solicitarActivacionBtn"
-                    data-url="@Url.Action("SolicitarActivacion", "Usuarios")">
-                Solicitar Activación de Evaluación
+            <button type="button" class="btn btn-outline-primary d-none" id="solicitarActivacionBtn" data-url="@Url.Action("SolicitarActivacion", "Usuarios")">
+                Solicitar Activacion de Evaluacion
             </button>
         </form>
     </div>
@@ -54,9 +44,9 @@
     <div class="alert alert-info mt-3">
         No se encontraron usuarios asignados a tu correo como evaluador.
         <br />
-        Verifica en Dataverse que la columna
-        <code>crfb7_evaluadorid</code> de los usuarios tenga tu correo
-        EXACTAMENTE como aparece en <code>crfb7_correoelectronico</code>.
+        Verifica en Dataverse que la columna <code>crfb7_evaluadorid</code> o la columna
+        <code>cr3d2_correoevaluadorsst</code> tengan tu correo exactamente como aparece en
+        <code>crfb7_correoelectronico</code>.
     </div>
 }
 else
@@ -67,13 +57,16 @@ else
                 <tr>
                     <th>Seleccionar</th>
                     <th>Nombre</th>
-                    <th>Cédula</th>
+                    <th>Cedula</th>
                     <th>Cargo</th>
                     <th>Gerencia</th>
                     <th>Correo</th>
+                    <th>Evaluacion normal</th>
+                    <th>Evaluacion SST</th>
+                    <th>Resultado final</th>
                     <th>Inicio de contrato</th>
-                    <th>Finalización contrato</th>
-                    <th>Finalización periodo de prueba</th>
+                    <th>Finalizacion contrato</th>
+                    <th>Finalizacion periodo de prueba</th>
                 </tr>
             </thead>
             <tbody>
@@ -90,10 +83,7 @@ else
                                data-fecha-activacion-evaluacion="@(u.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd") ?? "")" />
                     </td>
                     <td>
-                        <a asp-controller="Usuarios"
-                           asp-action="Detalle"
-                           asp-route-id="@u.Id"
-                           class="link-primary text-decoration-none">
+                        <a asp-controller="Usuarios" asp-action="Detalle" asp-route-id="@u.Id" class="link-primary text-decoration-none">
                             @u.NombreCompleto
                         </a>
                     </td>
@@ -101,6 +91,36 @@ else
                     <td>@u.Cargo</td>
                     <td>@u.Gerencia</td>
                     <td>@u.CorreoElectronico</td>
+                    <td class="text-center">
+                        @if (u.EvaluacionNormalCompleta)
+                        {
+                            <span class="badge bg-success">Completada</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Pendiente</span>
+                        }
+                    </td>
+                    <td class="text-center">
+                        @if (u.EvaluacionSstCompleta)
+                        {
+                            <span class="badge bg-success">Completada</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Pendiente</span>
+                        }
+                    </td>
+                    <td>
+                        @if (u.ResultadoFinal.HasValue)
+                        {
+                            @u.ResultadoFinal.Value.ToString("0.##")<span>%</span>
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </td>
                     <td>@(u.FechaInicioContrato?.ToShortDateString() ?? "-")</td>
                     <td>@(u.FechaFinalizacionContrato?.ToShortDateString() ?? "-")</td>
                     <td>@(u.FechaFinalizacionPeriodoPrueba?.ToShortDateString() ?? "-")</td>
@@ -122,11 +142,10 @@ else
             const iniciarBtn = document.getElementById('iniciarEvaluacionBtn');
             const solicitarBtn = document.getElementById('solicitarActivacionBtn');
             const evalInputId = document.getElementById('usuarioEvaluacionId');
+            const estadoActivacionUrlBase = '@Url.Action("EstadoActivacion", "Usuarios")';
 
             const setButtonsState = (canStart, canRequest) => {
-                if (iniciarBtn) {
-                    iniciarBtn.disabled = !canStart;
-                }
+                if (iniciarBtn) iniciarBtn.disabled = !canStart;
 
                 if (solicitarBtn) {
                     if (canRequest) {
@@ -135,51 +154,38 @@ else
                     } else {
                         solicitarBtn.classList.add('d-none');
                         solicitarBtn.disabled = true;
-                        solicitarBtn.textContent = 'Solicitar Activación de Evaluación';
+                        solicitarBtn.textContent = 'Solicitar Activacion de Evaluacion';
                     }
                 }
             };
 
             const parseDate = (value) => {
-                if (!value) {
-                    return null;
-                }
-
+                if (!value) return null;
                 const date = new Date(`${value}T00:00:00`);
                 return Number.isNaN(date.getTime()) ? null : date;
             };
 
-            const isWithinWindow = (targetDate, windowDays = 20) => {
-                if (!targetDate) {
-                    return false;
-                }
-
+            const isWithinWindow = (targetDate, windowDays = 25) => {
+                if (!targetDate) return false;
                 const start = new Date(targetDate);
                 start.setDate(start.getDate() - windowDays);
                 const end = new Date(targetDate);
-
                 const now = new Date();
                 return now >= start && now <= end;
             };
 
-            const isWithinActivationWindow = (activationDate, windowDays = 20) => {
-                if (!activationDate) {
-                    return false;
-                }
-
+            const isWithinActivationWindow = (activationDate, windowDays = 25) => {
+                if (!activationDate) return false;
                 const start = new Date(activationDate);
                 const end = new Date(activationDate);
                 end.setDate(end.getDate() + windowDays);
-
                 const now = new Date();
                 return now >= start && now <= end;
             };
 
             const updateSelection = () => {
                 const selected = document.querySelector('.usuario-select:checked');
-                if (!evalInputId) {
-                    return;
-                }
+                if (!evalInputId) return;
 
                 if (!selected) {
                     evalInputId.value = '';
@@ -188,9 +194,7 @@ else
                 }
 
                 evalInputId.value = selected.dataset.id || '';
-                if (solicitarBtn) {
-                    solicitarBtn.dataset.userId = selected.dataset.id || '';
-                }
+                if (solicitarBtn) solicitarBtn.dataset.userId = selected.dataset.id || '';
 
                 const fechaContrato = parseDate(selected.dataset.fechaFinalizacionContrato);
                 const fechaPrueba = parseDate(selected.dataset.fechaFinalizacionPrueba);
@@ -203,13 +207,28 @@ else
                 setButtonsState(puedeIniciar, !puedeIniciar);
             };
 
+            const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+            const refreshActivationState = async (userId, selectedCheckbox) => {
+                if (!userId || !estadoActivacionUrlBase) return false;
+
+                const response = await fetch(`${estadoActivacionUrlBase}?usuarioId=${encodeURIComponent(userId)}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+
+                if (!response.ok) throw new Error('No fue posible consultar el estado de activacion.');
+
+                const data = await response.json();
+                if (selectedCheckbox) selectedCheckbox.dataset.fechaActivacionEvaluacion = data.fechaActivacionEvaluacion || '';
+                updateSelection();
+                return data.puedeIniciar === true;
+            };
+
             checkboxes.forEach((checkbox) => {
                 checkbox.addEventListener('change', (event) => {
                     if (event.target.checked) {
                         checkboxes.forEach((other) => {
-                            if (other !== event.target) {
-                                other.checked = false;
-                            }
+                            if (other !== event.target) other.checked = false;
                         });
                     }
                     updateSelection();
@@ -222,9 +241,7 @@ else
                     const url = solicitarBtn.dataset.url;
                     const tokenInput = document.querySelector('#solicitudActivacionToken input[name="__RequestVerificationToken"]');
 
-                    if (!userId || !url || !tokenInput) {
-                        return;
-                    }
+                    if (!userId || !url || !tokenInput) return;
 
                     solicitarBtn.disabled = true;
                     solicitarBtn.textContent = 'Enviando solicitud...';
@@ -239,11 +256,25 @@ else
                             body: JSON.stringify({ usuarioId: userId })
                         });
 
-                        if (!response.ok) {
-                            throw new Error('Solicitud fallida');
-                        }
+                        if (!response.ok) throw new Error('Solicitud fallida');
 
                         solicitarBtn.textContent = 'Solicitud enviada';
+
+                        const selectedCheckbox = document.querySelector(`.usuario-select[data-id="${userId}"]`);
+                        let activado = false;
+                        for (let intento = 0; intento < 6; intento++) {
+                            if (intento > 0) await sleep(2000);
+                            activado = await refreshActivationState(userId, selectedCheckbox);
+                            if (activado) break;
+                        }
+
+                        if (activado) {
+                            solicitarBtn.classList.add('d-none');
+                            solicitarBtn.textContent = 'Solicitar Activacion de Evaluacion';
+                        } else {
+                            solicitarBtn.disabled = false;
+                            solicitarBtn.textContent = 'Solicitud enviada, actualiza en unos segundos';
+                        }
                     } catch (error) {
                         solicitarBtn.disabled = false;
                         solicitarBtn.textContent = 'Reintentar solicitud';
