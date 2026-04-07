@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.Text;
 using EvaluacionDesempenoAB.Models;
 
 namespace EvaluacionDesempenoAB.Helpers
@@ -30,19 +32,17 @@ namespace EvaluacionDesempenoAB.Helpers
                 return TipoParteEvaluacion.Ninguna;
             }
 
-            var parte = TipoParteEvaluacion.Ninguna;
+            if (SonCorreosIguales(usuarioObjetivo.CorreoEvaluadorSst, correoActual))
+            {
+                return TipoParteEvaluacion.Sst;
+            }
 
             if (SonCorreosIguales(usuarioObjetivo.EvaluadorNombre, correoActual))
             {
-                parte |= TipoParteEvaluacion.Normal;
+                return TipoParteEvaluacion.Normal;
             }
 
-            if (SonCorreosIguales(usuarioObjetivo.CorreoEvaluadorSst, correoActual))
-            {
-                parte |= TipoParteEvaluacion.Sst;
-            }
-
-            return parte;
+            return TipoParteEvaluacion.Ninguna;
         }
 
         public static bool TieneParte(TipoParteEvaluacion parte, TipoParteEvaluacion requerida)
@@ -58,10 +58,13 @@ namespace EvaluacionDesempenoAB.Helpers
                 return false;
             }
 
-            var nombre = nombreCompetencia.Trim();
-            return nombre.Contains(CompetenciaSstNombre, StringComparison.OrdinalIgnoreCase)
-                || (nombre.Contains("CULTURA", StringComparison.OrdinalIgnoreCase)
-                    && nombre.Contains("SST", StringComparison.OrdinalIgnoreCase));
+            var nombreNormalizado = Normalizar(nombreCompetencia);
+            return nombreNormalizado.Contains("CULTURA SST", StringComparison.OrdinalIgnoreCase)
+                || nombreNormalizado.Contains("CULUTA SST", StringComparison.OrdinalIgnoreCase)
+                || (nombreNormalizado.Contains("CULTURA", StringComparison.OrdinalIgnoreCase)
+                    && nombreNormalizado.Contains("SST", StringComparison.OrdinalIgnoreCase))
+                || (nombreNormalizado.Contains("CULUTA", StringComparison.OrdinalIgnoreCase)
+                    && nombreNormalizado.Contains("SST", StringComparison.OrdinalIgnoreCase));
         }
 
         public static bool DebeVerCompetencia(TipoParteEvaluacion parte, string? nombreCompetencia)
@@ -107,5 +110,21 @@ namespace EvaluacionDesempenoAB.Helpers
                 left?.Trim(),
                 right?.Trim(),
                 StringComparison.OrdinalIgnoreCase);
+
+        private static string Normalizar(string value)
+        {
+            var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(normalized.Length);
+
+            foreach (var ch in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+                {
+                    builder.Append(ch);
+                }
+            }
+
+            return builder.ToString().Normalize(NormalizationForm.FormC);
+        }
     }
 }
