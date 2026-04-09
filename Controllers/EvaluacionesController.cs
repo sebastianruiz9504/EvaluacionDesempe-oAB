@@ -126,6 +126,28 @@ namespace EvaluacionDesempenoAB.Controllers
             return null;
         }
 
+        private async Task<IActionResult> ReturnReporteConErrorGuardadoPlanAsync(
+            EvaluacionReporteViewModel model,
+            UsuarioEvaluado evaluadorActual,
+            string mensajeError)
+        {
+            var vm = await BuildReporteViewModelAsync(model.EvaluacionId, evaluadorActual);
+            if (vm == null)
+            {
+                return NotFound();
+            }
+
+            vm.PlanAccion = model.PlanAccion?.Any() == true
+                ? model.PlanAccion
+                : new List<PlanAccionItemVm> { new() };
+            vm.FechaProximaEvaluacion = model.FechaProximaEvaluacion;
+
+            ViewBag.MostrarModalGuardarPlan = true;
+            ViewBag.ErrorGuardadoPlan = mensajeError;
+
+            return View("Reporte", vm);
+        }
+
         private async Task<List<Evaluacion>> GetEvaluacionesVisiblesAsync(UsuarioEvaluado evaluador)
         {
             if (evaluador.EsSuperAdministrador)
@@ -955,7 +977,7 @@ namespace EvaluacionDesempenoAB.Controllers
         // ================== REPORTE ==================
 
         [HttpGet]
-        public async Task<IActionResult> Reporte(Guid id, bool mostrarModalFirma = false, bool firmaGuardada = false)
+        public async Task<IActionResult> Reporte(Guid id)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
@@ -969,8 +991,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 return NotFound();
             }
 
-            ViewBag.MostrarModalFirma = mostrarModalFirma;
-            ViewBag.FirmaGuardada = firmaGuardada;
             return View("Reporte", vm);
         }
 
@@ -1259,7 +1279,7 @@ namespace EvaluacionDesempenoAB.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> GuardarPlanAccion(EvaluacionReporteViewModel model)
+        public async Task<IActionResult> GuardarPlanAccion(EvaluacionReporteViewModel model, IFormFile? firmaArchivo)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
@@ -1284,10 +1304,40 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            var requiereFirma = !evaluador.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual);
+            if (requiereFirma)
+            {
+                if (firmaArchivo == null || firmaArchivo.Length == 0)
+                {
+                    return await ReturnReporteConErrorGuardadoPlanAsync(
+                        model,
+                        evaluador,
+                        "Debes adjuntar la firma en formato PNG o JPG para guardar el plan de acción.");
+                }
+
+                if (!EsFirmaImagenValida(firmaArchivo))
+                {
+                    return await ReturnReporteConErrorGuardadoPlanAsync(
+                        model,
+                        evaluador,
+                        "La firma debe estar en formato PNG o JPG.");
+                }
+
+                try
+                {
+                    await using var stream = firmaArchivo.OpenReadStream();
+                    await _repo.UploadFirmaUsuarioAsync(evaluador.Id, firmaArchivo.FileName, firmaArchivo.ContentType, stream);
+                }
+                catch (Exception ex)
+                {
+                    return await ReturnReporteConErrorGuardadoPlanAsync(model, evaluador, ex.Message);
+                }
+            }
+
             var competencias = await _repo.GetCompetenciasAsync();
             var comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
             var competenciasById = BuildCompetenciasLookup(competencias);
-            var parteActual = GetParteEvaluador(evaluador, usuario);
             var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
             var comportamientosPorDescripcion = BuildComportamientosPorDescripcion(comportamientos);
 
@@ -1331,8 +1381,7 @@ namespace EvaluacionDesempenoAB.Controllers
 
             await _repo.UpdateEvaluacionAsync(evaluacion, detalles, planesFinales);
 
-            var solicitarFirma = !evaluador.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual);
-            return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId, mostrarModalFirma = solicitarFirma });
+            return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId });
         }
 
         private async Task<EvaluacionReporteViewModel?> BuildReporteViewModelAsync(Guid id, UsuarioEvaluado evaluadorActual)
