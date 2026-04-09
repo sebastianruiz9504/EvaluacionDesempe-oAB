@@ -193,12 +193,16 @@ namespace EvaluacionDesempenoAB.Controllers
             UsuarioEvaluado usuario,
             IEnumerable<NivelEvaluacion> niveles)
         {
-            if (!usuario.TipoFormulario.HasValue)
-            {
-                return null;
-            }
+            return usuario.TipoFormulario.HasValue
+                ? ResolveNivelPorTipoFormulario(usuario.TipoFormulario.Value, niveles)
+                : null;
+        }
 
-            if (!TipoFormularioNiveles.TryGetValue(usuario.TipoFormulario.Value, out var nivelInfo))
+        private static NivelEvaluacion? ResolveNivelPorTipoFormulario(
+            int tipoFormulario,
+            IEnumerable<NivelEvaluacion> niveles)
+        {
+            if (!TipoFormularioNiveles.TryGetValue(tipoFormulario, out var nivelInfo))
             {
                 return null;
             }
@@ -208,6 +212,15 @@ namespace EvaluacionDesempenoAB.Controllers
                    ?? niveles.FirstOrDefault(n =>
                        string.Equals(n.Nombre, nivelInfo.Nombre, StringComparison.OrdinalIgnoreCase));
         }
+
+        private static List<TipoFormularioOpcionViewModel> BuildTipoFormularioOpciones()
+            => TipoFormularioNiveles
+                .Select(kvp => new TipoFormularioOpcionViewModel
+                {
+                    Valor = kvp.Key,
+                    Nombre = kvp.Value.Nombre
+                })
+                .ToList();
 
         private static Dictionary<Guid, Competencia> BuildCompetenciasLookup(IEnumerable<Competencia> competencias)
             => competencias
@@ -535,6 +548,10 @@ namespace EvaluacionDesempenoAB.Controllers
 
             ViewData["CedulaFiltro"] = cedula;
             ViewData["ProyectoFiltro"] = proyecto;
+            ViewBag.EsSuperAdmin = evaluador.EsSuperAdministrador;
+            ViewBag.TiposFormularioCertificado = evaluador.EsSuperAdministrador
+                ? BuildTipoFormularioOpciones()
+                : new List<TipoFormularioOpcionViewModel>();
 
             return View(vm);
         }
@@ -1048,10 +1065,27 @@ namespace EvaluacionDesempenoAB.Controllers
         }
 
         [HttpGet]
-        public IActionResult CertificadoEnBlanco()
+        public async Task<IActionResult> CertificadoEnBlanco(int? tipoFormulario)
         {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null || !evaluador.EsSuperAdministrador)
+            {
+                return Forbid();
+            }
+
+            if (!tipoFormulario.HasValue)
+            {
+                return BadRequest("Debes seleccionar un tipo de formulario.");
+            }
+
+            var vm = await BuildReporteEnBlancoViewModelAsync(tipoFormulario.Value);
+            if (vm == null)
+            {
+                return NotFound("No se encontro el certificado en blanco para el tipo de formulario seleccionado.");
+            }
+
             ViewBag.EsCertificadoEnBlanco = true;
-            return View("ReporteImpresion", BuildReporteEnBlancoViewModel());
+            return View("ReporteImpresion", vm);
         }
 
         [HttpPost]
@@ -1451,12 +1485,47 @@ namespace EvaluacionDesempenoAB.Controllers
             return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId });
         }
 
-        private static EvaluacionReporteViewModel BuildReporteEnBlancoViewModel()
+        private async Task<EvaluacionReporteViewModel?> BuildReporteEnBlancoViewModelAsync(int tipoFormulario)
         {
+            var niveles = await _repo.GetNivelesActivosAsync();
+            var nivel = ResolveNivelPorTipoFormulario(tipoFormulario, niveles);
+            if (nivel == null)
+            {
+                return null;
+            }
+
+            var competencias = await _repo.GetCompetenciasAsync();
+            var comportamientos = await _repo.GetComportamientosByNivelAsync(nivel.Id);
+            var competenciasVm = new List<CompetenciaReporteVm>();
+
+            foreach (var competencia in competencias.OrderBy(c => c.Orden))
+            {
+                var comportamientosCompetencia = comportamientos
+                    .Where(x => x.CompetenciaId == competencia.Id)
+                    .OrderBy(x => x.Orden)
+                    .Select(x => new ComportamientoReporteVm
+                    {
+                        Descripcion = x.Descripcion
+                    })
+                    .ToList();
+
+                if (!comportamientosCompetencia.Any())
+                {
+                    continue;
+                }
+
+                competenciasVm.Add(new CompetenciaReporteVm
+                {
+                    Nombre = competencia.Nombre,
+                    Comportamientos = comportamientosCompetencia
+                });
+            }
+
             return new EvaluacionReporteViewModel
             {
                 FechaGeneracionReporte = DateTime.Today,
-                Competencias = new List<CompetenciaReporteVm>(),
+                NombreNivel = nivel.Nombre,
+                Competencias = competenciasVm,
                 OportunidadesMejora = new List<OportunidadMejoraVm>(),
                 PlanAccion = new List<PlanAccionItemVm>()
             };

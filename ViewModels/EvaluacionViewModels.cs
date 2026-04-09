@@ -41,6 +41,12 @@ namespace EvaluacionDesempenoAB.ViewModels
         public List<EvaluacionListaViewModel> Evaluaciones { get; set; } = new();
     }
 
+    public class TipoFormularioOpcionViewModel
+    {
+        public int Valor { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+    }
+
     // ===== FORMULARIO =====
 
     public class EvaluacionFormularioViewModel

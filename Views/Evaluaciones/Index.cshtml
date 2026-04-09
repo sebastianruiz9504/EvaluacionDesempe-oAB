@@ -6,6 +6,8 @@
     var cedulaFiltro = ViewData["CedulaFiltro"] as string;
     var proyectoFiltro = ViewData["ProyectoFiltro"] as string;
     var hayEvaluaciones = Model.Any();
+    var esSuperAdmin = ViewBag.EsSuperAdmin is bool valor && valor;
+    var tiposFormularioCertificado = ViewBag.TiposFormularioCertificado as List<TipoFormularioOpcionViewModel> ?? new();
 }
 
 <h2 class="mt-4">Mis evaluaciones</h2>
@@ -53,10 +55,26 @@
             Imprimir resultados
         </a>
     }
-    <a class="btn btn-sm btn-outline-success"
-       asp-action="CertificadoEnBlanco">
-        Certificado en blanco
-    </a>
+    @if (esSuperAdmin)
+    {
+        <form method="get"
+              asp-action="CertificadoEnBlanco"
+              class="d-flex flex-wrap align-items-center gap-2">
+            <select name="tipoFormulario"
+                    class="form-select form-select-sm"
+                    style="min-width: 240px;"
+                    required>
+                <option value="">Selecciona tipo de formulario</option>
+                @foreach (var tipo in tiposFormularioCertificado)
+                {
+                    <option value="@tipo.Valor">@tipo.Nombre</option>
+                }
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-success">
+                Certificado en blanco
+            </button>
+        </form>
+    }
     @if (hayEvaluaciones)
     {
         <a id="accionReevaluar"
