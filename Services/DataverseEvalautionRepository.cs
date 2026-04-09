@@ -89,6 +89,38 @@ namespace EvaluacionDesempenoAB.Services
             return e == null ? null : MapUsuario(e);
         }
 
+        public async Task<List<UsuarioEvaluado>> GetUsuariosByIdsAsync(IEnumerable<Guid> ids)
+        {
+            var usuarios = new List<UsuarioEvaluado>();
+            var usuarioIds = ids
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            if (usuarioIds.Length == 0)
+            {
+                return usuarios;
+            }
+
+            foreach (var chunk in usuarioIds.Chunk(200))
+            {
+                var q = new QueryExpression(UsuarioTable)
+                {
+                    ColumnSet = new ColumnSet(true)
+                };
+
+                q.Criteria.AddCondition("crfb7_usuarioid", ConditionOperator.In, chunk.Cast<object>().ToArray());
+
+                var result = await _client.RetrieveMultipleAsync(q);
+                usuarios.AddRange(result.Entities.Select(MapUsuario));
+            }
+
+            return usuarios
+                .GroupBy(x => x.Id)
+                .Select(g => g.First())
+                .ToList();
+        }
+
         private UsuarioEvaluado MapUsuario(Entity e)
         {
             return new UsuarioEvaluado
@@ -200,6 +232,38 @@ namespace EvaluacionDesempenoAB.Services
             return e == null ? null : MapNivel(e);
         }
 
+        public async Task<List<NivelEvaluacion>> GetNivelesByIdsAsync(IEnumerable<Guid> ids)
+        {
+            var niveles = new List<NivelEvaluacion>();
+            var nivelIds = ids
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            if (nivelIds.Length == 0)
+            {
+                return niveles;
+            }
+
+            foreach (var chunk in nivelIds.Chunk(200))
+            {
+                var q = new QueryExpression(NivelTable)
+                {
+                    ColumnSet = new ColumnSet("crfb7_nombrenivel", "crfb7_codigo")
+                };
+
+                q.Criteria.AddCondition("crfb7_nivelid", ConditionOperator.In, chunk.Cast<object>().ToArray());
+
+                var result = await _client.RetrieveMultipleAsync(q);
+                niveles.AddRange(result.Entities.Select(MapNivel));
+            }
+
+            return niveles
+                .GroupBy(x => x.Id)
+                .Select(g => g.First())
+                .ToList();
+        }
+
         private NivelEvaluacion MapNivel(Entity e)
         {
             return new NivelEvaluacion
@@ -263,6 +327,52 @@ namespace EvaluacionDesempenoAB.Services
                 CompetenciaId = e.GetAttributeValue<EntityReference>("crfb7_competencia")?.Id ?? Guid.Empty,
                 NivelId       = e.GetAttributeValue<EntityReference>("crfb7_niveldeevaluacion")?.Id ?? Guid.Empty
             }).ToList();
+        }
+
+        public async Task<List<Comportamiento>> GetComportamientosByNivelesAsync(IEnumerable<Guid> nivelIds)
+        {
+            var comportamientos = new List<Comportamiento>();
+            var ids = nivelIds
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            if (ids.Length == 0)
+            {
+                return comportamientos;
+            }
+
+            foreach (var chunk in ids.Chunk(200))
+            {
+                var q = new QueryExpression(ComportamientoTable)
+                {
+                    ColumnSet = new ColumnSet(
+                        "crfb7_comportamiento1",
+                        "crfb7_descripciondelcomportamiento",
+                        "crfb7_competencia",
+                        "crfb7_niveldeevaluacion"
+                    )
+                };
+
+                q.Criteria.AddCondition("crfb7_niveldeevaluacion", ConditionOperator.In, chunk.Cast<object>().ToArray());
+
+                var result = await _client.RetrieveMultipleAsync(q);
+                comportamientos.AddRange(result.Entities.Select(e => new Comportamiento
+                {
+                    Id = e.Id,
+                    Descripcion = e.GetAttributeValue<string>("crfb7_descripciondelcomportamiento")
+                                  ?? e.GetAttributeValue<string>("crfb7_comportamiento1")
+                                  ?? "",
+                    Orden = 0,
+                    CompetenciaId = e.GetAttributeValue<EntityReference>("crfb7_competencia")?.Id ?? Guid.Empty,
+                    NivelId = e.GetAttributeValue<EntityReference>("crfb7_niveldeevaluacion")?.Id ?? Guid.Empty
+                }));
+            }
+
+            return comportamientos
+                .GroupBy(x => x.Id)
+                .Select(g => g.First())
+                .ToList();
         }
 
         // =====================================================
@@ -867,6 +977,44 @@ namespace EvaluacionDesempenoAB.Services
                 Puntaje         = e.GetAttributeValue<int?>("crfb7_dt_puntaje") ?? 0,
                 Comentario      = e.GetAttributeValue<string>("crfb7_dt_comentario")
             }).ToList();
+        }
+
+        public async Task<List<EvaluacionDetalle>> GetDetallesByEvaluacionesAsync(IEnumerable<Guid> evaluacionIds)
+        {
+            var detalles = new List<EvaluacionDetalle>();
+            var ids = evaluacionIds
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            if (ids.Length == 0)
+            {
+                return detalles;
+            }
+
+            foreach (var chunk in ids.Chunk(200))
+            {
+                var q = new QueryExpression(DetalleTable)
+                {
+                    ColumnSet = new ColumnSet(true)
+                };
+                q.Criteria.AddCondition("crfb7_dt_evaluacionid", ConditionOperator.In, chunk.Cast<object>().ToArray());
+
+                var result = await _client.RetrieveMultipleAsync(q);
+                detalles.AddRange(result.Entities.Select(e => new EvaluacionDetalle
+                {
+                    Id = e.Id,
+                    EvaluacionId = e.GetAttributeValue<EntityReference>("crfb7_dt_evaluacionid")?.Id ?? Guid.Empty,
+                    ComportamientoId = e.GetAttributeValue<EntityReference>("crfb7_dt_comportamientoid")?.Id ?? Guid.Empty,
+                    Puntaje = e.GetAttributeValue<int?>("crfb7_dt_puntaje") ?? 0,
+                    Comentario = e.GetAttributeValue<string>("crfb7_dt_comentario")
+                }));
+            }
+
+            return detalles
+                .GroupBy(x => x.Id)
+                .Select(g => g.First())
+                .ToList();
         }
 
         public async Task<List<PlanAccion>> GetPlanesByEvaluacionAsync(Guid evalId)

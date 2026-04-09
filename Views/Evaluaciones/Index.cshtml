@@ -8,9 +8,25 @@
     var hayEvaluaciones = Model.Any();
     var esSuperAdmin = ViewBag.EsSuperAdmin is bool valor && valor;
     var tiposFormularioCertificado = ViewBag.TiposFormularioCertificado as List<TipoFormularioOpcionViewModel> ?? new();
+    var errorCarga = ViewBag.ErrorCargaEvaluaciones as string;
+    var advertenciaCarga = ViewBag.AdvertenciaCargaEvaluaciones as string;
 }
 
 <h2 class="mt-4">Mis evaluaciones</h2>
+
+@if (!string.IsNullOrWhiteSpace(errorCarga))
+{
+    <div class="alert alert-warning mt-3" role="alert">
+        @errorCarga
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(advertenciaCarga))
+{
+    <div class="alert alert-info mt-3" role="alert">
+        @advertenciaCarga
+    </div>
+}
 
 <form method="get" class="row g-2 align-items-end mt-1 mb-2">
     <div class="col-md-4">
@@ -106,9 +122,12 @@
 
 @if (!hayEvaluaciones)
 {
-    <div class="alert alert-info mt-3">
-        No se han registrado evaluaciones aun.
-    </div>
+    @if (string.IsNullOrWhiteSpace(errorCarga))
+    {
+        <div class="alert alert-info mt-3">
+            No se han registrado evaluaciones aun.
+        </div>
+    }
 }
 else
 {

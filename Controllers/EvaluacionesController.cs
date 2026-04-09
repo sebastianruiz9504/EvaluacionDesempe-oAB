@@ -11,6 +11,7 @@ using EvaluacionDesempenoAB.Services;
 using EvaluacionDesempenoAB.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace EvaluacionDesempenoAB.Controllers
 {
@@ -18,6 +19,7 @@ namespace EvaluacionDesempenoAB.Controllers
     public class EvaluacionesController : Controller
     {
         private readonly IEvaluacionRepository _repo;
+        private readonly ILogger<EvaluacionesController> _logger;
 
         private static readonly Dictionary<int, (string Codigo, string Nombre)> TipoFormularioNiveles = new()
         {
@@ -38,9 +40,10 @@ namespace EvaluacionDesempenoAB.Controllers
         private const int OportunidadMejoraPuntajeMinimo = 70;
         private const int OportunidadMejoraPuntajeMaximo = 85;
 
-        public EvaluacionesController(IEvaluacionRepository repo)
+        public EvaluacionesController(IEvaluacionRepository repo, ILogger<EvaluacionesController> logger)
         {
             _repo = repo;
+            _logger = logger;
         }
 
         private string? GetUserEmail()
@@ -466,6 +469,23 @@ namespace EvaluacionDesempenoAB.Controllers
             return null;
         }
 
+        private void ConfigureIndexView(
+            UsuarioEvaluado evaluador,
+            string? cedula,
+            string? proyecto,
+            string? mensajeError = null,
+            string? mensajeAdvertencia = null)
+        {
+            ViewData["CedulaFiltro"] = cedula;
+            ViewData["ProyectoFiltro"] = proyecto;
+            ViewBag.EsSuperAdmin = evaluador.EsSuperAdministrador;
+            ViewBag.TiposFormularioCertificado = evaluador.EsSuperAdministrador
+                ? BuildTipoFormularioOpciones()
+                : new List<TipoFormularioOpcionViewModel>();
+            ViewBag.ErrorCargaEvaluaciones = mensajeError;
+            ViewBag.AdvertenciaCargaEvaluaciones = mensajeAdvertencia;
+        }
+
         // ================== LISTADO PRINCIPAL ==================
 
         public async Task<IActionResult> Index(string? cedula, string? proyecto)
@@ -476,84 +496,117 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            var evals = await GetEvaluacionesVisiblesAsync(evaluador);
-            var competencias = await _repo.GetCompetenciasAsync();
-            var usuariosDict = new Dictionary<Guid, UsuarioEvaluado>();
-            var nivelesDict = new Dictionary<Guid, NivelEvaluacion>();
-            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
-            var vm = new List<EvaluacionListaViewModel>();
-
-            foreach (var evaluacion in evals)
+            try
             {
-                if (!usuariosDict.TryGetValue(evaluacion.UsuarioId, out var usuario))
-                {
-                    usuario = await _repo.GetUsuarioByIdAsync(evaluacion.UsuarioId) ?? new UsuarioEvaluado();
-                    usuariosDict[evaluacion.UsuarioId] = usuario;
-                }
-
-                if (!nivelesDict.TryGetValue(evaluacion.NivelId, out var nivel))
-                {
-                    nivel = await _repo.GetNivelByIdAsync(evaluacion.NivelId) ?? new NivelEvaluacion();
-                    nivelesDict[evaluacion.NivelId] = nivel;
-                }
-
-                if (!comportamientosPorNivel.TryGetValue(evaluacion.NivelId, out var comportamientos))
-                {
-                    comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
-                    comportamientosPorNivel[evaluacion.NivelId] = comportamientos;
-                }
-
-                var detalles = await _repo.GetDetallesByEvaluacionAsync(evaluacion.Id);
-                var cobertura = BuildCobertura(detalles, competencias, comportamientos);
-
-                vm.Add(new EvaluacionListaViewModel
-                {
-                    Id = evaluacion.Id,
-                    UsuarioId = evaluacion.UsuarioId,
-                    FechaEvaluacion = evaluacion.FechaEvaluacion,
-                    ProximaEvaluacion = evaluacion.FechaProximaEvaluacion,
-                    NombreUsuario = usuario.NombreCompleto,
-                    CedulaUsuario = usuario.Cedula,
-                    GerenciaUsuario = evaluacion.Gerencia ?? usuario.Gerencia ?? string.Empty,
-                    ProyectoUsuario = evaluacion.Proyecto ?? string.Empty,
-                    NivelNombre = nivel.Nombre,
-                    NivelCodigo = nivel.Codigo,
-                    Proyecto = evaluacion.Proyecto ?? usuario.Cargo,
-                    Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
-                    TipoEvaluacion = evaluacion.TipoEvaluacion,
-                    ResultadoFinal = cobertura.AmbasPartesCompletas
-                        ? evaluacion.Total ?? cobertura.TotalCalculado
-                        : null,
-                    EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
-                    EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
-                    PuedeReevaluar = evaluacion.TipoEvaluacion == "Inicial",
-                    TieneReporteFirmado = evaluacion.TieneReporteFirmado,
-                    ReporteFirmadoNombre = evaluacion.ReporteFirmadoNombre
-                });
-            }
-
-            if (!string.IsNullOrWhiteSpace(cedula))
-            {
-                vm = vm
-                    .Where(x => x.CedulaUsuario?.Contains(cedula, StringComparison.OrdinalIgnoreCase) == true)
+                var evaluaciones = await GetEvaluacionesVisiblesAsync(evaluador);
+                var evaluacionesInvalidas = evaluaciones.Count(e =>
+                    e.Id == Guid.Empty ||
+                    e.UsuarioId == Guid.Empty ||
+                    e.NivelId == Guid.Empty);
+                var evals = evaluaciones
+                    .Where(e =>
+                        e.Id != Guid.Empty &&
+                        e.UsuarioId != Guid.Empty &&
+                        e.NivelId != Guid.Empty)
                     .ToList();
-            }
 
-            if (!string.IsNullOrWhiteSpace(proyecto))
+                var competencias = await _repo.GetCompetenciasAsync();
+                var usuariosDict = (await _repo.GetUsuariosByIdsAsync(evals.Select(e => e.UsuarioId)))
+                    .GroupBy(x => x.Id)
+                    .ToDictionary(g => g.Key, g => g.First());
+                var nivelesDict = (await _repo.GetNivelesByIdsAsync(evals.Select(e => e.NivelId)))
+                    .GroupBy(x => x.Id)
+                    .ToDictionary(g => g.Key, g => g.First());
+                var comportamientosPorNivel = (await _repo.GetComportamientosByNivelesAsync(evals.Select(e => e.NivelId)))
+                    .Where(x => x.NivelId != Guid.Empty)
+                    .GroupBy(x => x.NivelId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+                var detallesPorEvaluacion = (await _repo.GetDetallesByEvaluacionesAsync(evals.Select(e => e.Id)))
+                    .Where(x => x.EvaluacionId != Guid.Empty)
+                    .GroupBy(x => x.EvaluacionId)
+                    .ToDictionary(g => g.Key, g => (IReadOnlyCollection<EvaluacionDetalle>)g.ToList());
+
+                var vm = new List<EvaluacionListaViewModel>(evals.Count);
+
+                foreach (var evaluacion in evals)
+                {
+                    usuariosDict.TryGetValue(evaluacion.UsuarioId, out var usuario);
+                    nivelesDict.TryGetValue(evaluacion.NivelId, out var nivel);
+                    comportamientosPorNivel.TryGetValue(evaluacion.NivelId, out var comportamientos);
+                    detallesPorEvaluacion.TryGetValue(evaluacion.Id, out var detalles);
+
+                    usuario ??= new UsuarioEvaluado();
+                    nivel ??= new NivelEvaluacion();
+                    IReadOnlyCollection<Comportamiento> comportamientosActuales =
+                        (IReadOnlyCollection<Comportamiento>?)comportamientos ?? Array.Empty<Comportamiento>();
+
+                    var cobertura = BuildCobertura(
+                        detalles ?? Array.Empty<EvaluacionDetalle>(),
+                        competencias,
+                        comportamientosActuales);
+
+                    vm.Add(new EvaluacionListaViewModel
+                    {
+                        Id = evaluacion.Id,
+                        UsuarioId = evaluacion.UsuarioId,
+                        FechaEvaluacion = evaluacion.FechaEvaluacion,
+                        ProximaEvaluacion = evaluacion.FechaProximaEvaluacion,
+                        NombreUsuario = usuario.NombreCompleto,
+                        CedulaUsuario = usuario.Cedula,
+                        GerenciaUsuario = evaluacion.Gerencia ?? usuario.Gerencia ?? string.Empty,
+                        ProyectoUsuario = evaluacion.Proyecto ?? string.Empty,
+                        NivelNombre = nivel.Nombre,
+                        NivelCodigo = nivel.Codigo,
+                        Proyecto = evaluacion.Proyecto ?? usuario.Cargo,
+                        Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
+                        TipoEvaluacion = evaluacion.TipoEvaluacion,
+                        ResultadoFinal = cobertura.AmbasPartesCompletas
+                            ? evaluacion.Total ?? cobertura.TotalCalculado
+                            : null,
+                        EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
+                        EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
+                        PuedeReevaluar = evaluacion.TipoEvaluacion == "Inicial",
+                        TieneReporteFirmado = evaluacion.TieneReporteFirmado,
+                        ReporteFirmadoNombre = evaluacion.ReporteFirmadoNombre
+                    });
+                }
+
+                if (!string.IsNullOrWhiteSpace(cedula))
+                {
+                    vm = vm
+                        .Where(x => x.CedulaUsuario?.Contains(cedula, StringComparison.OrdinalIgnoreCase) == true)
+                        .ToList();
+                }
+
+                if (!string.IsNullOrWhiteSpace(proyecto))
+                {
+                    vm = vm
+                        .Where(x => x.ProyectoUsuario?.Contains(proyecto, StringComparison.OrdinalIgnoreCase) == true)
+                        .ToList();
+                }
+
+                var advertencia = evaluacionesInvalidas > 0
+                    ? $"Se omitieron {evaluacionesInvalidas} evaluaciones con datos incompletos para evitar errores al cargar el listado."
+                    : null;
+
+                ConfigureIndexView(evaluador, cedula, proyecto, mensajeAdvertencia: advertencia);
+                return View(vm);
+            }
+            catch (Exception ex)
             {
-                vm = vm
-                    .Where(x => x.ProyectoUsuario?.Contains(proyecto, StringComparison.OrdinalIgnoreCase) == true)
-                    .ToList();
+                _logger.LogError(
+                    ex,
+                    "No fue posible cargar el listado de 'Mis evaluaciones' para el evaluador {CorreoEvaluador}.",
+                    GetCorreoActual(evaluador));
+
+                ConfigureIndexView(
+                    evaluador,
+                    cedula,
+                    proyecto,
+                    mensajeError: "No fue posible cargar las evaluaciones en este momento. Intenta nuevamente en unos segundos.");
+
+                return View(new List<EvaluacionListaViewModel>());
             }
-
-            ViewData["CedulaFiltro"] = cedula;
-            ViewData["ProyectoFiltro"] = proyecto;
-            ViewBag.EsSuperAdmin = evaluador.EsSuperAdministrador;
-            ViewBag.TiposFormularioCertificado = evaluador.EsSuperAdministrador
-                ? BuildTipoFormularioOpciones()
-                : new List<TipoFormularioOpcionViewModel>();
-
-            return View(vm);
         }
 
         // ================== NUEVA EVALUACIÓN ==================

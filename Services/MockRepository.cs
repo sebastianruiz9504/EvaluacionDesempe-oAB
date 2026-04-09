@@ -167,6 +167,19 @@ namespace EvaluacionDesempenoAB.Services
             return Task.FromResult(u);
         }
 
+        public Task<List<UsuarioEvaluado>> GetUsuariosByIdsAsync(IEnumerable<Guid> ids)
+        {
+            var idSet = ids
+                .Where(id => id != Guid.Empty)
+                .ToHashSet();
+
+            var usuarios = _usuarios
+                .Where(x => idSet.Contains(x.Id))
+                .ToList();
+
+            return Task.FromResult(usuarios);
+        }
+
         public Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades)
         {
             var u = _usuarios.FirstOrDefault(x => x.Id == usuarioId);
@@ -208,6 +221,19 @@ namespace EvaluacionDesempenoAB.Services
             return Task.FromResult(n);
         }
 
+        public Task<List<NivelEvaluacion>> GetNivelesByIdsAsync(IEnumerable<Guid> ids)
+        {
+            var idSet = ids
+                .Where(id => id != Guid.Empty)
+                .ToHashSet();
+
+            var niveles = _niveles
+                .Where(x => idSet.Contains(x.Id))
+                .ToList();
+
+            return Task.FromResult(niveles);
+        }
+
         // === COMPETENCIAS / COMPORTAMIENTOS ===
 
         public Task<List<Competencia>> GetCompetenciasAsync()
@@ -238,6 +264,21 @@ namespace EvaluacionDesempenoAB.Services
             var lista = _evaluaciones
                 .Where(x => usuarioIds.Contains(x.UsuarioId))
                 .OrderByDescending(x => x.FechaEvaluacion)
+                .ToList();
+
+            return Task.FromResult(lista);
+        }
+
+        public Task<List<Comportamiento>> GetComportamientosByNivelesAsync(IEnumerable<Guid> nivelIds)
+        {
+            var nivelIdSet = nivelIds
+                .Where(id => id != Guid.Empty)
+                .ToHashSet();
+
+            var lista = _comportamientos
+                .Where(x => nivelIdSet.Contains(x.NivelId))
+                .OrderBy(x => x.CompetenciaId)
+                .ThenBy(x => x.Orden)
                 .ToList();
 
             return Task.FromResult(lista);
@@ -353,6 +394,21 @@ namespace EvaluacionDesempenoAB.Services
         public Task<List<EvaluacionDetalle>> GetDetallesByEvaluacionAsync(Guid evaluacionId)
         {
             var lista = _detalles.Where(x => x.EvaluacionId == evaluacionId).ToList();
+            return Task.FromResult(lista);
+        }
+
+        public Task<List<EvaluacionDetalle>> GetDetallesByEvaluacionesAsync(IEnumerable<Guid> evaluacionIds)
+        {
+            var evaluacionIdSet = evaluacionIds
+                .Where(id => id != Guid.Empty)
+                .ToHashSet();
+
+            var lista = _detalles
+                .Where(x => evaluacionIdSet.Contains(x.EvaluacionId))
+                .OrderBy(x => x.EvaluacionId)
+                .ThenBy(x => x.Id)
+                .ToList();
+
             return Task.FromResult(lista);
         }
 

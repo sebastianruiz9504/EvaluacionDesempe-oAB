@@ -21,6 +21,7 @@ namespace EvaluacionDesempenoAB.Services
 
         // Traer un usuario por Id
         Task<UsuarioEvaluado?> GetUsuarioByIdAsync(Guid id);
+        Task<List<UsuarioEvaluado>> GetUsuariosByIdsAsync(IEnumerable<Guid> ids);
 
         // Actualizar novedades del usuario
         Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades);
@@ -31,11 +32,13 @@ namespace EvaluacionDesempenoAB.Services
 
         Task<List<NivelEvaluacion>> GetNivelesActivosAsync();
         Task<NivelEvaluacion?> GetNivelByIdAsync(Guid id);
+        Task<List<NivelEvaluacion>> GetNivelesByIdsAsync(IEnumerable<Guid> ids);
 
         // === COMPETENCIAS / COMPORTAMIENTOS ===
 
         Task<List<Competencia>> GetCompetenciasAsync();
         Task<List<Comportamiento>> GetComportamientosByNivelAsync(Guid nivelId);
+        Task<List<Comportamiento>> GetComportamientosByNivelesAsync(IEnumerable<Guid> nivelIds);
 
         // === EVALUACIONES ===
 
@@ -62,6 +65,7 @@ namespace EvaluacionDesempenoAB.Services
 
         // Detalles y planes
         Task<List<EvaluacionDetalle>> GetDetallesByEvaluacionAsync(Guid evaluacionId);
+        Task<List<EvaluacionDetalle>> GetDetallesByEvaluacionesAsync(IEnumerable<Guid> evaluacionIds);
         Task<List<PlanAccion>> GetPlanesByEvaluacionAsync(Guid evaluacionId);
     }
 }
