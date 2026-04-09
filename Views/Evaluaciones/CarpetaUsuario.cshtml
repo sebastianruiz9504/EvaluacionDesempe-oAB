@@ -32,6 +32,8 @@ else
                 <th>Próxima evaluación</th>
                 <th>Nivel</th>
                 <th>Tipo</th>
+                <th>Evaluacion normal</th>
+                <th>Evaluacion SST</th>
                 <th style="width: 220px;">Acciones</th>
             </tr>
         </thead>
@@ -54,6 +56,26 @@ else
                     }
                 </td>
                 <td>@e.TipoEvaluacion</td>
+                <td class="text-center">
+                    @if (e.EvaluacionNormalCompleta)
+                    {
+                        <span class="badge bg-success">Completada</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Pendiente</span>
+                    }
+                </td>
+                <td class="text-center">
+                    @if (e.EvaluacionSstCompleta)
+                    {
+                        <span class="badge bg-success">Completada</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Pendiente</span>
+                    }
+                </td>
                 <td>
                     <a asp-controller="Evaluaciones"
                        asp-action="Reporte"

@@ -61,8 +61,6 @@ else
                     <th>Cargo</th>
                     <th>Gerencia</th>
                     <th>Correo</th>
-                    <th>Evaluacion normal</th>
-                    <th>Evaluacion SST</th>
                     <th>Resultado final</th>
                     <th>Inicio de contrato</th>
                     <th>Finalizacion contrato</th>
@@ -91,26 +89,6 @@ else
                     <td>@u.Cargo</td>
                     <td>@u.Gerencia</td>
                     <td>@u.CorreoElectronico</td>
-                    <td class="text-center">
-                        @if (u.EvaluacionNormalCompleta)
-                        {
-                            <span class="badge bg-success">Completada</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary">Pendiente</span>
-                        }
-                    </td>
-                    <td class="text-center">
-                        @if (u.EvaluacionSstCompleta)
-                        {
-                            <span class="badge bg-success">Completada</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary">Pendiente</span>
-                        }
-                    </td>
                     <td>
                         @if (u.ResultadoFinal.HasValue)
                         {
