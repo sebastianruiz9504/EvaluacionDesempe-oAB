@@ -37,6 +37,11 @@
 
         return ("Siempre", "bg-success");
     }
+
+    private bool EsOportunidadMejora(int? puntaje)
+    {
+        return puntaje.HasValue && puntaje.Value >= 70 && puntaje.Value <= 85;
+    }
 }
 
 <!DOCTYPE html>
@@ -74,6 +79,7 @@
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
+            padding: 0 16px;
         }
 
         .firma-imagen {
@@ -88,6 +94,7 @@
             margin-top: 4px;
             font-size: 10px;
             font-weight: 600;
+            word-break: break-word;
         }
 
         .tabla-compacta th,
@@ -174,6 +181,12 @@
             height: 130px;
             text-align: center;
             vertical-align: bottom;
+            padding: 0 12px 10px;
+        }
+
+        .firma-evaluado {
+            max-width: 420px;
+            margin: 0 auto;
         }
     </style>
 </head>
@@ -228,6 +241,10 @@
                 <td class="info-value">@Model.NombreEvaluadorSst</td>
             </tr>
             <tr>
+                <td class="info-label">Cargo del evaluador SST</td>
+                <td class="info-value">@Model.CargoEvaluadorSst</td>
+            </tr>
+            <tr>
                 <td class="info-label">Cargo del jefe inmediato o evaluador</td>
                 <td class="info-value">@Model.CargoJefeInmediatoOEvaluador</td>
             </tr>
@@ -266,13 +283,14 @@
             <table class="sheet-table tabla-compacta mb-2">
                 <thead>
                     <tr>
-                        <th style="width: 42%;">Comportamiento</th>
-                        <th class="rating-cell" style="width: 9%;">Nunca</th>
-                        <th class="rating-cell" style="width: 9%;">Casi nunca</th>
-                        <th class="rating-cell" style="width: 9%;">A veces</th>
-                        <th class="rating-cell" style="width: 9%;">Casi siempre</th>
-                        <th class="rating-cell" style="width: 9%;">Siempre</th>
-                        <th class="rating-cell" style="width: 13%;">Puntaje</th>
+                        <th style="width: 18%;">Competencia</th>
+                        <th style="width: 28%;">Comportamiento</th>
+                        <th class="rating-cell" style="width: 8%;">Nunca</th>
+                        <th class="rating-cell" style="width: 8%;">Casi nunca</th>
+                        <th class="rating-cell" style="width: 8%;">A veces</th>
+                        <th class="rating-cell" style="width: 8%;">Casi siempre</th>
+                        <th class="rating-cell" style="width: 8%;">Siempre</th>
+                        <th class="rating-cell" style="width: 14%;">Puntaje</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -280,6 +298,7 @@
                 {
                     var nivelInfo = ObtenerNivelInfo(c.Puntaje);
                     <tr>
+                        <td>@comp.Nombre</td>
                         <td>@c.Descripcion</td>
                         <td class="rating-cell">@(nivelInfo.Texto == "Nunca" ? "X" : "")</td>
                         <td class="rating-cell">@(nivelInfo.Texto == "Casi nunca" ? "X" : "")</td>
@@ -295,7 +314,7 @@
                     </tr>
                 }
                 <tr>
-                    <td colspan="6" class="info-label">Promedio de competencia</td>
+                    <td colspan="7" class="info-label">Promedio de competencia</td>
                     <td class="rating-cell"><strong>@comp.Promedio %</strong></td>
                 </tr>
                 </tbody>
@@ -306,7 +325,7 @@
 
         @if (!Model.OportunidadesMejora.Any())
         {
-            <div class="mt-2">No se identificaron comportamientos con puntajes por debajo del 76%.</div>
+            <div class="mt-2">No se identificaron comportamientos con puntajes entre 70% y 85%.</div>
         }
         else
         {
@@ -341,8 +360,8 @@
             </table>
         }
 
-        <div class="section-bar mt-3">V. Plan de acción</div>
-        <div class="mt-2">Define el plan de acción a partir de los resultados de la evaluación y las oportunidades de mejora.</div>
+        <div class="section-bar mt-3">V. Plan de accion</div>
+        <div class="mt-2">Define el plan de accion a partir de los resultados de la evaluacion y las oportunidades de mejora entre 70% y 85%.</div>
 
         @if (!planAccion.Any())
         {
@@ -392,6 +411,15 @@
                         <div class="firma-linea"></div>
                         <div class="firma-label">Firma del evaluador SST</div>
                         <div class="firma-nombre">@Model.NombreEvaluadorSst</div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <div class="firma-contenedor firma-evaluado">
+                        <div class="firma-linea"></div>
+                        <div class="firma-label">Firma del evaluado</div>
+                        <div class="firma-nombre">@Model.NombreUsuario</div>
                     </div>
                 </td>
             </tr>

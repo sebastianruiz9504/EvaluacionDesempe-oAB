@@ -35,6 +35,9 @@ namespace EvaluacionDesempenoAB.Controllers
             public bool AmbasPartesCompletas => EvaluacionNormalCompleta && EvaluacionSstCompleta;
         }
 
+        private const int OportunidadMejoraPuntajeMinimo = 70;
+        private const int OportunidadMejoraPuntajeMaximo = 85;
+
         public EvaluacionesController(IEvaluacionRepository repo)
         {
             _repo = repo;
@@ -93,6 +96,14 @@ namespace EvaluacionDesempenoAB.Controllers
 
             return $"data:{tipoContenido};base64,{Convert.ToBase64String(archivo.Contenido)}";
         }
+
+        private static bool TieneContenido(ArchivoEvaluacion? archivo)
+            => archivo != null && archivo.Contenido.Length > 0;
+
+        private static bool EsPuntajeOportunidadMejora(int? puntaje)
+            => puntaje.HasValue &&
+               puntaje.Value >= OportunidadMejoraPuntajeMinimo &&
+               puntaje.Value <= OportunidadMejoraPuntajeMaximo;
 
         private static bool EsFirmaImagenValida(IFormFile archivo)
         {
@@ -357,18 +368,42 @@ namespace EvaluacionDesempenoAB.Controllers
             return merged;
         }
 
+        private static bool TienePlanAccionRegistrado(
+            IEnumerable<PlanAccion> planes,
+            IReadOnlySet<Guid> comportamientosParteActual,
+            IReadOnlyDictionary<string, Comportamiento> comportamientosPorDescripcion)
+        {
+            return planes.Any(p =>
+                PlanPerteneceAParte(p, comportamientosParteActual, comportamientosPorDescripcion) &&
+                !string.IsNullOrWhiteSpace(p.DescripcionAccion));
+        }
+
+        private static bool TienePlanAccionRegistrado(IEnumerable<PlanAccionItemVm> planes)
+        {
+            return planes.Any(p =>
+                (p.ComportamientoId.HasValue || !string.IsNullOrWhiteSpace(p.Comportamiento)) &&
+                !string.IsNullOrWhiteSpace(p.Descripcion));
+        }
+
         private static List<PlanAccionOpcionVm> BuildPlanOptions(
             TipoParteEvaluacion parte,
             IEnumerable<Competencia> competencias,
-            IEnumerable<Comportamiento> comportamientos)
+            IEnumerable<Comportamiento> comportamientos,
+            IEnumerable<EvaluacionDetalle> detalles)
         {
             var competenciasById = BuildCompetenciasLookup(competencias);
+            var puntajesPorComportamiento = detalles
+                .Where(d => d.ComportamientoId != Guid.Empty)
+                .GroupBy(d => d.ComportamientoId)
+                .ToDictionary(g => g.Key, g => g.Last().Puntaje);
 
             return comportamientos
                 .Where(c =>
                 {
                     competenciasById.TryGetValue(c.CompetenciaId, out var competencia);
-                    return EvaluacionRolesHelper.DebeVerCompetencia(parte, competencia?.Nombre);
+                    return EvaluacionRolesHelper.DebeVerCompetencia(parte, competencia?.Nombre) &&
+                           puntajesPorComportamiento.TryGetValue(c.Id, out var puntaje) &&
+                           EsPuntajeOportunidadMejora(puntaje);
                 })
                 .OrderBy(c =>
                 {
@@ -1343,9 +1378,35 @@ namespace EvaluacionDesempenoAB.Controllers
 
             var detalles = await _repo.GetDetallesByEvaluacionAsync(model.EvaluacionId);
             var planesExistentes = await _repo.GetPlanesByEvaluacionAsync(model.EvaluacionId);
+            var firmaActual = requiereFirma
+                ? await _repo.DownloadFirmaUsuarioAsync(evaluador.Id)
+                : null;
+            var planAccionBloqueado = requiereFirma &&
+                                      TieneContenido(firmaActual) &&
+                                      TienePlanAccionRegistrado(
+                                          planesExistentes,
+                                          comportamientosParteActual,
+                                          comportamientosPorDescripcion);
+
+            if (planAccionBloqueado)
+            {
+                return await ReturnReporteConErrorGuardadoPlanAsync(
+                    model,
+                    evaluador,
+                    "El plan de accion ya fue firmado y no admite cambios.");
+            }
 
             var comportamientosPermitidos = comportamientos
-                .Where(c => comportamientosParteActual.Contains(c.Id))
+                .Where(c =>
+                {
+                    if (!comportamientosParteActual.Contains(c.Id))
+                    {
+                        return false;
+                    }
+
+                    var detalle = detalles.FirstOrDefault(d => d.ComportamientoId == c.Id);
+                    return EsPuntajeOportunidadMejora(detalle?.Puntaje);
+                })
                 .ToDictionary(c => c.Id, c => c);
 
             var planesActualizados = model.PlanAccion
@@ -1377,7 +1438,6 @@ namespace EvaluacionDesempenoAB.Controllers
             var cobertura = BuildCobertura(detalles, competencias, comportamientos);
             evaluacion.Total = cobertura.TotalCalculado;
             evaluacion.Estado = cobertura.AmbasPartesCompletas ? "Finalizada" : evaluacion.Estado;
-            evaluacion.FechaProximaEvaluacion = model.FechaProximaEvaluacion;
 
             await _repo.UpdateEvaluacionAsync(evaluacion, detalles, planesFinales);
 
@@ -1460,7 +1520,7 @@ namespace EvaluacionDesempenoAB.Controllers
 
             var oportunidades = competenciasVm
                 .SelectMany(comp => comp.Comportamientos
-                    .Where(c => c.Puntaje.HasValue && c.Puntaje.Value < 76)
+                    .Where(c => EsPuntajeOportunidadMejora(c.Puntaje))
                     .Select(c => new OportunidadMejoraVm
                     {
                         Competencia = comp.Nombre,
@@ -1469,7 +1529,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     }))
                 .ToList();
 
-            var planOptions = BuildPlanOptions(parteActual, competencias, comportamientos);
+            var planOptions = BuildPlanOptions(parteActual, competencias, comportamientos, detalles);
             var planVm = planes
                 .Where(p => PlanPerteneceAParte(p, comportamientosParteActual, comportamientosPorDescripcion))
                 .Select(p => new PlanAccionItemVm
@@ -1494,7 +1554,13 @@ namespace EvaluacionDesempenoAB.Controllers
             var firmaEvaluadorSst = evaluadorSst == null
                 ? null
                 : await _repo.DownloadFirmaUsuarioAsync(evaluadorSst.Id);
+            var firmaActual = !evaluadorActual.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual)
+                ? await _repo.DownloadFirmaUsuarioAsync(evaluadorActual.Id)
+                : null;
             var etiquetaFirmaActual = GetEtiquetaFirmaParaParte(parteActual);
+            var planAccionBloqueado = etiquetaFirmaActual != null &&
+                                      TieneContenido(firmaActual) &&
+                                      TienePlanAccionRegistrado(planVm);
 
             return new EvaluacionReporteViewModel
             {
@@ -1509,6 +1575,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     : usuario.CorreoEvaluador,
                 CargoJefeInmediatoOEvaluador = usuario.CargoJefeInmediato,
                 NombreEvaluadorSst = evaluadorSst?.NombreCompleto ?? usuario.CorreoEvaluadorSst,
+                CargoEvaluadorSst = usuario.CargoEvaluadorSst,
                 FechaIngreso = usuario.FechaIngreso,
                 FechaGeneracionReporte = DateTime.Today,
                 FechaEvaluacion = evaluacion.FechaEvaluacion,
@@ -1527,8 +1594,11 @@ namespace EvaluacionDesempenoAB.Controllers
                 ObservacionesGenerales = evaluacion.Observaciones,
                 FirmaEvaluadorDataUrl = ConvertirArchivoADataUrl(firmaEvaluador),
                 FirmaEvaluadorSstDataUrl = ConvertirArchivoADataUrl(firmaEvaluadorSst),
-                PuedeAdjuntarFirmaActual = !evaluadorActual.EsSuperAdministrador && etiquetaFirmaActual != null,
+                PuedeAdjuntarFirmaActual = !evaluadorActual.EsSuperAdministrador &&
+                                           etiquetaFirmaActual != null &&
+                                           !planAccionBloqueado,
                 EtiquetaFirmaActual = etiquetaFirmaActual,
+                PlanAccionBloqueado = planAccionBloqueado,
                 FechaProximaEvaluacion = evaluacion.FechaProximaEvaluacion
             };
         }

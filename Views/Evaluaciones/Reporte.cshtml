@@ -41,6 +41,11 @@
 
         return ("Siempre", "bg-success");
     }
+
+    private bool EsOportunidadMejora(int? puntaje)
+    {
+        return puntaje.HasValue && puntaje.Value >= 70 && puntaje.Value <= 85;
+    }
 }
 
 <div class="container mt-4">
@@ -105,7 +110,7 @@
                     <tbody>
                     @foreach (var c in comp.Comportamientos)
                     {
-                        <tr class="@(c.Puntaje.HasValue && c.Puntaje.Value < 76 ? "table-warning" : "")">
+                        <tr class="@(EsOportunidadMejora(c.Puntaje) ? "table-warning" : "")">
                             <td>@c.Descripcion</td>
                             <td>
                                 @if (c.Puntaje.HasValue)
@@ -132,7 +137,7 @@
     @if (!Model.OportunidadesMejora.Any())
     {
         <div class="alert alert-success mt-2">
-            No se identificaron comportamientos con puntajes por debajo del 76%.
+            No se identificaron comportamientos con puntajes entre 70% y 85%.
         </div>
     }
     else
@@ -171,12 +176,20 @@
     <h4 class="mt-4">Plan de accion</h4>
 
     <p>
-        Define el plan de accion para los comportamientos del bloque que te corresponde evaluar.
+        Define el plan de accion para los comportamientos del bloque que te corresponde evaluar y que quedaron entre 70% y 85%.
     </p>
+
+    @if (Model.PlanAccionBloqueado)
+    {
+        <div class="alert alert-warning mt-2">
+            El plan de accion ya fue firmado y quedo bloqueado para cambios.
+        </div>
+    }
 
     <form asp-action="GuardarPlanAccion" method="post" enctype="multipart/form-data" class="mt-2">
         @Html.AntiForgeryToken()
         <input asp-for="EvaluacionId" type="hidden" />
+        <fieldset class="border-0 p-0" disabled="@(Model.PlanAccionBloqueado ? "disabled" : null)">
 
         <table class="table table-striped">
             <thead class="table-light">
@@ -222,17 +235,16 @@
 
         <div class="mt-3 d-flex flex-wrap gap-2">
             <button type="button" class="btn btn-outline-primary" id="agregar-accion" disabled>Añadir otra oportunidad</button>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalProximaEvaluacion">
-                Guardar plan de accion
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFirma">
+                @(Model.PlanAccionBloqueado ? "Plan de accion firmado" : "Guardar plan de accion")
             </button>
-            <a asp-action="Index" class="btn btn-secondary ms-2">Volver al listado</a>
         </div>
 
-        <div class="modal fade" id="modalProximaEvaluacion" tabindex="-1" aria-hidden="true">
+        <div class="modal fade" id="modalFirma" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Fecha estimada de reevaluacion</h5>
+                        <h5 class="modal-title">FIRMA</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -243,13 +255,9 @@
                             </div>
                         }
 
-                        <label asp-for="FechaProximaEvaluacion" class="form-label">Selecciona la fecha para reevaluar al usuario</label>
-                        <input asp-for="FechaProximaEvaluacion" type="date" class="form-control" required />
-                        <span asp-validation-for="FechaProximaEvaluacion" class="text-danger"></span>
-
                         @if (Model.PuedeAdjuntarFirmaActual)
                         {
-                            <label for="firmaArchivo" class="form-label mt-3">Adjunta la firma de @Model.EtiquetaFirmaActual</label>
+                            <label for="firmaArchivo" class="form-label">Adjunta la firma de @Model.EtiquetaFirmaActual</label>
                             <input id="firmaArchivo"
                                    name="firmaArchivo"
                                    type="file"
@@ -260,6 +268,12 @@
                                 Este archivo es obligatorio para guardar el plan de accion.
                             </div>
                         }
+                        else
+                        {
+                            <div class="text-muted">
+                                Confirma el guardado del plan de accion.
+                            </div>
+                        }
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -267,6 +281,10 @@
                     </div>
                 </div>
             </div>
+        </div>
+        </fieldset>
+        <div class="mt-3">
+            <a asp-action="Index" class="btn btn-secondary">Volver al listado</a>
         </div>
     </form>
 
@@ -301,15 +319,16 @@
             const rowTemplate = document.getElementById("plan-accion-row-template");
             let rowIndex = planBody ? planBody.children.length : 0;
             const hasPlanOptions = @Model.OpcionesPlanAccion.Any().ToString().ToLower();
+            const planBloqueado = @Model.PlanAccionBloqueado.ToString().ToLower();
             const mostrarModalGuardarPlan = @mostrarModalGuardarPlan.ToString().ToLower();
-            const modalGuardarPlanElement = document.getElementById("modalProximaEvaluacion");
+            const modalGuardarPlanElement = document.getElementById("modalFirma");
             const modalGuardarPlan = modalGuardarPlanElement && window.bootstrap
                 ? window.bootstrap.Modal.getOrCreateInstance(modalGuardarPlanElement)
                 : null;
 
             const updateAddButtonState = () => {
                 if (!addButton || !planBody) return;
-                if (!hasPlanOptions) {
+                if (planBloqueado || !hasPlanOptions) {
                     addButton.disabled = true;
                     return;
                 }

@@ -110,6 +110,7 @@ namespace EvaluacionDesempenoAB.Services
                 CorreoEvaluador   = e.GetAttributeValue<string>("crfb7_correoevaluador"),
                 CorreoEvaluadorSst = e.GetAttributeValue<string>("cr3d2_correoevaluadorsst"),
                 CargoJefeInmediato = e.GetAttributeValue<string>("cr3d2_cargodeljefeinmediato"),
+                CargoEvaluadorSst = e.GetAttributeValue<string>("cr3d2_cargosst"),
                 TipoFormulario    = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value,
                 EsSuperAdministrador = GetBoolOrOptionSet(e, "crfb7_superadministrador"),
                 Novedades = e.GetAttributeValue<string>("crfb7_novedades")

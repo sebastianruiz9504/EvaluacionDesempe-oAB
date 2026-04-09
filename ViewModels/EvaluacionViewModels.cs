@@ -111,6 +111,7 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string? NombreJefeInmediatoOEvaluador { get; set; }
         public string? CargoJefeInmediatoOEvaluador { get; set; }
         public string? NombreEvaluadorSst { get; set; }
+        public string? CargoEvaluadorSst { get; set; }
         public DateTime? FechaIngreso { get; set; }
         public DateTime FechaGeneracionReporte { get; set; } = DateTime.Today;
 
@@ -133,6 +134,7 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string? FirmaEvaluadorSstDataUrl { get; set; }
         public bool PuedeAdjuntarFirmaActual { get; set; }
         public string? EtiquetaFirmaActual { get; set; }
+        public bool PlanAccionBloqueado { get; set; }
 
         public DateTime? FechaProximaEvaluacion { get; set; }
     }

@@ -26,7 +26,8 @@ namespace EvaluacionDesempenoAB.Models
         public string? CorreoEvaluador { get; set; }
         public string? CorreoEvaluadorSst { get; set; }
         public string? CargoJefeInmediato { get; set; }
-         public int? TipoFormulario { get; set; }
+        public string? CargoEvaluadorSst { get; set; }
+        public int? TipoFormulario { get; set; }
 
         public bool EsSuperAdministrador { get; set; }
 

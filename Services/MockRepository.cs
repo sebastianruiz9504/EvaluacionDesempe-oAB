@@ -47,6 +47,7 @@ namespace EvaluacionDesempenoAB.Services
                     NombreCompleto = evaluadorSstNombre,
                     Cedula = "2222222222",
                     Cargo = "Lider SST",
+                    CargoEvaluadorSst = "Lider SST",
                     Gerencia = "SST",
                     CorreoElectronico = evaluadorSstCorreo,
                     EvaluadorNombre = null,
@@ -67,6 +68,7 @@ namespace EvaluacionDesempenoAB.Services
                     // está bajo el Evaluador Demo
                     EvaluadorNombre = evaluadorCorreo,
                     CorreoEvaluadorSst = evaluadorSstCorreo,
+                    CargoEvaluadorSst = "Lider SST",
                     TipoFormulario = 433930002, // Operativo
                     Novedades = "Pendiente documentación."
                 },
@@ -83,6 +85,7 @@ namespace EvaluacionDesempenoAB.Services
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-1).AddMonths(2),
                     FechaActivacionEvaluacion = null,
                     CorreoElectronico = "maria.lopez@contoso.com",
+                    CargoEvaluadorSst = "Lider SST",
                     EvaluadorNombre = evaluadorCorreo,
                     CorreoEvaluadorSst = evaluadorSstCorreo,
                     Novedades = "Cambio de cargo en trámite."
