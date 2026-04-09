@@ -28,6 +28,7 @@ namespace EvaluacionDesempenoAB.Services
         private const string EvaluacionTable = "crfb7_evaluacion";
         private const string DetalleTable    = "crfb7_detalledeevaluacion";
         private const string PlanTable       = "crfb7_plandeaccion";
+        private const string FirmaUsuarioColumn = "cr3d2_firma";
         private const string ReporteFirmadoColumn = "cr3d2_reportefirmado";
         private const string ReporteFirmadoNombreColumn = "cr3d2_reportefirmado_name";
 
@@ -137,6 +138,42 @@ namespace EvaluacionDesempenoAB.Services
             };
 
             await _client.UpdateAsync(entity);
+        }
+
+        public async Task UploadFirmaUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)
+        {
+            var metadata = GetAttributeMetadata(UsuarioTable, FirmaUsuarioColumn);
+
+            if (metadata is FileAttributeMetadata)
+            {
+                await UploadFileColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, fileName, contentType, content);
+                return;
+            }
+
+            if (metadata is ImageAttributeMetadata imageMetadata)
+            {
+                await UploadImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, imageMetadata, content);
+                return;
+            }
+
+            throw new InvalidPluginExecutionException($"{UsuarioTable}.{FirmaUsuarioColumn} no es una columna de archivo ni de imagen válida.");
+        }
+
+        public async Task<ArchivoEvaluacion?> DownloadFirmaUsuarioAsync(Guid usuarioId)
+        {
+            var metadata = GetAttributeMetadata(UsuarioTable, FirmaUsuarioColumn);
+
+            if (metadata is FileAttributeMetadata)
+            {
+                return await DownloadFileColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
+            }
+
+            if (metadata is ImageAttributeMetadata)
+            {
+                return await DownloadImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
+            }
+
+            throw new InvalidPluginExecutionException($"{UsuarioTable}.{FirmaUsuarioColumn} no es una columna de archivo ni de imagen válida.");
         }
 
         // =====================================================
@@ -454,6 +491,220 @@ namespace EvaluacionDesempenoAB.Services
             }
 
             throw new InvalidPluginExecutionException($"{entityLogicalName}.{fileColumnLogicalName} no es una columna de archivo válida.");
+        }
+
+        private AttributeMetadata GetAttributeMetadata(string entityLogicalName, string attributeLogicalName)
+        {
+            var request = new RetrieveAttributeRequest
+            {
+                EntityLogicalName = entityLogicalName,
+                LogicalName = attributeLogicalName
+            };
+
+            var response = (RetrieveAttributeResponse)_client.Execute(request);
+            return response.AttributeMetadata
+                ?? throw new InvalidPluginExecutionException($"No fue posible recuperar la metadata de {entityLogicalName}.{attributeLogicalName}.");
+        }
+
+        private Task UploadFileColumnAsync(
+            string entityLogicalName,
+            Guid recordId,
+            string fileColumnLogicalName,
+            string fileName,
+            string? contentType,
+            Stream content)
+        {
+            var maxSizeInKb = GetFileColumnMaxSizeInKb(entityLogicalName, fileColumnLogicalName);
+            if (content.CanSeek && content.Length > maxSizeInKb * 1024L)
+            {
+                throw new InvalidPluginExecutionException($"El archivo supera el tamaño máximo permitido para la columna {fileColumnLogicalName}.");
+            }
+
+            var target = new EntityReference(entityLogicalName, recordId);
+            var initializeRequest = new InitializeFileBlocksUploadRequest
+            {
+                Target = target,
+                FileAttributeName = fileColumnLogicalName,
+                FileName = fileName
+            };
+
+            var initializeResponse = (InitializeFileBlocksUploadResponse)_client.Execute(initializeRequest);
+            var token = initializeResponse.FileContinuationToken;
+            var blockIds = new List<string>();
+            var buffer = new byte[4 * 1024 * 1024];
+
+            int bytesRead;
+            while ((bytesRead = content.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                var chunk = new byte[bytesRead];
+                Buffer.BlockCopy(buffer, 0, chunk, 0, bytesRead);
+
+                var blockId = Convert.ToBase64String(Encoding.UTF8.GetBytes(Guid.NewGuid().ToString()));
+                blockIds.Add(blockId);
+
+                var uploadRequest = new UploadBlockRequest
+                {
+                    BlockData = chunk,
+                    BlockId = blockId,
+                    FileContinuationToken = token
+                };
+
+                _client.Execute(uploadRequest);
+            }
+
+            var commitRequest = new CommitFileBlocksUploadRequest
+            {
+                BlockList = blockIds.ToArray(),
+                FileContinuationToken = token,
+                FileName = fileName,
+                MimeType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType
+            };
+
+            _client.Execute(commitRequest);
+            return Task.CompletedTask;
+        }
+
+        private Task<ArchivoEvaluacion?> DownloadFileColumnAsync(
+            string entityLogicalName,
+            Guid recordId,
+            string fileColumnLogicalName,
+            string defaultFileName)
+        {
+            var target = new EntityReference(entityLogicalName, recordId);
+            var initializeRequest = new InitializeFileBlocksDownloadRequest
+            {
+                Target = target,
+                FileAttributeName = fileColumnLogicalName
+            };
+
+            var initializeResponse = (InitializeFileBlocksDownloadResponse)_client.Execute(initializeRequest);
+            if (initializeResponse.FileSizeInBytes <= 0)
+            {
+                return Task.FromResult<ArchivoEvaluacion?>(null);
+            }
+
+            var bytes = new List<byte>((int)initializeResponse.FileSizeInBytes);
+            long remaining = initializeResponse.FileSizeInBytes;
+            long offset = 0;
+            long blockSize = initializeResponse.IsChunkingSupported
+                ? 4 * 1024 * 1024
+                : initializeResponse.FileSizeInBytes;
+
+            if (remaining < blockSize)
+            {
+                blockSize = remaining;
+            }
+
+            while (remaining > 0)
+            {
+                var downloadRequest = new DownloadBlockRequest
+                {
+                    BlockLength = blockSize,
+                    FileContinuationToken = initializeResponse.FileContinuationToken,
+                    Offset = offset
+                };
+
+                var downloadResponse = (DownloadBlockResponse)_client.Execute(downloadRequest);
+                bytes.AddRange(downloadResponse.Data);
+                remaining -= blockSize;
+                offset += blockSize;
+            }
+
+            return Task.FromResult<ArchivoEvaluacion?>(new ArchivoEvaluacion
+            {
+                NombreArchivo = initializeResponse.FileName ?? defaultFileName,
+                TipoContenido = "application/octet-stream",
+                Contenido = bytes.ToArray()
+            });
+        }
+
+        private async Task UploadImageColumnAsync(
+            string entityLogicalName,
+            Guid recordId,
+            string imageColumnLogicalName,
+            ImageAttributeMetadata imageMetadata,
+            Stream content)
+        {
+            using var memory = new MemoryStream();
+            await content.CopyToAsync(memory);
+
+            var bytes = memory.ToArray();
+            var maxSizeInKb = GetMaxSizeInKb(imageMetadata, entityLogicalName, imageColumnLogicalName);
+            if (bytes.LongLength > maxSizeInKb * 1024L)
+            {
+                throw new InvalidPluginExecutionException($"La imagen supera el tamaño máximo permitido para la columna {imageColumnLogicalName}.");
+            }
+
+            var entity = new Entity(entityLogicalName, recordId)
+            {
+                [imageColumnLogicalName] = bytes
+            };
+
+            await _client.UpdateAsync(entity);
+        }
+
+        private async Task<ArchivoEvaluacion?> DownloadImageColumnAsync(
+            string entityLogicalName,
+            Guid recordId,
+            string imageColumnLogicalName,
+            string defaultFileName)
+        {
+            var entity = await _client.RetrieveAsync(entityLogicalName, recordId, new ColumnSet(imageColumnLogicalName));
+            var bytes = entity?.GetAttributeValue<byte[]>(imageColumnLogicalName);
+            if (bytes == null || bytes.Length == 0)
+            {
+                return null;
+            }
+
+            var contentType = InferImageContentType(bytes);
+            return new ArchivoEvaluacion
+            {
+                NombreArchivo = defaultFileName + InferImageExtension(contentType),
+                TipoContenido = contentType,
+                Contenido = bytes
+            };
+        }
+
+        private static int GetMaxSizeInKb(AttributeMetadata metadata, string entityLogicalName, string attributeLogicalName)
+        {
+            return metadata switch
+            {
+                FileAttributeMetadata fileColumn when fileColumn.MaxSizeInKB.HasValue => fileColumn.MaxSizeInKB.Value,
+                ImageAttributeMetadata imageColumn when imageColumn.MaxSizeInKB.HasValue => imageColumn.MaxSizeInKB.Value,
+                _ => throw new InvalidPluginExecutionException($"{entityLogicalName}.{attributeLogicalName} no expone un tamaño máximo válido.")
+            };
+        }
+
+        private static string InferImageContentType(byte[] bytes)
+        {
+            if (bytes.Length >= 4 &&
+                bytes[0] == 0x89 &&
+                bytes[1] == 0x50 &&
+                bytes[2] == 0x4E &&
+                bytes[3] == 0x47)
+            {
+                return "image/png";
+            }
+
+            if (bytes.Length >= 3 &&
+                bytes[0] == 0xFF &&
+                bytes[1] == 0xD8 &&
+                bytes[2] == 0xFF)
+            {
+                return "image/jpeg";
+            }
+
+            return "application/octet-stream";
+        }
+
+        private static string InferImageExtension(string contentType)
+        {
+            return contentType switch
+            {
+                "image/png" => ".png",
+                "image/jpeg" => ".jpg",
+                _ => string.Empty
+            };
         }
 
         public async Task<Guid> CreateEvaluacionAsync(Evaluacion evaluacion,

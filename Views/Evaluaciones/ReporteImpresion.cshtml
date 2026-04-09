@@ -69,6 +69,27 @@
             margin-top: 8px;
         }
 
+        .firma-contenedor {
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .firma-imagen {
+            max-width: 100%;
+            max-height: 70px;
+            object-fit: contain;
+            margin: 0 auto 6px;
+            display: block;
+        }
+
+        .firma-nombre {
+            margin-top: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
         .tabla-compacta th,
         .tabla-compacta td {
             padding: 4px 6px;
@@ -150,7 +171,7 @@
         }
 
         .firmas-table td {
-            height: 80px;
+            height: 130px;
             text-align: center;
             vertical-align: bottom;
         }
@@ -201,6 +222,10 @@
             <tr>
                 <td class="info-label">Nombre del jefe inmediato o evaluador</td>
                 <td class="info-value">@Model.NombreJefeInmediatoOEvaluador</td>
+            </tr>
+            <tr>
+                <td class="info-label">Nombre del evaluador SST</td>
+                <td class="info-value">@Model.NombreEvaluadorSst</td>
             </tr>
             <tr>
                 <td class="info-label">Cargo del jefe inmediato o evaluador</td>
@@ -348,12 +373,26 @@
         <table class="sheet-table firmas-table mt-2">
             <tr>
                 <td style="width: 50%;">
-                    <div class="firma-linea"></div>
-                    <div class="firma-label">Firma del evaluador</div>
+                    <div class="firma-contenedor">
+                        @if (!string.IsNullOrWhiteSpace(Model.FirmaEvaluadorDataUrl))
+                        {
+                            <img src="@Model.FirmaEvaluadorDataUrl" alt="Firma del evaluador" class="firma-imagen" />
+                        }
+                        <div class="firma-linea"></div>
+                        <div class="firma-label">Firma del evaluador</div>
+                        <div class="firma-nombre">@Model.NombreJefeInmediatoOEvaluador</div>
+                    </div>
                 </td>
                 <td style="width: 50%;">
-                    <div class="firma-linea"></div>
-                    <div class="firma-label">Firma del usuario</div>
+                    <div class="firma-contenedor">
+                        @if (!string.IsNullOrWhiteSpace(Model.FirmaEvaluadorSstDataUrl))
+                        {
+                            <img src="@Model.FirmaEvaluadorSstDataUrl" alt="Firma del evaluador SST" class="firma-imagen" />
+                        }
+                        <div class="firma-linea"></div>
+                        <div class="firma-label">Firma del evaluador SST</div>
+                        <div class="firma-nombre">@Model.NombreEvaluadorSst</div>
+                    </div>
                 </td>
             </tr>
         </table>
@@ -365,11 +404,27 @@
         crossorigin="anonymous"
         referrerpolicy="no-referrer"></script>
 <script>
-    window.addEventListener("load", () => {
+    const esperarImagenes = async (container) => {
+        const images = Array.from(container.querySelectorAll("img"));
+        const pendientes = images
+            .filter((img) => !img.complete)
+            .map((img) => new Promise((resolve) => {
+                img.addEventListener("load", resolve, { once: true });
+                img.addEventListener("error", resolve, { once: true });
+            }));
+
+        if (pendientes.length > 0) {
+            await Promise.all(pendientes);
+        }
+    };
+
+    window.addEventListener("load", async () => {
         const reporte = document.getElementById("reporte-imprimible");
         if (!reporte || typeof html2pdf === "undefined") {
             return;
         }
+
+        await esperarImagenes(reporte);
 
         const opciones = {
             margin: 0.3,

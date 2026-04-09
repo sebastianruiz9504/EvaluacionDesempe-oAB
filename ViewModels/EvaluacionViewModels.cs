@@ -110,6 +110,7 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string? Proyecto { get; set; }
         public string? NombreJefeInmediatoOEvaluador { get; set; }
         public string? CargoJefeInmediatoOEvaluador { get; set; }
+        public string? NombreEvaluadorSst { get; set; }
         public DateTime? FechaIngreso { get; set; }
         public DateTime FechaGeneracionReporte { get; set; } = DateTime.Today;
 
@@ -128,7 +129,11 @@ namespace EvaluacionDesempenoAB.ViewModels
         public List<PlanAccionOpcionVm> OpcionesPlanAccion { get; set; } = new();
 
         public string? ObservacionesGenerales { get; set; }
-        
+        public string? FirmaEvaluadorDataUrl { get; set; }
+        public string? FirmaEvaluadorSstDataUrl { get; set; }
+        public bool PuedeAdjuntarFirmaActual { get; set; }
+        public string? EtiquetaFirmaActual { get; set; }
+
         public DateTime? FechaProximaEvaluacion { get; set; }
     }
 

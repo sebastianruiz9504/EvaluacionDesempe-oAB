@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using EvaluacionDesempenoAB.Models;
 
@@ -23,6 +24,8 @@ namespace EvaluacionDesempenoAB.Services
 
         // Actualizar novedades del usuario
         Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades);
+        Task UploadFirmaUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content);
+        Task<ArchivoEvaluacion?> DownloadFirmaUsuarioAsync(Guid usuarioId);
 
         // === NIVELES ===
 

@@ -61,6 +61,71 @@ namespace EvaluacionDesempenoAB.Controllers
             return await _repo.GetUsuarioByCorreoAsync(email);
         }
 
+        private async Task<UsuarioEvaluado?> ResolveUsuarioPorCorreosAsync(params string?[] posiblesCorreos)
+        {
+            foreach (var correo in posiblesCorreos)
+            {
+                if (string.IsNullOrWhiteSpace(correo) || !correo.Contains('@'))
+                {
+                    continue;
+                }
+
+                var usuario = await _repo.GetUsuarioByCorreoAsync(correo.Trim());
+                if (usuario != null)
+                {
+                    return usuario;
+                }
+            }
+
+            return null;
+        }
+
+        private static string? ConvertirArchivoADataUrl(ArchivoEvaluacion? archivo)
+        {
+            if (archivo == null || archivo.Contenido.Length == 0)
+            {
+                return null;
+            }
+
+            var tipoContenido = string.IsNullOrWhiteSpace(archivo.TipoContenido)
+                ? "application/octet-stream"
+                : archivo.TipoContenido;
+
+            return $"data:{tipoContenido};base64,{Convert.ToBase64String(archivo.Contenido)}";
+        }
+
+        private static bool EsFirmaImagenValida(IFormFile archivo)
+        {
+            var contentTypeValido =
+                string.Equals(archivo.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(archivo.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase);
+
+            if (contentTypeValido)
+            {
+                return true;
+            }
+
+            var extension = Path.GetExtension(archivo.FileName);
+            return string.Equals(extension, ".png", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(extension, ".jpg", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(extension, ".jpeg", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string? GetEtiquetaFirmaParaParte(TipoParteEvaluacion parte)
+        {
+            if (parte == TipoParteEvaluacion.Normal)
+            {
+                return "Evaluador";
+            }
+
+            if (parte == TipoParteEvaluacion.Sst)
+            {
+                return "Evaluador SST";
+            }
+
+            return null;
+        }
+
         private async Task<List<Evaluacion>> GetEvaluacionesVisiblesAsync(UsuarioEvaluado evaluador)
         {
             if (evaluador.EsSuperAdministrador)
@@ -890,7 +955,7 @@ namespace EvaluacionDesempenoAB.Controllers
         // ================== REPORTE ==================
 
         [HttpGet]
-        public async Task<IActionResult> Reporte(Guid id)
+        public async Task<IActionResult> Reporte(Guid id, bool mostrarModalFirma = false, bool firmaGuardada = false)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
@@ -904,6 +969,8 @@ namespace EvaluacionDesempenoAB.Controllers
                 return NotFound();
             }
 
+            ViewBag.MostrarModalFirma = mostrarModalFirma;
+            ViewBag.FirmaGuardada = firmaGuardada;
             return View("Reporte", vm);
         }
 
@@ -923,6 +990,70 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             return View("ReporteImpresion", vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubirFirmaEvaluador(Guid id, IFormFile? archivo)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            if (id == Guid.Empty)
+            {
+                return BadRequest(new { ok = false, message = "Evaluación inválida." });
+            }
+
+            if (archivo == null || archivo.Length == 0)
+            {
+                return BadRequest(new { ok = false, message = "Debes adjuntar una firma." });
+            }
+
+            if (!EsFirmaImagenValida(archivo))
+            {
+                return BadRequest(new { ok = false, message = "La firma debe estar en formato PNG o JPG." });
+            }
+
+            var evaluacion = await _repo.GetEvaluacionByIdAsync(id);
+            if (evaluacion == null)
+            {
+                return NotFound(new { ok = false, message = "No se encontró la evaluación." });
+            }
+
+            var usuario = await _repo.GetUsuarioByIdAsync(evaluacion.UsuarioId);
+            if (usuario == null)
+            {
+                return NotFound(new { ok = false, message = "No se encontró el usuario evaluado." });
+            }
+
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            if (evaluador.EsSuperAdministrador || !EvaluacionRolesHelper.TieneAcceso(parteActual))
+            {
+                return Forbid();
+            }
+
+            try
+            {
+                await using var stream = archivo.OpenReadStream();
+                await _repo.UploadFirmaUsuarioAsync(evaluador.Id, archivo.FileName, archivo.ContentType, stream);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    message = ex.Message
+                });
+            }
+
+            return Json(new
+            {
+                ok = true,
+                message = "La firma se guardó correctamente."
+            });
         }
 
         [HttpPost]
@@ -1200,7 +1331,8 @@ namespace EvaluacionDesempenoAB.Controllers
 
             await _repo.UpdateEvaluacionAsync(evaluacion, detalles, planesFinales);
 
-            return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId });
+            var solicitarFirma = !evaluador.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual);
+            return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId, mostrarModalFirma = solicitarFirma });
         }
 
         private async Task<EvaluacionReporteViewModel?> BuildReporteViewModelAsync(Guid id, UsuarioEvaluado evaluadorActual)
@@ -1305,6 +1437,16 @@ namespace EvaluacionDesempenoAB.Controllers
                 planVm.Add(new PlanAccionItemVm());
             }
 
+            var evaluadorPrincipal = await ResolveUsuarioPorCorreosAsync(usuario.EvaluadorNombre, usuario.CorreoEvaluador);
+            var evaluadorSst = await ResolveUsuarioPorCorreosAsync(usuario.CorreoEvaluadorSst);
+            var firmaEvaluador = evaluadorPrincipal == null
+                ? null
+                : await _repo.DownloadFirmaUsuarioAsync(evaluadorPrincipal.Id);
+            var firmaEvaluadorSst = evaluadorSst == null
+                ? null
+                : await _repo.DownloadFirmaUsuarioAsync(evaluadorSst.Id);
+            var etiquetaFirmaActual = GetEtiquetaFirmaParaParte(parteActual);
+
             return new EvaluacionReporteViewModel
             {
                 EvaluacionId = evaluacion.Id,
@@ -1313,8 +1455,11 @@ namespace EvaluacionDesempenoAB.Controllers
                 Cargo = usuario.Cargo,
                 Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
                 Proyecto = evaluacion.Proyecto,
-                NombreJefeInmediatoOEvaluador = usuario.CorreoEvaluador,
+                NombreJefeInmediatoOEvaluador = string.IsNullOrWhiteSpace(usuario.CorreoEvaluador)
+                    ? evaluadorPrincipal?.NombreCompleto ?? usuario.EvaluadorNombre
+                    : usuario.CorreoEvaluador,
                 CargoJefeInmediatoOEvaluador = usuario.CargoJefeInmediato,
+                NombreEvaluadorSst = evaluadorSst?.NombreCompleto ?? usuario.CorreoEvaluadorSst,
                 FechaIngreso = usuario.FechaIngreso,
                 FechaGeneracionReporte = DateTime.Today,
                 FechaEvaluacion = evaluacion.FechaEvaluacion,
@@ -1331,6 +1476,10 @@ namespace EvaluacionDesempenoAB.Controllers
                 PlanAccion = planVm,
                 OpcionesPlanAccion = planOptions,
                 ObservacionesGenerales = evaluacion.Observaciones,
+                FirmaEvaluadorDataUrl = ConvertirArchivoADataUrl(firmaEvaluador),
+                FirmaEvaluadorSstDataUrl = ConvertirArchivoADataUrl(firmaEvaluadorSst),
+                PuedeAdjuntarFirmaActual = !evaluadorActual.EsSuperAdministrador && etiquetaFirmaActual != null,
+                EtiquetaFirmaActual = etiquetaFirmaActual,
                 FechaProximaEvaluacion = evaluacion.FechaProximaEvaluacion
             };
         }

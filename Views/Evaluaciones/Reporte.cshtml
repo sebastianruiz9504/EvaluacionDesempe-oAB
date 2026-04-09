@@ -7,6 +7,8 @@
         .GroupBy(o => o.Competencia)
         .OrderBy(g => g.Key)
         .ToList();
+    var mostrarModalFirma = ViewBag.MostrarModalFirma is bool abrirModal && abrirModal;
+    var firmaGuardada = ViewBag.FirmaGuardada is bool firmaOk && firmaOk;
 }
 
 @functions {
@@ -43,6 +45,15 @@
 
 <div class="container mt-4">
     <h2>Reporte de evaluacion de desempeno</h2>
+
+    @if (firmaGuardada)
+    {
+        <div class="alert alert-success mt-3">
+            La firma del evaluador se guardo correctamente.
+        </div>
+    }
+
+    <div id="firma-estado-general" class="alert alert-success mt-3 d-none"></div>
 
     <div class="card mt-3">
         <div class="card-body">
@@ -223,6 +234,12 @@
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalProximaEvaluacion">
                 Guardar plan de accion
             </button>
+            @if (Model.PuedeAdjuntarFirmaActual)
+            {
+                <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalFirmaEvaluador">
+                    Adjuntar firma (@Model.EtiquetaFirmaActual)
+                </button>
+            }
             <a asp-action="Index" class="btn btn-secondary ms-2">Volver al listado</a>
         </div>
 
@@ -246,6 +263,42 @@
             </div>
         </div>
     </form>
+
+    @if (Model.PuedeAdjuntarFirmaActual)
+    {
+        <div class="modal fade" id="modalFirmaEvaluador" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Adjuntar firma de @Model.EtiquetaFirmaActual</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-3">
+                            Adjunta tu firma en formato PNG o JPG. Se guardara en tu usuario y se usara automaticamente
+                            cuando se descargue el certificado.
+                        </p>
+                        <form id="firma-evaluador-form" asp-action="SubirFirmaEvaluador" method="post" enctype="multipart/form-data">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.EvaluacionId" />
+                            <label for="archivoFirmaEvaluador" class="form-label">Archivo de firma</label>
+                            <input id="archivoFirmaEvaluador"
+                                   name="archivo"
+                                   type="file"
+                                   class="form-control"
+                                   accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                                   required />
+                        </form>
+                        <div id="firma-feedback" class="small mt-3"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="button" class="btn btn-primary" id="guardar-firma-evaluador">Guardar firma</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 
     <template id="plan-accion-row-template">
         <tr>
@@ -278,6 +331,15 @@
             const rowTemplate = document.getElementById("plan-accion-row-template");
             let rowIndex = planBody ? planBody.children.length : 0;
             const hasPlanOptions = @Model.OpcionesPlanAccion.Any().ToString().ToLower();
+            const mostrarModalFirma = @mostrarModalFirma.ToString().ToLower();
+            const firmaForm = document.getElementById("firma-evaluador-form");
+            const guardarFirmaButton = document.getElementById("guardar-firma-evaluador");
+            const firmaFeedback = document.getElementById("firma-feedback");
+            const firmaEstadoGeneral = document.getElementById("firma-estado-general");
+            const firmaModalElement = document.getElementById("modalFirmaEvaluador");
+            const firmaModal = firmaModalElement && window.bootstrap
+                ? window.bootstrap.Modal.getOrCreateInstance(firmaModalElement)
+                : null;
 
             const updateAddButtonState = () => {
                 if (!addButton || !planBody) return;
@@ -325,6 +387,76 @@
 
             if (addButton) {
                 addButton.addEventListener("click", addRow);
+            }
+
+            if (guardarFirmaButton && firmaForm instanceof HTMLFormElement) {
+                guardarFirmaButton.addEventListener("click", async () => {
+                    const archivoInput = firmaForm.querySelector('input[name="archivo"]');
+                    if (!(archivoInput instanceof HTMLInputElement) || !archivoInput.files || archivoInput.files.length === 0) {
+                        if (firmaFeedback) {
+                            firmaFeedback.className = "small mt-3 text-danger";
+                            firmaFeedback.textContent = "Selecciona un archivo PNG o JPG antes de guardar.";
+                        }
+                        return;
+                    }
+
+                    guardarFirmaButton.setAttribute("disabled", "disabled");
+                    if (firmaFeedback) {
+                        firmaFeedback.className = "small mt-3 text-muted";
+                        firmaFeedback.textContent = "Guardando firma...";
+                    }
+
+                    try {
+                        const response = await fetch(firmaForm.action, {
+                            method: "POST",
+                            body: new FormData(firmaForm),
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                        });
+
+                        const payload = await response.json().catch(() => null);
+                        if (!response.ok || !payload?.ok) {
+                            throw new Error(payload?.message || "No fue posible guardar la firma.");
+                        }
+
+                        if (firmaFeedback) {
+                            firmaFeedback.className = "small mt-3 text-success";
+                            firmaFeedback.textContent = payload.message || "La firma se guardo correctamente.";
+                        }
+
+                        if (firmaEstadoGeneral) {
+                            firmaEstadoGeneral.classList.remove("d-none", "alert-danger");
+                            firmaEstadoGeneral.classList.add("alert-success");
+                            firmaEstadoGeneral.textContent = payload.message || "La firma se guardo correctamente.";
+                        }
+
+                        if (firmaModal) {
+                            window.setTimeout(() => firmaModal.hide(), 800);
+                        }
+                    } catch (error) {
+                        if (firmaFeedback) {
+                            firmaFeedback.className = "small mt-3 text-danger";
+                            firmaFeedback.textContent = error instanceof Error
+                                ? error.message
+                                : "No fue posible guardar la firma.";
+                        }
+
+                        if (firmaEstadoGeneral) {
+                            firmaEstadoGeneral.classList.remove("d-none", "alert-success");
+                            firmaEstadoGeneral.classList.add("alert-danger");
+                            firmaEstadoGeneral.textContent = error instanceof Error
+                                ? error.message
+                                : "No fue posible guardar la firma.";
+                        }
+                    } finally {
+                        guardarFirmaButton.removeAttribute("disabled");
+                    }
+                });
+            }
+
+            if (mostrarModalFirma && firmaModal) {
+                firmaModal.show();
             }
 
             updateAddButtonState();

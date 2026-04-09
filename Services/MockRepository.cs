@@ -17,6 +17,7 @@ namespace EvaluacionDesempenoAB.Services
         private readonly List<EvaluacionDetalle> _detalles;
         private readonly List<PlanAccion> _planes;
         private readonly Dictionary<Guid, ArchivoEvaluacion> _reportesFirmados;
+        private readonly Dictionary<Guid, ArchivoEvaluacion> _firmasUsuarios;
 
         public MockRepository()
         {
@@ -131,6 +132,7 @@ namespace EvaluacionDesempenoAB.Services
             _detalles = new List<EvaluacionDetalle>();
             _planes = new List<PlanAccion>();
             _reportesFirmados = new Dictionary<Guid, ArchivoEvaluacion>();
+            _firmasUsuarios = new Dictionary<Guid, ArchivoEvaluacion>();
         }
 
         // === USUARIOS ===
@@ -171,6 +173,25 @@ namespace EvaluacionDesempenoAB.Services
             }
 
             return Task.CompletedTask;
+        }
+
+        public async Task UploadFirmaUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)
+        {
+            using var memory = new MemoryStream();
+            await content.CopyToAsync(memory);
+
+            _firmasUsuarios[usuarioId] = new ArchivoEvaluacion
+            {
+                NombreArchivo = fileName,
+                TipoContenido = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+                Contenido = memory.ToArray()
+            };
+        }
+
+        public Task<ArchivoEvaluacion?> DownloadFirmaUsuarioAsync(Guid usuarioId)
+        {
+            _firmasUsuarios.TryGetValue(usuarioId, out var archivo);
+            return Task.FromResult(archivo);
         }
 
         // === NIVELES ===
