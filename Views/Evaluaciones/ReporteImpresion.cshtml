@@ -3,10 +3,17 @@
 
 @{
     Layout = null;
-    var planAccion = Model.PlanAccion
-        .Where(p => !string.IsNullOrWhiteSpace(p.Comportamiento) || !string.IsNullOrWhiteSpace(p.Descripcion))
-        .ToList();
+    var esCertificadoEnBlanco = ViewBag.EsCertificadoEnBlanco is bool valor && valor;
+    var planAccion = esCertificadoEnBlanco
+        ? new List<PlanAccionItemVm>()
+        : Model.PlanAccion
+            .Where(p => !string.IsNullOrWhiteSpace(p.Comportamiento) || !string.IsNullOrWhiteSpace(p.Descripcion))
+            .ToList();
+    var nombreArchivo = esCertificadoEnBlanco
+        ? "certificado-en-blanco.pdf"
+        : $"reporte-evaluacion-{Model.CedulaUsuario}.pdf";
 }
+
 @functions {
     private (string Texto, string Clase) ObtenerNivelInfo(int? puntaje)
     {
@@ -38,10 +45,17 @@
         return ("Siempre", "bg-success");
     }
 
-    private bool EsOportunidadMejora(int? puntaje)
-    {
-        return puntaje.HasValue && puntaje.Value >= 70 && puntaje.Value <= 85;
-    }
+    private static string ValorOBlanco(bool esCertificadoEnBlanco, string? valor)
+        => esCertificadoEnBlanco ? string.Empty : valor ?? string.Empty;
+
+    private static string FechaOBlanco(bool esCertificadoEnBlanco, DateTime? fecha)
+        => esCertificadoEnBlanco || !fecha.HasValue ? string.Empty : fecha.Value.ToString("dd/MM/yyyy");
+
+    private static string DecimalOBlanco(bool esCertificadoEnBlanco, decimal? valor)
+        => esCertificadoEnBlanco || !valor.HasValue ? string.Empty : $"{valor.Value}%";
+
+    private static string EnteroOBlanco(bool esCertificadoEnBlanco, int? valor)
+        => esCertificadoEnBlanco || !valor.HasValue ? string.Empty : $"{valor.Value}%";
 }
 
 <!DOCTYPE html>
@@ -49,7 +63,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reporte de evaluación</title>
+    <title>Reporte de evaluacion</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <style>
         body {
@@ -188,6 +202,10 @@
             max-width: 420px;
             margin: 0 auto;
         }
+
+        .blank-row td {
+            height: 26px;
+        }
     </style>
 </head>
 <body>
@@ -199,87 +217,78 @@
                     <img src="~/img/LogoAB.png" alt="Logo AB" style="height: 36px;" />
                 </td>
                 <td style="width: 55%;">
-                    <div class="sheet-title">Formato evaluación de desempeño</div>
-                    <div class="sheet-title">@Model.NombreNivel</div>
+                    <div class="sheet-title">Formato evaluacion de desempeno</div>
+                    <div class="sheet-title">@(esCertificadoEnBlanco ? "" : Model.NombreNivel)</div>
                 </td>
                 <td style="width: 30%;">
-                      <div><strong>Código:</strong> GH-FM-059</div>
-                    <div><strong>Versión:</strong> 01</div>
+                    <div><strong>Codigo:</strong> GH-FM-059</div>
+                    <div><strong>Version:</strong> 01</div>
                     <div><strong>Vigencia:</strong> 09-03-2021</div>
                 </td>
             </tr>
         </table>
 
-        <div class="section-bar">I. Identificación del colaborador</div>
+        <div class="section-bar">I. Identificacion del colaborador</div>
         <table class="sheet-table tabla-compacta mb-3">
             <tr>
                 <td class="info-label">Nombre completo</td>
-                <td class="info-value">@Model.NombreUsuario</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreUsuario)</td>
             </tr>
             <tr>
-                <td class="info-label">Cédula</td>
-                <td class="info-value">@Model.CedulaUsuario</td>
+                <td class="info-label">Cedula</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.CedulaUsuario)</td>
             </tr>
             <tr>
                 <td class="info-label">Cargo</td>
-                <td class="info-value">@Model.Cargo</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.Cargo)</td>
             </tr>
             <tr>
                 <td class="info-label">Gerencia</td>
-                <td class="info-value">@Model.Gerencia</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.Gerencia)</td>
             </tr>
             <tr>
                 <td class="info-label">Proyecto</td>
-                <td class="info-value">@Model.Proyecto</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.Proyecto)</td>
             </tr>
             <tr>
                 <td class="info-label">Nombre del jefe inmediato o evaluador</td>
-                <td class="info-value">@Model.NombreJefeInmediatoOEvaluador</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreJefeInmediatoOEvaluador)</td>
             </tr>
             <tr>
                 <td class="info-label">Nombre del evaluador SST</td>
-                <td class="info-value">@Model.NombreEvaluadorSst</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreEvaluadorSst)</td>
             </tr>
             <tr>
                 <td class="info-label">Cargo del evaluador SST</td>
-                <td class="info-value">@Model.CargoEvaluadorSst</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.CargoEvaluadorSst)</td>
             </tr>
             <tr>
                 <td class="info-label">Cargo del jefe inmediato o evaluador</td>
-                <td class="info-value">@Model.CargoJefeInmediatoOEvaluador</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.CargoJefeInmediatoOEvaluador)</td>
             </tr>
             <tr>
                 <td class="info-label">Fecha de ingreso</td>
-                <td class="info-value">@Model.FechaIngreso?.ToString("dd/MM/yyyy")</td>
+                <td class="info-value">@FechaOBlanco(esCertificadoEnBlanco, Model.FechaIngreso)</td>
             </tr>
             <tr>
-                <td class="info-label">Fecha de evaluación</td>
-                <td class="info-value">@Model.FechaGeneracionReporte.ToString("dd/MM/yyyy")</td>
+                <td class="info-label">Fecha de evaluacion</td>
+                <td class="info-value">@FechaOBlanco(esCertificadoEnBlanco, esCertificadoEnBlanco ? null : Model.FechaGeneracionReporte)</td>
             </tr>
             <tr>
-                <td class="info-label">Nivel de evaluación</td>
-                <td class="info-value">@Model.NombreNivel</td>
+                <td class="info-label">Nivel de evaluacion</td>
+                <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreNivel)</td>
             </tr>
             <tr>
                 <td class="info-label">Promedio general</td>
-                <td class="info-value">
-                    @if (Model.PromedioGeneral.HasValue)
-                    {
-                        @Model.PromedioGeneral.Value<span>%</span>
-                    }
-                    else
-                    {
-                        <span>No calculado</span>
-                    }
-                </td>
+                <td class="info-value">@DecimalOBlanco(esCertificadoEnBlanco, Model.PromedioGeneral)</td>
             </tr>
         </table>
 
         <div class="section-bar">II. Detalle por competencia</div>
 
-        @foreach (var comp in Model.Competencias)
+        @if (esCertificadoEnBlanco)
         {
-            <div class="section-subtitle mt-3">@comp.Nombre</div>
+            <div class="section-subtitle mt-3">&nbsp;</div>
             <table class="sheet-table tabla-compacta mb-2">
                 <thead>
                     <tr>
@@ -294,36 +303,97 @@
                     </tr>
                 </thead>
                 <tbody>
-                @foreach (var c in comp.Comportamientos)
-                {
-                    var nivelInfo = ObtenerNivelInfo(c.Puntaje);
-                    <tr>
-                        <td>@comp.Nombre</td>
-                        <td>@c.Descripcion</td>
-                        <td class="rating-cell">@(nivelInfo.Texto == "Nunca" ? "X" : "")</td>
-                        <td class="rating-cell">@(nivelInfo.Texto == "Casi nunca" ? "X" : "")</td>
-                        <td class="rating-cell">@(nivelInfo.Texto == "A veces" ? "X" : "")</td>
-                        <td class="rating-cell">@(nivelInfo.Texto == "Casi siempre" ? "X" : "")</td>
-                        <td class="rating-cell">@(nivelInfo.Texto == "Siempre" ? "X" : "")</td>
-                        <td class="rating-cell">
-                            @if (c.Puntaje.HasValue)
-                            {
-                                @c.Puntaje.Value<span>%</span>
-                            }
-                        </td>
+                    <tr class="blank-row">
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
                     </tr>
-                }
-                <tr>
-                    <td colspan="7" class="info-label">Promedio de competencia</td>
-                    <td class="rating-cell"><strong>@comp.Promedio %</strong></td>
-                </tr>
+                    <tr class="blank-row">
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td colspan="7" class="info-label">Promedio de competencia</td>
+                        <td class="rating-cell"><strong>&nbsp;</strong></td>
+                    </tr>
                 </tbody>
             </table>
+        }
+        else
+        {
+            @foreach (var comp in Model.Competencias)
+            {
+                <div class="section-subtitle mt-3">@comp.Nombre</div>
+                <table class="sheet-table tabla-compacta mb-2">
+                    <thead>
+                        <tr>
+                            <th style="width: 18%;">Competencia</th>
+                            <th style="width: 28%;">Comportamiento</th>
+                            <th class="rating-cell" style="width: 8%;">Nunca</th>
+                            <th class="rating-cell" style="width: 8%;">Casi nunca</th>
+                            <th class="rating-cell" style="width: 8%;">A veces</th>
+                            <th class="rating-cell" style="width: 8%;">Casi siempre</th>
+                            <th class="rating-cell" style="width: 8%;">Siempre</th>
+                            <th class="rating-cell" style="width: 14%;">Puntaje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var c in comp.Comportamientos)
+                    {
+                        var nivelInfo = ObtenerNivelInfo(c.Puntaje);
+                        <tr>
+                            <td>@comp.Nombre</td>
+                            <td>@c.Descripcion</td>
+                            <td class="rating-cell">@(nivelInfo.Texto == "Nunca" ? "X" : "")</td>
+                            <td class="rating-cell">@(nivelInfo.Texto == "Casi nunca" ? "X" : "")</td>
+                            <td class="rating-cell">@(nivelInfo.Texto == "A veces" ? "X" : "")</td>
+                            <td class="rating-cell">@(nivelInfo.Texto == "Casi siempre" ? "X" : "")</td>
+                            <td class="rating-cell">@(nivelInfo.Texto == "Siempre" ? "X" : "")</td>
+                            <td class="rating-cell">@EnteroOBlanco(false, c.Puntaje)</td>
+                        </tr>
+                    }
+                    <tr>
+                        <td colspan="7" class="info-label">Promedio de competencia</td>
+                        <td class="rating-cell"><strong>@comp.Promedio %</strong></td>
+                    </tr>
+                    </tbody>
+                </table>
+            }
         }
 
         <div class="section-bar mt-3">III. Oportunidades de mejora</div>
 
-        @if (!Model.OportunidadesMejora.Any())
+        @if (esCertificadoEnBlanco)
+        {
+            <table class="sheet-table tabla-compacta mt-2">
+                <thead>
+                    <tr>
+                        <th>Competencia</th>
+                        <th>Comportamiento</th>
+                        <th style="width: 120px;">Puntaje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="blank-row">
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td class="rating-cell">&nbsp;</td>
+                    </tr>
+                </tbody>
+            </table>
+        }
+        else if (!Model.OportunidadesMejora.Any())
         {
             <div class="mt-2">No se identificaron comportamientos con puntajes entre 70% y 85%.</div>
         }
@@ -350,12 +420,12 @@
             </table>
         }
 
-        @if (!string.IsNullOrWhiteSpace(Model.ObservacionesGenerales))
+        @if (esCertificadoEnBlanco || !string.IsNullOrWhiteSpace(Model.ObservacionesGenerales))
         {
             <div class="section-bar mt-3">IV. Observaciones generales</div>
             <table class="sheet-table tabla-compacta mt-2">
                 <tr>
-                    <td class="observaciones-box">@Model.ObservacionesGenerales</td>
+                    <td class="observaciones-box">@(esCertificadoEnBlanco ? "" : Model.ObservacionesGenerales)</td>
                 </tr>
             </table>
         }
@@ -363,9 +433,30 @@
         <div class="section-bar mt-3">V. Plan de accion</div>
         <div class="mt-2">Define el plan de accion a partir de los resultados de la evaluacion y las oportunidades de mejora entre 70% y 85%.</div>
 
-        @if (!planAccion.Any())
+        @if (esCertificadoEnBlanco)
         {
-            <div class="mt-2">No hay plan de acción registrado.</div>
+            <table class="sheet-table tabla-compacta plan-table mt-2">
+                <thead>
+                    <tr>
+                        <th style="width: 50%;">Oportunidad de mejora</th>
+                        <th style="width: 50%;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="blank-row">
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                    </tr>
+                    <tr class="blank-row">
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                    </tr>
+                </tbody>
+            </table>
+        }
+        else if (!planAccion.Any())
+        {
+            <div class="mt-2">No hay plan de accion registrado.</div>
         }
         else
         {
@@ -393,24 +484,24 @@
             <tr>
                 <td style="width: 50%;">
                     <div class="firma-contenedor">
-                        @if (!string.IsNullOrWhiteSpace(Model.FirmaEvaluadorDataUrl))
+                        @if (!esCertificadoEnBlanco && !string.IsNullOrWhiteSpace(Model.FirmaEvaluadorDataUrl))
                         {
                             <img src="@Model.FirmaEvaluadorDataUrl" alt="Firma del evaluador" class="firma-imagen" />
                         }
                         <div class="firma-linea"></div>
                         <div class="firma-label">Firma del evaluador</div>
-                        <div class="firma-nombre">@Model.NombreJefeInmediatoOEvaluador</div>
+                        <div class="firma-nombre">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreJefeInmediatoOEvaluador)</div>
                     </div>
                 </td>
                 <td style="width: 50%;">
                     <div class="firma-contenedor">
-                        @if (!string.IsNullOrWhiteSpace(Model.FirmaEvaluadorSstDataUrl))
+                        @if (!esCertificadoEnBlanco && !string.IsNullOrWhiteSpace(Model.FirmaEvaluadorSstDataUrl))
                         {
                             <img src="@Model.FirmaEvaluadorSstDataUrl" alt="Firma del evaluador SST" class="firma-imagen" />
                         }
                         <div class="firma-linea"></div>
                         <div class="firma-label">Firma del evaluador SST</div>
-                        <div class="firma-nombre">@Model.NombreEvaluadorSst</div>
+                        <div class="firma-nombre">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreEvaluadorSst)</div>
                     </div>
                 </td>
             </tr>
@@ -419,7 +510,7 @@
                     <div class="firma-contenedor firma-evaluado">
                         <div class="firma-linea"></div>
                         <div class="firma-label">Firma del evaluado</div>
-                        <div class="firma-nombre">@Model.NombreUsuario</div>
+                        <div class="firma-nombre">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreUsuario)</div>
                     </div>
                 </td>
             </tr>
@@ -456,7 +547,7 @@
 
         const opciones = {
             margin: 0.3,
-            filename: "reporte-evaluacion-@(Model.CedulaUsuario).pdf",
+            filename: "@nombreArchivo",
             html2canvas: { scale: 2 },
             jsPDF: { unit: "in", format: "letter", orientation: "portrait" }
         };

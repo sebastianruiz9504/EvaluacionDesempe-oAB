@@ -1047,6 +1047,13 @@ namespace EvaluacionDesempenoAB.Controllers
             return View("ReporteImpresion", vm);
         }
 
+        [HttpGet]
+        public IActionResult CertificadoEnBlanco()
+        {
+            ViewBag.EsCertificadoEnBlanco = true;
+            return View("ReporteImpresion", BuildReporteEnBlancoViewModel());
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SubirFirmaEvaluador(Guid id, IFormFile? archivo)
@@ -1442,6 +1449,17 @@ namespace EvaluacionDesempenoAB.Controllers
             await _repo.UpdateEvaluacionAsync(evaluacion, detalles, planesFinales);
 
             return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId });
+        }
+
+        private static EvaluacionReporteViewModel BuildReporteEnBlancoViewModel()
+        {
+            return new EvaluacionReporteViewModel
+            {
+                FechaGeneracionReporte = DateTime.Today,
+                Competencias = new List<CompetenciaReporteVm>(),
+                OportunidadesMejora = new List<OportunidadMejoraVm>(),
+                PlanAccion = new List<PlanAccionItemVm>()
+            };
         }
 
         private async Task<EvaluacionReporteViewModel?> BuildReporteViewModelAsync(Guid id, UsuarioEvaluado evaluadorActual)
