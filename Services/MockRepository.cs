@@ -17,6 +17,7 @@ namespace EvaluacionDesempenoAB.Services
         private readonly List<EvaluacionDetalle> _detalles;
         private readonly List<PlanAccion> _planes;
         private readonly Dictionary<Guid, ArchivoEvaluacion> _reportesFirmados;
+        private readonly Dictionary<Guid, ArchivoEvaluacion> _fotosUsuarios;
         private readonly Dictionary<Guid, ArchivoEvaluacion> _firmasUsuarios;
 
         public MockRepository()
@@ -135,6 +136,7 @@ namespace EvaluacionDesempenoAB.Services
             _detalles = new List<EvaluacionDetalle>();
             _planes = new List<PlanAccion>();
             _reportesFirmados = new Dictionary<Guid, ArchivoEvaluacion>();
+            _fotosUsuarios = new Dictionary<Guid, ArchivoEvaluacion>();
             _firmasUsuarios = new Dictionary<Guid, ArchivoEvaluacion>();
         }
 
@@ -189,6 +191,25 @@ namespace EvaluacionDesempenoAB.Services
             }
 
             return Task.CompletedTask;
+        }
+
+        public async Task UploadFotoUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)
+        {
+            using var memory = new MemoryStream();
+            await content.CopyToAsync(memory);
+
+            _fotosUsuarios[usuarioId] = new ArchivoEvaluacion
+            {
+                NombreArchivo = fileName,
+                TipoContenido = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+                Contenido = memory.ToArray()
+            };
+        }
+
+        public Task<ArchivoEvaluacion?> DownloadFotoUsuarioAsync(Guid usuarioId)
+        {
+            _fotosUsuarios.TryGetValue(usuarioId, out var archivo);
+            return Task.FromResult(archivo);
         }
 
         public async Task UploadFirmaUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)

@@ -28,6 +28,7 @@ namespace EvaluacionDesempenoAB.Services
         private const string EvaluacionTable = "crfb7_evaluacion";
         private const string DetalleTable    = "crfb7_detalledeevaluacion";
         private const string PlanTable       = "crfb7_plandeaccion";
+        private const string FotoUsuarioColumn = "cr3d2_foto";
         private const string FirmaUsuarioColumn = "cr3d2_firma";
         private const string ReporteFirmadoColumn = "cr3d2_reportefirmado";
         private const string ReporteFirmadoNombreColumn = "cr3d2_reportefirmado_name";
@@ -171,6 +172,42 @@ namespace EvaluacionDesempenoAB.Services
             };
 
             await _client.UpdateAsync(entity);
+        }
+
+        public async Task UploadFotoUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)
+        {
+            var metadata = GetAttributeMetadata(UsuarioTable, FotoUsuarioColumn);
+
+            if (metadata is FileAttributeMetadata)
+            {
+                await UploadFileColumnAsync(UsuarioTable, usuarioId, FotoUsuarioColumn, fileName, contentType, content);
+                return;
+            }
+
+            if (metadata is ImageAttributeMetadata imageMetadata)
+            {
+                await UploadImageColumnAsync(UsuarioTable, usuarioId, FotoUsuarioColumn, imageMetadata, content);
+                return;
+            }
+
+            throw new InvalidPluginExecutionException($"{UsuarioTable}.{FotoUsuarioColumn} no es una columna de archivo ni de imagen valida.");
+        }
+
+        public async Task<ArchivoEvaluacion?> DownloadFotoUsuarioAsync(Guid usuarioId)
+        {
+            var metadata = GetAttributeMetadata(UsuarioTable, FotoUsuarioColumn);
+
+            if (metadata is FileAttributeMetadata)
+            {
+                return await DownloadFileColumnAsync(UsuarioTable, usuarioId, FotoUsuarioColumn, "foto_usuario");
+            }
+
+            if (metadata is ImageAttributeMetadata)
+            {
+                return await DownloadImageColumnAsync(UsuarioTable, usuarioId, FotoUsuarioColumn, "foto_usuario");
+            }
+
+            throw new InvalidPluginExecutionException($"{UsuarioTable}.{FotoUsuarioColumn} no es una columna de archivo ni de imagen valida.");
         }
 
         public async Task UploadFirmaUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)
@@ -580,7 +617,7 @@ namespace EvaluacionDesempenoAB.Services
             ArchivoEvaluacion archivo = new()
             {
                 NombreArchivo = initializeResponse.FileName ?? "reporte_firmado",
-                TipoContenido = "application/octet-stream",
+                TipoContenido = InferContentType(initializeResponse.FileName, bytes.ToArray()),
                 Contenido = bytes.ToArray()
             };
 
@@ -724,7 +761,7 @@ namespace EvaluacionDesempenoAB.Services
             return Task.FromResult<ArchivoEvaluacion?>(new ArchivoEvaluacion
             {
                 NombreArchivo = initializeResponse.FileName ?? defaultFileName,
-                TipoContenido = "application/octet-stream",
+                TipoContenido = InferContentType(initializeResponse.FileName, bytes.ToArray()),
                 Contenido = bytes.ToArray()
             });
         }
@@ -815,6 +852,38 @@ namespace EvaluacionDesempenoAB.Services
                 "image/png" => ".png",
                 "image/jpeg" => ".jpg",
                 _ => string.Empty
+            };
+        }
+
+        private static string InferContentType(string? fileName, byte[] bytes)
+        {
+            var contentTypeFromName = InferContentTypeFromFileName(fileName);
+            if (!string.IsNullOrWhiteSpace(contentTypeFromName))
+            {
+                return contentTypeFromName;
+            }
+
+            return InferImageContentType(bytes);
+        }
+
+        private static string? InferContentTypeFromFileName(string? fileName)
+        {
+            var extension = Path.GetExtension(fileName ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                return null;
+            }
+
+            return extension.ToLowerInvariant() switch
+            {
+                ".png" => "image/png",
+                ".jpg" => "image/jpeg",
+                ".jpeg" => "image/jpeg",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".webp" => "image/webp",
+                ".pdf" => "application/pdf",
+                _ => null
             };
         }
 

@@ -3,25 +3,36 @@
 
 @{
     ViewData["Title"] = "Modulo admin";
+    var cedulaFiltro = ViewData["CedulaFiltro"] as string;
+    var hayUsuarios = Model.Any();
 }
 
 <h2 class="mt-4">Modulo admin</h2>
 
-@{
-    var cedulaFiltro = ViewData["CedulaFiltro"] as string;
-    var hayUsuarios = Model.Any();
+@if (TempData["AdminFotoSuccess"] is string fotoSuccess)
+{
+    <div class="alert alert-success mt-3">
+        @fotoSuccess
+    </div>
+}
+
+@if (TempData["AdminFotoError"] is string fotoError)
+{
+    <div class="alert alert-danger mt-3">
+        @fotoError
+    </div>
 }
 
 <div class="row g-3 mt-1 align-items-end">
     <div class="col-12 col-lg-5">
         <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
             <div class="flex-grow-1">
-                <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cédula</label>
+                <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cedula</label>
                 <input id="cedulaFiltro"
                        name="cedula"
                        class="form-control"
                        value="@cedulaFiltro"
-                       placeholder="Ingresa la cédula" />
+                       placeholder="Ingresa la cedula" />
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
@@ -37,7 +48,15 @@
         <form asp-controller="Evaluaciones" asp-action="Nueva" method="get" class="d-flex flex-wrap gap-2 align-items-end">
             <input type="hidden" id="usuarioEvaluacionId" name="usuarioId" />
             <button type="submit" class="btn btn-primary" id="iniciarEvaluacionBtn" @(hayUsuarios ? "" : "disabled")>
-                Iniciar evaluación
+                Iniciar evaluacion
+            </button>
+            <button type="button"
+                    class="btn btn-outline-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#subirFotoModal"
+                    id="anadirFotoBtn"
+                    @(hayUsuarios ? "" : "disabled")>
+                Anadir foto
             </button>
         </form>
     </div>
@@ -67,20 +86,22 @@ else
             <thead class="table-light">
                 <tr>
                     <th>Seleccionar</th>
+                    <th>Foto</th>
                     <th>Nombre</th>
-                    <th>Cédula</th>
+                    <th>Cedula</th>
                     <th>Cargo</th>
                     <th>Gerencia</th>
                     <th>Correo</th>
                     <th>Inicio de contrato</th>
-                    <th>Finalización contrato</th>
-                    <th>Finalización periodo de prueba</th>
+                    <th>Finalizacion contrato</th>
+                    <th>Finalizacion periodo de prueba</th>
                     <th>Novedades</th>
                 </tr>
             </thead>
             <tbody>
             @foreach (var u in Model)
             {
+                var fotoUrl = Url.Action("Foto", "Usuarios", new { id = u.Id }) ?? string.Empty;
                 <tr>
                     <td class="text-center">
                         <input type="checkbox"
@@ -88,7 +109,14 @@ else
                                aria-label="Seleccionar usuario"
                                data-id="@u.Id"
                                data-nombre="@u.NombreCompleto"
-                               data-novedades="@u.Novedades" />
+                               data-novedades="@u.Novedades"
+                               data-foto-url="@fotoUrl" />
+                    </td>
+                    <td class="text-center align-middle">
+                        <img src="@fotoUrl"
+                             alt="Foto de @u.NombreCompleto"
+                             class="ab-user-photo-thumb"
+                             loading="lazy" />
                     </td>
                     <td>
                         <a asp-controller="Usuarios"
@@ -112,6 +140,49 @@ else
         </table>
     </div>
 }
+
+<div class="modal fade" id="subirFotoModal" tabindex="-1" aria-labelledby="subirFotoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="SubirFoto" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="cedula" value="@cedulaFiltro" />
+                <div class="modal-header">
+                    <h5 class="modal-title" id="subirFotoLabel">Anadir foto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex flex-column align-items-center text-center gap-3">
+                        <img id="fotoUsuarioPreview"
+                             alt="Vista previa de la foto actual"
+                             class="ab-user-photo-preview d-none" />
+                        <div class="w-100">
+                            <label class="form-label" for="fotoUsuarioNombre">Usuario</label>
+                            <input type="text" id="fotoUsuarioNombre" class="form-control" readonly />
+                            <input type="hidden" name="id" id="fotoUsuarioId" />
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label for="fotoArchivo" class="form-label">Selecciona la foto</label>
+                        <input id="fotoArchivo"
+                               name="archivo"
+                               type="file"
+                               class="form-control"
+                               accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                               required />
+                        <div class="form-text">
+                            La imagen se cargara directamente en Dataverse para el usuario seleccionado.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Subir foto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade" id="editarNovedadesModal" tabindex="-1" aria-labelledby="editarNovedadesLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -147,8 +218,12 @@ else
         (() => {
             const checkboxes = document.querySelectorAll('.usuario-select');
             const iniciarBtn = document.getElementById('iniciarEvaluacionBtn');
+            const fotoBtn = document.getElementById('anadirFotoBtn');
             const editarBtn = document.getElementById('editarNovedadesBtn');
             const evalInputId = document.getElementById('usuarioEvaluacionId');
+            const fotoInputId = document.getElementById('fotoUsuarioId');
+            const fotoInputNombre = document.getElementById('fotoUsuarioNombre');
+            const fotoPreview = document.getElementById('fotoUsuarioPreview');
             const inputId = document.getElementById('novedadesUsuarioId');
             const inputNombre = document.getElementById('novedadesUsuarioNombre');
             const textarea = document.getElementById('novedadesTexto');
@@ -157,9 +232,31 @@ else
                 if (iniciarBtn) {
                     iniciarBtn.disabled = !enabled;
                 }
+                if (fotoBtn) {
+                    fotoBtn.disabled = !enabled;
+                }
                 if (editarBtn) {
                     editarBtn.disabled = !enabled;
                 }
+            };
+
+            const syncFotoPreview = (selected) => {
+                if (!fotoInputId || !fotoInputNombre || !fotoPreview) {
+                    return;
+                }
+
+                if (!selected) {
+                    fotoInputId.value = '';
+                    fotoInputNombre.value = '';
+                    fotoPreview.removeAttribute('src');
+                    fotoPreview.classList.add('d-none');
+                    return;
+                }
+
+                fotoInputId.value = selected.dataset.id || '';
+                fotoInputNombre.value = selected.dataset.nombre || '';
+                fotoPreview.src = selected.dataset.fotoUrl || '';
+                fotoPreview.classList.remove('d-none');
             };
 
             const updateSelection = () => {
@@ -173,6 +270,7 @@ else
                     inputId.value = '';
                     inputNombre.value = '';
                     textarea.value = '';
+                    syncFotoPreview(null);
                     setButtonsState(false);
                     return;
                 }
@@ -181,6 +279,7 @@ else
                 inputId.value = selected.dataset.id || '';
                 inputNombre.value = selected.dataset.nombre || '';
                 textarea.value = selected.dataset.novedades || '';
+                syncFotoPreview(selected);
                 setButtonsState(true);
             };
 

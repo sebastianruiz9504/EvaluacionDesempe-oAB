@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using EvaluacionDesempenoAB.Helpers;
 using EvaluacionDesempenoAB.Models;
@@ -248,6 +250,42 @@ namespace EvaluacionDesempenoAB.Controllers
             return RedirectToAction("CarpetaUsuario", "Evaluaciones", new { usuarioId = id });
         }
 
+        [HttpGet]
+        public async Task<IActionResult> Foto(Guid id)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            var usuario = await _repo.GetUsuarioByIdAsync(id);
+            if (usuario == null)
+            {
+                SetNoCacheHeaders();
+                return File(BuildPlaceholderPhotoSvg("SF"), "image/svg+xml");
+            }
+
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
+
+            SetNoCacheHeaders();
+
+            var foto = await _repo.DownloadFotoUsuarioAsync(id);
+            if (foto == null || foto.Contenido.Length == 0)
+            {
+                return File(BuildPlaceholderPhotoSvg(GetUserInitials(usuario.NombreCompleto)), "image/svg+xml");
+            }
+
+            var contentType = string.IsNullOrWhiteSpace(foto.TipoContenido)
+                ? "application/octet-stream"
+                : foto.TipoContenido;
+
+            return File(foto.Contenido, contentType);
+        }
+
         public class SolicitudActivacionRequest
         {
             public Guid UsuarioId { get; set; }
@@ -361,6 +399,44 @@ namespace EvaluacionDesempenoAB.Controllers
                 puedeSolicitar = !puedeIniciar,
                 fechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd")
             });
+        }
+
+        private void SetNoCacheHeaders()
+        {
+            Response.Headers["Cache-Control"] = "no-store, no-cache, max-age=0";
+            Response.Headers["Pragma"] = "no-cache";
+            Response.Headers["Expires"] = "0";
+        }
+
+        private static byte[] BuildPlaceholderPhotoSvg(string initials)
+        {
+            var safeInitials = WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(initials) ? "SF" : initials);
+            var svg = $"""
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="Foto de usuario no disponible">
+  <rect width="240" height="240" rx="28" fill="#e9ecef" />
+  <circle cx="120" cy="92" r="42" fill="#c6d0da" />
+  <path d="M48 208c10-42 40-64 72-64s62 22 72 64" fill="#c6d0da" />
+  <text x="120" y="222" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#5c6773">{safeInitials}</text>
+</svg>
+""";
+
+            return Encoding.UTF8.GetBytes(svg);
+        }
+
+        private static string GetUserInitials(string? fullName)
+        {
+            if (string.IsNullOrWhiteSpace(fullName))
+            {
+                return "SF";
+            }
+
+            var initials = string.Concat(
+                fullName
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Take(2)
+                    .Select(part => char.ToUpperInvariant(part[0])));
+
+            return string.IsNullOrWhiteSpace(initials) ? "SF" : initials;
         }
     }
 }

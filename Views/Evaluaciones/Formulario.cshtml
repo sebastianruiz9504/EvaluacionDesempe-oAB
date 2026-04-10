@@ -10,19 +10,30 @@
 
     <div class="card mt-3">
         <div class="card-body">
-            <h5 class="card-title">@Model.NombreUsuario (@Model.CedulaUsuario)</h5>
-            <p class="card-text mb-1"><strong>Cargo:</strong> @Model.Cargo</p>
-            <p class="card-text mb-1"><strong>Gerencia:</strong> @Model.Gerencia</p>
-            <p class="card-text mb-1"><strong>Nivel de evaluacion:</strong> @Model.NombreNivel</p>
-            <p class="card-text mb-1"><strong>Tipo de evaluacion:</strong> @Model.TipoEvaluacion</p>
-            <p class="card-text mb-1"><strong>Alcance actual:</strong> @Model.AlcanceEvaluadorActual</p>
-            <div class="d-flex flex-wrap gap-2 mt-2">
-                <span class="badge @(Model.EvaluacionNormalCompleta ? "bg-success" : "bg-secondary")">
-                    Evaluacion normal: @(Model.EvaluacionNormalCompleta ? "Completada" : "Pendiente")
-                </span>
-                <span class="badge @(Model.EvaluacionSstCompleta ? "bg-success" : "bg-secondary")">
-                    Evaluacion SST: @(Model.EvaluacionSstCompleta ? "Completada" : "Pendiente")
-                </span>
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-lg">
+                    <h5 class="card-title">@Model.NombreUsuario (@Model.CedulaUsuario)</h5>
+                    <p class="card-text mb-1"><strong>Cargo:</strong> @Model.Cargo</p>
+                    <p class="card-text mb-1"><strong>Gerencia:</strong> @Model.Gerencia</p>
+                    <p class="card-text mb-1"><strong>Nivel de evaluacion:</strong> @Model.NombreNivel</p>
+                    <p class="card-text mb-1"><strong>Tipo de evaluacion:</strong> @Model.TipoEvaluacion</p>
+                    <p class="card-text mb-1"><strong>Alcance actual:</strong> @Model.AlcanceEvaluadorActual</p>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <span class="badge @(Model.EvaluacionNormalCompleta ? "bg-success" : "bg-secondary")">
+                            Evaluacion normal: @(Model.EvaluacionNormalCompleta ? "Completada" : "Pendiente")
+                        </span>
+                        <span class="badge @(Model.EvaluacionSstCompleta ? "bg-success" : "bg-secondary")">
+                            Evaluacion SST: @(Model.EvaluacionSstCompleta ? "Completada" : "Pendiente")
+                        </span>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-auto">
+                    <div class="ab-user-photo-panel">
+                        <img src="@Url.Action("Foto", "Usuarios", new { id = Model.UsuarioId })"
+                             alt="Foto de @Model.NombreUsuario"
+                             class="ab-user-photo-panel-image" />
+                    </div>
+                </div>
             </div>
         </div>
     </div>
