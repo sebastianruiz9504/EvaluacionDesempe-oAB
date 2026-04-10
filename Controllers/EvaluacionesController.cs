@@ -1198,9 +1198,12 @@ namespace EvaluacionDesempenoAB.Controllers
                 });
             }
 
+            var firmaGuardada = await _repo.DownloadFirmaUsuarioAsync(evaluador.Id);
+
             return Json(new
             {
                 ok = true,
+                firmaDataUrl = ConvertirArchivoADataUrl(firmaGuardada),
                 message = "La firma se guardó correctamente."
             });
         }
@@ -1435,17 +1438,24 @@ namespace EvaluacionDesempenoAB.Controllers
 
             var parteActual = GetParteEvaluador(evaluador, usuario);
             var requiereFirma = !evaluador.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual);
+            var firmaActual = requiereFirma
+                ? await _repo.DownloadFirmaUsuarioAsync(evaluador.Id)
+                : null;
+
             if (requiereFirma)
             {
                 if (firmaArchivo == null || firmaArchivo.Length == 0)
                 {
-                    return await ReturnReporteConErrorGuardadoPlanAsync(
-                        model,
-                        evaluador,
-                        "Debes adjuntar la firma en formato PNG o JPG para guardar el plan de acción.");
+                    if (!TieneContenido(firmaActual))
+                    {
+                        return await ReturnReporteConErrorGuardadoPlanAsync(
+                            model,
+                            evaluador,
+                            "Debes adjuntar la firma en formato PNG o JPG para guardar el plan de acción.");
+                    }
                 }
 
-                if (!EsFirmaImagenValida(firmaArchivo))
+                else if (!EsFirmaImagenValida(firmaArchivo))
                 {
                     return await ReturnReporteConErrorGuardadoPlanAsync(
                         model,
@@ -1453,14 +1463,18 @@ namespace EvaluacionDesempenoAB.Controllers
                         "La firma debe estar en formato PNG o JPG.");
                 }
 
-                try
+                else
                 {
-                    await using var stream = firmaArchivo.OpenReadStream();
-                    await _repo.UploadFirmaUsuarioAsync(evaluador.Id, firmaArchivo.FileName, firmaArchivo.ContentType, stream);
-                }
-                catch (Exception ex)
-                {
-                    return await ReturnReporteConErrorGuardadoPlanAsync(model, evaluador, ex.Message);
+                    try
+                    {
+                        await using var stream = firmaArchivo.OpenReadStream();
+                        await _repo.UploadFirmaUsuarioAsync(evaluador.Id, firmaArchivo.FileName, firmaArchivo.ContentType, stream);
+                        firmaActual = await _repo.DownloadFirmaUsuarioAsync(evaluador.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        return await ReturnReporteConErrorGuardadoPlanAsync(model, evaluador, ex.Message);
+                    }
                 }
             }
 
@@ -1472,9 +1486,6 @@ namespace EvaluacionDesempenoAB.Controllers
 
             var detalles = await _repo.GetDetallesByEvaluacionAsync(model.EvaluacionId);
             var planesExistentes = await _repo.GetPlanesByEvaluacionAsync(model.EvaluacionId);
-            var firmaActual = requiereFirma
-                ? await _repo.DownloadFirmaUsuarioAsync(evaluador.Id)
-                : null;
             var planAccionBloqueado = requiereFirma &&
                                       TieneContenido(firmaActual) &&
                                       TienePlanAccionRegistrado(
@@ -1734,6 +1745,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 ObservacionesGenerales = evaluacion.Observaciones,
                 FirmaEvaluadorDataUrl = ConvertirArchivoADataUrl(firmaEvaluador),
                 FirmaEvaluadorSstDataUrl = ConvertirArchivoADataUrl(firmaEvaluadorSst),
+                FirmaActualDataUrl = ConvertirArchivoADataUrl(firmaActual),
                 PuedeAdjuntarFirmaActual = !evaluadorActual.EsSuperAdministrador &&
                                            etiquetaFirmaActual != null &&
                                            !planAccionBloqueado,

@@ -9,6 +9,10 @@
         .ToList();
     var mostrarModalGuardarPlan = ViewBag.MostrarModalGuardarPlan is bool abrirModal && abrirModal;
     var errorGuardadoPlan = ViewBag.ErrorGuardadoPlan as string;
+    var tieneFirmaActualGuardada = !string.IsNullOrWhiteSpace(Model.FirmaActualDataUrl);
+    var etiquetaVistaPreviaFirma = Model.EtiquetaFirmaActual == "Evaluador SST"
+        ? "Firma del evaluador SST"
+        : "Firma del evaluador";
 }
 
 @functions {
@@ -47,6 +51,45 @@
         return puntaje.HasValue && puntaje.Value >= 70 && puntaje.Value <= 85;
     }
 }
+
+<style>
+    .firma-preview-card {
+        margin-top: 1rem;
+        padding: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.75rem;
+        background: #f8f9fa;
+    }
+
+    .firma-preview-stage {
+        width: min(100%, 360px);
+        height: 76px;
+        margin: 0 auto 6px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0 8px;
+    }
+
+    .firma-preview-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: center bottom;
+        display: block;
+    }
+
+    .firma-preview-line {
+        width: min(100%, 360px);
+        margin: 0 auto;
+        border-top: 1px solid #212529;
+    }
+
+    .firma-preview-label {
+        width: min(100%, 360px);
+        margin: 8px auto 0;
+    }
+</style>
 
 <div class="container mt-4">
     <h2>Reporte de evaluacion de desempeno</h2>
@@ -240,7 +283,7 @@
             </button>
         </div>
 
-        <div class="modal fade" id="modalFirma" tabindex="-1" aria-hidden="true">
+        <div class="modal fade" id="modalFirma" tabindex="-1" aria-hidden="true" data-subir-firma-url="@Url.Action("SubirFirmaEvaluador", "Evaluaciones")">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -262,10 +305,28 @@
                                    name="firmaArchivo"
                                    type="file"
                                    class="form-control"
-                                   accept=".png,.jpg,.jpeg,image/png,image/jpeg"
-                                   required />
+                                   accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
                             <div class="form-text">
-                                Este archivo es obligatorio para guardar el plan de accion.
+                                Puedes guardar la firma para revisar la vista previa antes de confirmar el plan de accion.
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="guardarFirmaModal" disabled>
+                                Guardar firma y actualizar vista previa
+                            </button>
+                            <div id="firmaGuardadoEstado" class="d-none mt-3" role="alert" aria-live="polite"></div>
+
+                            <div class="firma-preview-card @(tieneFirmaActualGuardada ? string.Empty : "d-none")" id="firmaPreviewCard">
+                                <div class="fw-semibold mb-2">Vista previa en el certificado</div>
+                                <div class="firma-preview-stage">
+                                    <img id="firmaPreviewImage"
+                                         src="@Model.FirmaActualDataUrl"
+                                         alt="Vista previa de la firma en el certificado"
+                                         class="firma-preview-image @(tieneFirmaActualGuardada ? string.Empty : "d-none")" />
+                                </div>
+                                <div class="firma-preview-line"></div>
+                                <div class="firma-preview-label">@etiquetaVistaPreviaFirma</div>
+                            </div>
+                            <div id="firmaPreviewEmpty" class="form-text @(tieneFirmaActualGuardada ? "d-none" : string.Empty)">
+                                Aun no hay una firma guardada para mostrar en la vista previa.
                             </div>
                         }
                         else
@@ -277,7 +338,7 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Confirmar y guardar</button>
+                        <button type="submit" class="btn btn-primary">Confirmar y guardar plan</button>
                     </div>
                 </div>
             </div>
@@ -325,6 +386,16 @@
             const modalGuardarPlan = modalGuardarPlanElement && window.bootstrap
                 ? window.bootstrap.Modal.getOrCreateInstance(modalGuardarPlanElement)
                 : null;
+            const guardarPlanForm = modalGuardarPlanElement?.closest("form");
+            const tokenInput = guardarPlanForm?.querySelector('input[name="__RequestVerificationToken"]');
+            const firmaArchivoInput = document.getElementById("firmaArchivo");
+            const guardarFirmaModalButton = document.getElementById("guardarFirmaModal");
+            const firmaPreviewCard = document.getElementById("firmaPreviewCard");
+            const firmaPreviewImage = document.getElementById("firmaPreviewImage");
+            const firmaPreviewEmpty = document.getElementById("firmaPreviewEmpty");
+            const firmaGuardadoEstado = document.getElementById("firmaGuardadoEstado");
+            const subirFirmaUrl = modalGuardarPlanElement?.dataset.subirFirmaUrl ?? "";
+            const firmaActualInicial = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.FirmaActualDataUrl ?? string.Empty));
 
             const updateAddButtonState = () => {
                 if (!addButton || !planBody) return;
@@ -360,6 +431,40 @@
                 updateAddButtonState();
             };
 
+            const setFirmaPreview = (src) => {
+                const hasSrc = typeof src === "string" && src.trim().length > 0;
+                if (firmaPreviewCard) {
+                    firmaPreviewCard.classList.toggle("d-none", !hasSrc);
+                }
+
+                if (firmaPreviewEmpty) {
+                    firmaPreviewEmpty.classList.toggle("d-none", hasSrc);
+                }
+
+                if (firmaPreviewImage instanceof HTMLImageElement) {
+                    if (hasSrc) {
+                        firmaPreviewImage.src = src;
+                        firmaPreviewImage.classList.remove("d-none");
+                    } else {
+                        firmaPreviewImage.removeAttribute("src");
+                        firmaPreviewImage.classList.add("d-none");
+                    }
+                }
+            };
+
+            const setFirmaStatus = (message, isError = false) => {
+                if (!firmaGuardadoEstado) return;
+
+                if (!message) {
+                    firmaGuardadoEstado.textContent = "";
+                    firmaGuardadoEstado.className = "d-none mt-3";
+                    return;
+                }
+
+                firmaGuardadoEstado.textContent = message;
+                firmaGuardadoEstado.className = `alert ${isError ? "alert-danger" : "alert-success"} py-2 px-3 mt-3 mb-0`;
+            };
+
             if (planBody) {
                 planBody.querySelectorAll("tr").forEach((row) => syncComportamientoLabel(row));
                 planBody.addEventListener("change", (event) => {
@@ -373,6 +478,68 @@
             if (addButton) {
                 addButton.addEventListener("click", addRow);
             }
+
+            if (guardarFirmaModalButton instanceof HTMLButtonElement && firmaArchivoInput instanceof HTMLInputElement) {
+                const updateGuardarFirmaState = () => {
+                    guardarFirmaModalButton.disabled = !(firmaArchivoInput.files && firmaArchivoInput.files.length > 0);
+                };
+
+                firmaArchivoInput.addEventListener("change", () => {
+                    setFirmaStatus("");
+                    updateGuardarFirmaState();
+                });
+
+                guardarFirmaModalButton.addEventListener("click", async () => {
+                    const archivo = firmaArchivoInput.files?.[0];
+                    if (!archivo) {
+                        setFirmaStatus("Selecciona una firma en formato PNG o JPG.", true);
+                        updateGuardarFirmaState();
+                        return;
+                    }
+
+                    if (!(tokenInput instanceof HTMLInputElement) || !tokenInput.value || !subirFirmaUrl) {
+                        setFirmaStatus("No fue posible preparar la carga de la firma.", true);
+                        return;
+                    }
+
+                    guardarFirmaModalButton.disabled = true;
+                    firmaArchivoInput.disabled = true;
+                    setFirmaStatus("Guardando la firma y actualizando la vista previa...");
+
+                    const formData = new FormData();
+                    formData.append("__RequestVerificationToken", tokenInput.value);
+                    formData.append("id", "@Model.EvaluacionId");
+                    formData.append("archivo", archivo);
+
+                    try {
+                        const response = await fetch(subirFirmaUrl, {
+                            method: "POST",
+                            body: formData,
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                        });
+                        const result = await response.json().catch(() => null);
+
+                        if (!response.ok || !result?.ok) {
+                            throw new Error(result?.message ?? "No fue posible guardar la firma.");
+                        }
+
+                        setFirmaPreview(result.firmaDataUrl ?? "");
+                        setFirmaStatus(`${result.message} Revisa la vista previa de abajo; si hace falta, puedes cargar otra imagen.`, false);
+                        firmaArchivoInput.value = "";
+                    } catch (error) {
+                        setFirmaStatus(error instanceof Error ? error.message : "No fue posible guardar la firma.", true);
+                    } finally {
+                        firmaArchivoInput.disabled = false;
+                        updateGuardarFirmaState();
+                    }
+                });
+
+                updateGuardarFirmaState();
+            }
+
+            setFirmaPreview(firmaActualInicial);
 
             if (mostrarModalGuardarPlan && modalGuardarPlan) {
                 modalGuardarPlan.show();
