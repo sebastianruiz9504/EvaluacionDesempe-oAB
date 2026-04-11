@@ -37,6 +37,7 @@ namespace EvaluacionDesempenoAB.Services
                     Cedula = "1111111111",
                     Cargo = "Jefe",
                     Gerencia = "Operaciones",
+                    Proyecto = "Administración central",
                     CorreoElectronico = evaluadorCorreo,
                     EvaluadorNombre = null, // no tiene jefe por encima
                     EsSuperAdministrador = true,
@@ -47,9 +48,10 @@ namespace EvaluacionDesempenoAB.Services
                     Id = Guid.NewGuid(),
                     NombreCompleto = evaluadorSstNombre,
                     Cedula = "2222222222",
-                    Cargo = "Lider SST",
-                    CargoEvaluadorSst = "Lider SST",
+                    Cargo = "Líder SST",
+                    CargoEvaluadorSst = "Líder SST",
                     Gerencia = "SST",
+                    Proyecto = "Sistema SST",
                     CorreoElectronico = evaluadorSstCorreo,
                     EvaluadorNombre = null,
                     EsSuperAdministrador = false
@@ -61,6 +63,7 @@ namespace EvaluacionDesempenoAB.Services
                     Cedula = "123456789",
                     Cargo = "Operario",
                     Gerencia = "Operaciones",
+                    Proyecto = "Acueducto Norte",
                     FechaInicioContrato = DateTime.Today.AddYears(-2),
                      FechaFinalizacionContrato = DateTime.Today.AddYears(1),
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-2).AddMonths(3),
@@ -69,7 +72,7 @@ namespace EvaluacionDesempenoAB.Services
                     // está bajo el Evaluador Demo
                     EvaluadorNombre = evaluadorCorreo,
                     CorreoEvaluadorSst = evaluadorSstCorreo,
-                    CargoEvaluadorSst = "Lider SST",
+                    CargoEvaluadorSst = "Líder SST",
                     TipoFormulario = 433930002, // Operativo
                     Novedades = "Pendiente documentación."
                 },
@@ -80,13 +83,14 @@ namespace EvaluacionDesempenoAB.Services
                     Cedula = "987654321",
                     Cargo = "Auxiliar",
                     Gerencia = "Gestión Ambiental",
+                    Proyecto = "PTAR Salitre",
                       FechaInicioContrato = DateTime.Today.AddYears(-1),
                       
                     FechaFinalizacionContrato = DateTime.Today.AddYears(1),
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-1).AddMonths(2),
                     FechaActivacionEvaluacion = null,
                     CorreoElectronico = "maria.lopez@contoso.com",
-                    CargoEvaluadorSst = "Lider SST",
+                    CargoEvaluadorSst = "Líder SST",
                     EvaluadorNombre = evaluadorCorreo,
                     CorreoEvaluadorSst = evaluadorSstCorreo,
                     Novedades = "Cambio de cargo en trámite."

@@ -2,7 +2,7 @@
 @model EvaluacionReporteViewModel
 
 @{
-    ViewData["Title"] = "Reporte de evaluacion";
+    ViewData["Title"] = "Reporte de evaluación";
     var opcionesPlanPorCompetencia = Model.OpcionesPlanAccion
         .GroupBy(o => o.Competencia)
         .OrderBy(g => g.Key)
@@ -95,23 +95,24 @@
 </style>
 
 <div class="container mt-4">
-    <h2>Reporte de evaluacion de desempeno</h2>
+    <h2>Reporte de evaluación de desempeño</h2>
 
     <div class="card mt-3">
         <div class="card-body">
             <h5 class="card-title">@Model.NombreUsuario (@Model.CedulaUsuario)</h5>
             <p class="card-text mb-1"><strong>Cargo:</strong> @Model.Cargo</p>
             <p class="card-text mb-1"><strong>Gerencia:</strong> @Model.Gerencia</p>
-            <p class="card-text mb-1"><strong>Nivel de evaluacion:</strong> @Model.NombreNivel</p>
-            <p class="card-text mb-1"><strong>Tipo de evaluacion:</strong> @Model.TipoEvaluacion</p>
-            <p class="card-text mb-1"><strong>Fecha de evaluacion:</strong> @Model.FechaEvaluacion.ToShortDateString()</p>
+            <p class="card-text mb-1"><strong>Proyecto:</strong> @(string.IsNullOrWhiteSpace(Model.Proyecto) ? "-" : Model.Proyecto)</p>
+            <p class="card-text mb-1"><strong>Nivel de evaluación:</strong> @Model.NombreNivel</p>
+            <p class="card-text mb-1"><strong>Tipo de evaluación:</strong> @Model.TipoEvaluacion</p>
+            <p class="card-text mb-1"><strong>Fecha de evaluación:</strong> @Model.FechaEvaluacion.ToShortDateString()</p>
             <p class="card-text mb-1"><strong>Alcance actual:</strong> @Model.AlcanceEvaluadorActual</p>
             <div class="d-flex flex-wrap gap-2 mb-3">
                 <span class="badge @(Model.EvaluacionNormalCompleta ? "bg-success" : "bg-secondary")">
-                    Evaluacion normal: @(Model.EvaluacionNormalCompleta ? "Completada" : "Pendiente")
+                    Evaluación normal: @(Model.EvaluacionNormalCompleta ? "Completada" : "Pendiente")
                 </span>
                 <span class="badge @(Model.EvaluacionSstCompleta ? "bg-success" : "bg-secondary")">
-                    Evaluacion SST: @(Model.EvaluacionSstCompleta ? "Completada" : "Pendiente")
+                    Evaluación SST: @(Model.EvaluacionSstCompleta ? "Completada" : "Pendiente")
                 </span>
             </div>
             <p class="card-text">
@@ -131,7 +132,7 @@
     @if (!Model.EvaluacionNormalCompleta || !Model.EvaluacionSstCompleta)
     {
         <div class="alert alert-info mt-3">
-            El resultado final se calculara cuando la evaluacion normal y la evaluacion SST esten completas.
+            El resultado final se calculará cuando la evaluación normal y la evaluación SST estén completas.
         </div>
     }
 
@@ -219,16 +220,16 @@
         </div>
     }
 
-    <h4 class="mt-4">Plan de accion</h4>
+    <h4 class="mt-4">Plan de acción</h4>
 
     <p>
-        Define el plan de accion para los comportamientos del bloque que te corresponde evaluar y que quedaron entre 70% y 85%.
+        Define el plan de acción para los comportamientos del bloque que te corresponde evaluar y que quedaron entre 70% y 85%.
     </p>
 
     @if (Model.PlanAccionBloqueado)
     {
         <div class="alert alert-warning mt-2">
-            El plan de accion ya fue firmado y quedo bloqueado para cambios.
+            El plan de acción ya fue firmado y quedó bloqueado para cambios.
         </div>
     }
 
@@ -282,7 +283,7 @@
         <div class="mt-3 d-flex flex-wrap gap-2">
             <button type="button" class="btn btn-outline-primary" id="agregar-accion" disabled>Añadir otra oportunidad</button>
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFirma">
-                @(Model.PlanAccionBloqueado ? "Plan de accion firmado" : "Guardar plan de accion")
+                @(Model.PlanAccionBloqueado ? "Plan de acción firmado" : "Guardar plan de acción")
             </button>
         </div>
 
@@ -310,7 +311,7 @@
                                    class="form-control"
                                    accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
                             <div class="form-text">
-                                Puedes guardar la firma para revisar la vista previa antes de confirmar el plan de accion.
+                                Puedes guardar la firma para revisar la vista previa antes de confirmar el plan de acción.
                             </div>
                             <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="guardarFirmaModal" disabled>
                                 Guardar firma y actualizar vista previa
@@ -329,13 +330,13 @@
                                 <div class="firma-preview-label">@etiquetaVistaPreviaFirma</div>
                             </div>
                             <div id="firmaPreviewEmpty" class="form-text @(tieneFirmaActualGuardada ? "d-none" : string.Empty)">
-                                Aun no hay una firma guardada para mostrar en la vista previa.
+                                Aún no hay una firma guardada para mostrar en la vista previa.
                             </div>
                         }
                         else
                         {
                             <div class="text-muted">
-                                Confirma el guardado del plan de accion.
+                                Confirma el guardado del plan de acción.
                             </div>
                         }
                     </div>

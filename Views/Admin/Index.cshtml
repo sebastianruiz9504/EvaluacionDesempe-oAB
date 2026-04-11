@@ -2,12 +2,12 @@
 @model IEnumerable<UsuarioEvaluado>
 
 @{
-    ViewData["Title"] = "Modulo admin";
+    ViewData["Title"] = "Módulo admin";
     var cedulaFiltro = ViewData["CedulaFiltro"] as string;
     var hayUsuarios = Model.Any();
 }
 
-<h2 class="mt-4">Modulo admin</h2>
+<h2 class="mt-4">Módulo admin</h2>
 
 @if (TempData["AdminFotoSuccess"] is string fotoSuccess)
 {
@@ -27,12 +27,12 @@
     <div class="col-12 col-lg-5">
         <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
             <div class="flex-grow-1">
-                <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cedula</label>
+                <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cédula</label>
                 <input id="cedulaFiltro"
                        name="cedula"
                        class="form-control"
                        value="@cedulaFiltro"
-                       placeholder="Ingresa la cedula" />
+                       placeholder="Ingresa la cédula" />
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-outline-secondary">Filtrar</button>
@@ -48,7 +48,7 @@
         <form asp-controller="Evaluaciones" asp-action="Nueva" method="get" class="d-flex flex-wrap gap-2 align-items-end">
             <input type="hidden" id="usuarioEvaluacionId" name="usuarioId" />
             <button type="submit" class="btn btn-primary" id="iniciarEvaluacionBtn" @(hayUsuarios ? "" : "disabled")>
-                Iniciar evaluacion
+                Iniciar evaluación
             </button>
             <button type="button"
                     class="btn btn-outline-primary"
@@ -56,7 +56,7 @@
                     data-bs-target="#subirFotoModal"
                     id="anadirFotoBtn"
                     @(hayUsuarios ? "" : "disabled")>
-                Anadir foto
+                Añadir foto
             </button>
         </form>
     </div>
@@ -73,6 +73,13 @@
     </div>
 </div>
 
+@if (hayUsuarios)
+{
+    <div id="seleccionUsuariosResumen" class="small text-muted mt-2">
+        Selecciona un usuario para habilitar las acciones.
+    </div>
+}
+
 @if (!hayUsuarios)
 {
     <div class="alert alert-info mt-3">
@@ -85,16 +92,25 @@ else
         <table class="table table-striped table-bordered mb-0">
             <thead class="table-light">
                 <tr>
-                    <th>Seleccionar</th>
+                    <th class="text-center" style="width: 110px;">
+                        <div>Seleccionar</div>
+                        <div class="form-check d-inline-flex align-items-center gap-1 mb-0">
+                            <input type="checkbox"
+                                   class="form-check-input"
+                                   id="seleccionarTodosUsuarios"
+                                   aria-label="Seleccionar todos los usuarios" />
+                            <label class="form-check-label small" for="seleccionarTodosUsuarios">Todo</label>
+                        </div>
+                    </th>
                     <th>Foto</th>
                     <th>Nombre</th>
-                    <th>Cedula</th>
+                    <th>Cédula</th>
                     <th>Cargo</th>
                     <th>Gerencia</th>
                     <th>Correo</th>
                     <th>Inicio de contrato</th>
-                    <th>Finalizacion contrato</th>
-                    <th>Finalizacion periodo de prueba</th>
+                    <th>Finalización contrato</th>
+                    <th>Finalización período de prueba</th>
                     <th>Novedades</th>
                 </tr>
             </thead>
@@ -148,7 +164,7 @@ else
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="cedula" value="@cedulaFiltro" />
                 <div class="modal-header">
-                    <h5 class="modal-title" id="subirFotoLabel">Anadir foto</h5>
+                    <h5 class="modal-title" id="subirFotoLabel">Añadir foto</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
@@ -171,7 +187,7 @@ else
                                accept=".png,.jpg,.jpeg,image/png,image/jpeg"
                                required />
                         <div class="form-text">
-                            La imagen se cargara directamente en Dataverse para el usuario seleccionado.
+                            La imagen se cargará directamente en Dataverse para el usuario seleccionado.
                         </div>
                     </div>
                 </div>
@@ -217,6 +233,8 @@ else
     <script>
         (() => {
             const checkboxes = document.querySelectorAll('.usuario-select');
+            const seleccionarTodos = document.getElementById('seleccionarTodosUsuarios');
+            const seleccionResumen = document.getElementById('seleccionUsuariosResumen');
             const iniciarBtn = document.getElementById('iniciarEvaluacionBtn');
             const fotoBtn = document.getElementById('anadirFotoBtn');
             const editarBtn = document.getElementById('editarNovedadesBtn');
@@ -228,7 +246,10 @@ else
             const inputNombre = document.getElementById('novedadesUsuarioNombre');
             const textarea = document.getElementById('novedadesTexto');
 
-            const setButtonsState = (enabled) => {
+            const getSelected = () => Array.from(checkboxes).filter((checkbox) => checkbox.checked);
+
+            const setButtonsState = (selectedCount) => {
+                const enabled = selectedCount === 1;
                 if (iniciarBtn) {
                     iniciarBtn.disabled = !enabled;
                 }
@@ -238,6 +259,34 @@ else
                 if (editarBtn) {
                     editarBtn.disabled = !enabled;
                 }
+            };
+
+            const syncSelectAllState = () => {
+                if (!(seleccionarTodos instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                const selectedCount = getSelected().length;
+                seleccionarTodos.checked = checkboxes.length > 0 && selectedCount === checkboxes.length;
+                seleccionarTodos.indeterminate = selectedCount > 0 && selectedCount < checkboxes.length;
+            };
+
+            const syncSelectionSummary = (selectedCount) => {
+                if (!seleccionResumen) {
+                    return;
+                }
+
+                if (selectedCount === 0) {
+                    seleccionResumen.textContent = 'Selecciona un usuario para habilitar las acciones.';
+                    return;
+                }
+
+                if (selectedCount === 1) {
+                    seleccionResumen.textContent = '1 usuario seleccionado.';
+                    return;
+                }
+
+                seleccionResumen.textContent = `${selectedCount} usuarios seleccionados. Las acciones actuales requieren una sola selección.`;
             };
 
             const syncFotoPreview = (selected) => {
@@ -260,7 +309,9 @@ else
             };
 
             const updateSelection = () => {
-                const selected = document.querySelector('.usuario-select:checked');
+                const selectedItems = getSelected();
+                const selectedCount = selectedItems.length;
+                const selected = selectedCount === 1 ? selectedItems[0] : null;
                 if (!evalInputId || !inputId || !textarea || !inputNombre) {
                     return;
                 }
@@ -271,7 +322,9 @@ else
                     inputNombre.value = '';
                     textarea.value = '';
                     syncFotoPreview(null);
-                    setButtonsState(false);
+                    setButtonsState(selectedCount);
+                    syncSelectAllState();
+                    syncSelectionSummary(selectedCount);
                     return;
                 }
 
@@ -280,21 +333,25 @@ else
                 inputNombre.value = selected.dataset.nombre || '';
                 textarea.value = selected.dataset.novedades || '';
                 syncFotoPreview(selected);
-                setButtonsState(true);
+                setButtonsState(selectedCount);
+                syncSelectAllState();
+                syncSelectionSummary(selectedCount);
             };
 
             checkboxes.forEach((checkbox) => {
-                checkbox.addEventListener('change', (event) => {
-                    if (event.target.checked) {
-                        checkboxes.forEach((other) => {
-                            if (other !== event.target) {
-                                other.checked = false;
-                            }
-                        });
-                    }
+                checkbox.addEventListener('change', () => {
                     updateSelection();
                 });
             });
+
+            if (seleccionarTodos instanceof HTMLInputElement) {
+                seleccionarTodos.addEventListener('change', () => {
+                    checkboxes.forEach((checkbox) => {
+                        checkbox.checked = seleccionarTodos.checked;
+                    });
+                    updateSelection();
+                });
+            }
 
             updateSelection();
         })();

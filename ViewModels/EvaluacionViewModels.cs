@@ -37,6 +37,9 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string NombreUsuario { get; set; } = string.Empty;
         public string CedulaUsuario { get; set; } = string.Empty;
         public string? Cargo { get; set; }
+        public string? Gerencia { get; set; }
+        public string? Proyecto { get; set; }
+        public string? CorreoElectronico { get; set; }
 
         public List<EvaluacionListaViewModel> Evaluaciones { get; set; } = new();
     }
@@ -60,6 +63,7 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string CedulaUsuario { get; set; } = string.Empty;
         public string? Cargo { get; set; }
         public string? Gerencia { get; set; }
+        public string? Proyecto { get; set; }
         public string NombreNivel { get; set; } = string.Empty;
         public string AlcanceEvaluadorActual { get; set; } = string.Empty;
         public bool EvaluacionNormalCompleta { get; set; }
@@ -114,6 +118,7 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string? Cargo { get; set; }
         public string? Gerencia { get; set; }
         public string? Proyecto { get; set; }
+        public string? TipoFormularioNombre { get; set; }
         public string? NombreJefeInmediatoOEvaluador { get; set; }
         public string? CargoJefeInmediatoOEvaluador { get; set; }
         public string? NombreEvaluadorSst { get; set; }

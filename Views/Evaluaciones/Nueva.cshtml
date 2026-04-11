@@ -1,7 +1,7 @@
 @using EvaluacionDesempenoAB.Models
 
 @{
-    ViewData["Title"] = "Iniciar evaluacion";
+    ViewData["Title"] = "Iniciar evaluación";
 
     var usuario = ViewBag.Usuario as UsuarioEvaluado;
     var niveles = ViewBag.Niveles as List<NivelEvaluacion>;
@@ -10,12 +10,12 @@
 @if (usuario is null || niveles is null)
 {
     <div class="alert alert-danger">
-        No se pudo cargar la informacion del usuario o de los niveles.
+        No se pudo cargar la información del usuario o de los niveles.
     </div>
 }
 else
 {
-    <h1 class="h4 ab-heading mb-3">Iniciar evaluacion</h1>
+    <h1 class="h4 ab-heading mb-3">Iniciar evaluación</h1>
 
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
@@ -27,12 +27,20 @@ else
                             <div class="fw-semibold">@usuario.NombreCompleto</div>
                         </div>
                         <div class="col-md-3">
-                            <div class="small text-muted">Cedula</div>
+                            <div class="small text-muted">Cédula</div>
                             <div class="fw-semibold">@usuario.Cedula</div>
                         </div>
                         <div class="col-md-3">
                             <div class="small text-muted">Cargo</div>
                             <div>@usuario.Cargo</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="small text-muted">Gerencia</div>
+                            <div>@(string.IsNullOrWhiteSpace(usuario.Gerencia) ? "-" : usuario.Gerencia)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="small text-muted">Proyecto</div>
+                            <div>@(string.IsNullOrWhiteSpace(usuario.Proyecto) ? "-" : usuario.Proyecto)</div>
                         </div>
                     </div>
                 </div>
@@ -47,7 +55,7 @@ else
         </div>
     </div>
 
-    <p class="mb-3">Selecciona el tipo de evaluacion que deseas realizar para este usuario:</p>
+    <p class="mb-3">Selecciona el tipo de evaluación que deseas realizar para este usuario:</p>
 
     <div class="row g-3">
         @foreach (var nivel in niveles)
@@ -65,7 +73,7 @@ else
                                asp-action="Formulario"
                                asp-route-usuarioId="@usuario.Id"
                                asp-route-nivelId="@nivel.Id">
-                                Iniciar evaluacion
+                                Iniciar evaluación
                             </a>
                         </div>
                     </div>

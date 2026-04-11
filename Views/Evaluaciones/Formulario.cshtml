@@ -2,11 +2,11 @@
 @model EvaluacionFormularioViewModel
 
 @{
-    ViewData["Title"] = "Evaluacion de desempeno";
+    ViewData["Title"] = "Evaluación de desempeño";
 }
 
 <div class="container mt-4">
-    <h2>Evaluacion de desempeno</h2>
+    <h2>Evaluación de desempeño</h2>
 
     <div class="card mt-3">
         <div class="card-body">
@@ -15,15 +15,16 @@
                     <h5 class="card-title">@Model.NombreUsuario (@Model.CedulaUsuario)</h5>
                     <p class="card-text mb-1"><strong>Cargo:</strong> @Model.Cargo</p>
                     <p class="card-text mb-1"><strong>Gerencia:</strong> @Model.Gerencia</p>
-                    <p class="card-text mb-1"><strong>Nivel de evaluacion:</strong> @Model.NombreNivel</p>
-                    <p class="card-text mb-1"><strong>Tipo de evaluacion:</strong> @Model.TipoEvaluacion</p>
+                    <p class="card-text mb-1"><strong>Proyecto:</strong> @(string.IsNullOrWhiteSpace(Model.Proyecto) ? "-" : Model.Proyecto)</p>
+                    <p class="card-text mb-1"><strong>Nivel de evaluación:</strong> @Model.NombreNivel</p>
+                    <p class="card-text mb-1"><strong>Tipo de evaluación:</strong> @Model.TipoEvaluacion</p>
                     <p class="card-text mb-1"><strong>Alcance actual:</strong> @Model.AlcanceEvaluadorActual</p>
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <span class="badge @(Model.EvaluacionNormalCompleta ? "bg-success" : "bg-secondary")">
-                            Evaluacion normal: @(Model.EvaluacionNormalCompleta ? "Completada" : "Pendiente")
+                            Evaluación normal: @(Model.EvaluacionNormalCompleta ? "Completada" : "Pendiente")
                         </span>
                         <span class="badge @(Model.EvaluacionSstCompleta ? "bg-success" : "bg-secondary")">
-                            Evaluacion SST: @(Model.EvaluacionSstCompleta ? "Completada" : "Pendiente")
+                            Evaluación SST: @(Model.EvaluacionSstCompleta ? "Completada" : "Pendiente")
                         </span>
                     </div>
                 </div>
@@ -41,7 +42,7 @@
     @if (!Model.EvaluacionNormalCompleta || !Model.EvaluacionSstCompleta)
     {
         <div class="alert alert-info mt-3">
-            Solo estas calificando los comportamientos que corresponden a tu bloque. El resultado final se calculara cuando ambas partes esten completas.
+            Solo estás calificando los comportamientos que corresponden a tu bloque. El resultado final se calculará cuando ambas partes estén completas.
         </div>
     }
 
@@ -74,9 +75,12 @@
         <input asp-for="AlcanceEvaluadorActual" type="hidden" />
         <input asp-for="EvaluacionNormalCompleta" type="hidden" />
         <input asp-for="EvaluacionSstCompleta" type="hidden" />
+        <input asp-for="Cargo" type="hidden" />
+        <input asp-for="Gerencia" type="hidden" />
+        <input asp-for="Proyecto" type="hidden" />
 
         <div class="mb-3">
-            <label asp-for="FechaEvaluacion" class="form-label">Fecha de evaluacion</label>
+            <label asp-for="FechaEvaluacion" class="form-label">Fecha de evaluación</label>
             <input asp-for="FechaEvaluacion" type="date" class="form-control" />
             <span asp-validation-for="FechaEvaluacion" class="text-danger"></span>
         </div>
@@ -135,7 +139,7 @@
 
         <div class="mt-4">
             <button type="submit" name="accion" value="borrador" class="btn btn-secondary me-2">Guardar borrador</button>
-            <button type="submit" name="accion" value="finalizar" class="btn btn-primary">Finalizar evaluacion</button>
+            <button type="submit" name="accion" value="finalizar" class="btn btn-primary">Finalizar evaluación</button>
             <a asp-action="Index" class="btn btn-outline-secondary ms-2">Cancelar</a>
         </div>
     </form>

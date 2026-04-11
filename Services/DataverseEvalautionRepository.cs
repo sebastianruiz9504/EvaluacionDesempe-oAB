@@ -131,6 +131,7 @@ namespace EvaluacionDesempenoAB.Services
                 Cedula           = e.GetAttributeValue<string>("crfb7_cedula") ?? "",
                 Cargo            = e.GetAttributeValue<string>("crfb7_cargo"),
                 Gerencia         = e.GetAttributeValue<string>("crfb7_gerencia"),
+                Proyecto         = e.GetAttributeValue<string>("cr3d2_proyecto"),
                 FechaIngreso     = e.GetAttributeValue<DateTime?>("crfb7_fechaingreso"),
                 FechaInicioContrato = e.GetAttributeValue<DateTime?>("crfb7_fechainiciocontrato"),
                 FechaFinalizacionContrato = e.GetAttributeValue<DateTime?>("crfb7_fechafinalizacioncontrato"),

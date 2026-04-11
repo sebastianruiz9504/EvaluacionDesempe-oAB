@@ -11,6 +11,7 @@ namespace EvaluacionDesempenoAB.Models
 
         public string? Cargo { get; set; }
         public string? Gerencia { get; set; }
+        public string? Proyecto { get; set; }
         public string? Regional { get; set; }
         public DateTime? FechaIngreso { get; set; }
         public DateTime? FechaInicioContrato { get; set; }

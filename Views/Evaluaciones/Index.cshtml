@@ -30,7 +30,7 @@
 
 <form method="get" class="row g-2 align-items-end mt-1 mb-2">
     <div class="col-md-4">
-        <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cedula</label>
+        <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cédula</label>
         <input id="cedulaFiltro"
                name="cedula"
                class="form-control"
@@ -63,7 +63,7 @@
      data-base-subir-reporte="@Url.Action("SubirReporteFirmado", "Evaluaciones")">
     @if (hayEvaluaciones)
     {
-        <span class="text-muted">Selecciona una evaluacion para habilitar las acciones dependientes de una evaluacion.</span>
+        <span class="text-muted">Selecciona una evaluación para habilitar las acciones dependientes de una evaluación.</span>
         <a id="accionImprimir"
            class="btn btn-sm btn-outline-success disabled"
            href="#"
@@ -125,7 +125,7 @@
     @if (string.IsNullOrWhiteSpace(errorCarga))
     {
         <div class="alert alert-info mt-3">
-            No se han registrado evaluaciones aun.
+            No se han registrado evaluaciones aún.
         </div>
     }
 }
@@ -135,23 +135,23 @@ else
         <input id="filtroTablaEvaluaciones"
                type="text"
                class="form-control"
-               placeholder="Filtrar por proyecto o cedula..." />
+               placeholder="Filtrar por proyecto o cédula..." />
     </div>
     <table class="table table-striped table-bordered mt-3">
         <thead class="table-light">
             <tr>
                 <th style="width: 90px;">Seleccionar</th>
-                <th>Fecha evaluacion</th>
-                <th>Proxima evaluacion</th>
+                <th>Fecha evaluación</th>
+                <th>Próxima evaluación</th>
                 <th>Nombre</th>
-                <th>Cedula</th>
+                <th>Cédula</th>
                 <th>Gerencia</th>
                 <th>Proyecto</th>
                 <th>Nivel</th>
                 <th>Tipo</th>
                 <th>Resultado final</th>
-                <th>Evaluacion normal</th>
-                <th>Evaluacion SST</th>
+                <th>Evaluación normal</th>
+                <th>Evaluación SST</th>
                 <th>Reporte firmado</th>
             </tr>
         </thead>
@@ -167,7 +167,7 @@ else
                     <input type="checkbox"
                            name="evaluacionesSeleccionadas"
                            class="form-check-input"
-                           aria-label="Seleccionar evaluacion de @e.NombreUsuario" />
+                           aria-label="Seleccionar evaluación de @e.NombreUsuario" />
                 </td>
                 <td>@e.FechaEvaluacion.ToShortDateString()</td>
                 <td>

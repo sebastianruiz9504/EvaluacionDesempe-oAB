@@ -9,6 +9,9 @@
         : Model.PlanAccion
             .Where(p => !string.IsNullOrWhiteSpace(p.Comportamiento) || !string.IsNullOrWhiteSpace(p.Descripcion))
             .ToList();
+    var tituloFormato = esCertificadoEnBlanco && !string.IsNullOrWhiteSpace(Model.TipoFormularioNombre)
+        ? $"Formato evaluación de desempeño - {Model.TipoFormularioNombre}"
+        : "Formato evaluación de desempeño";
     var nombreArchivo = esCertificadoEnBlanco
         ? "certificado-en-blanco.pdf"
         : $"reporte-evaluacion-{Model.CedulaUsuario}.pdf";
@@ -63,7 +66,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reporte de evaluacion</title>
+    <title>Reporte de evaluación</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <style>
         body {
@@ -229,25 +232,25 @@
                     <img src="~/img/LogoAB.png" alt="Logo AB" style="height: 36px;" />
                 </td>
                 <td style="width: 55%;">
-                    <div class="sheet-title">Formato evaluacion de desempeno</div>
+                    <div class="sheet-title">@tituloFormato</div>
                     <div class="sheet-title">@(esCertificadoEnBlanco ? "" : Model.NombreNivel)</div>
                 </td>
                 <td style="width: 30%;">
-                    <div><strong>Codigo:</strong> GH-FM-059</div>
-                    <div><strong>Version:</strong> 01</div>
+                    <div><strong>Código:</strong> GH-FM-059</div>
+                    <div><strong>Versión:</strong> 01</div>
                     <div><strong>Vigencia:</strong> 09-03-2021</div>
                 </td>
             </tr>
         </table>
 
-        <div class="section-bar">I. Identificacion del colaborador</div>
+        <div class="section-bar">I. Identificación del colaborador</div>
         <table class="sheet-table tabla-compacta mb-3">
             <tr>
                 <td class="info-label">Nombre completo</td>
                 <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreUsuario)</td>
             </tr>
             <tr>
-                <td class="info-label">Cedula</td>
+                <td class="info-label">Cédula</td>
                 <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.CedulaUsuario)</td>
             </tr>
             <tr>
@@ -283,11 +286,11 @@
                 <td class="info-value">@FechaOBlanco(esCertificadoEnBlanco, Model.FechaIngreso)</td>
             </tr>
             <tr>
-                <td class="info-label">Fecha de evaluacion</td>
+                <td class="info-label">Fecha de evaluación</td>
                 <td class="info-value">@FechaOBlanco(esCertificadoEnBlanco, esCertificadoEnBlanco ? null : Model.FechaGeneracionReporte)</td>
             </tr>
             <tr>
-                <td class="info-label">Nivel de evaluacion</td>
+                <td class="info-label">Nivel de evaluación</td>
                 <td class="info-value">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreNivel)</td>
             </tr>
             <tr>
@@ -475,8 +478,8 @@
             </table>
         }
 
-        <div class="section-bar mt-3">V. Plan de accion</div>
-        <div class="mt-2">Define el plan de accion a partir de los resultados de la evaluacion y las oportunidades de mejora entre 70% y 85%.</div>
+        <div class="section-bar mt-3">V. Plan de acción</div>
+        <div class="mt-2">Define el plan de acción a partir de los resultados de la evaluación y las oportunidades de mejora entre 70% y 85%.</div>
 
         @if (esCertificadoEnBlanco)
         {
@@ -501,7 +504,7 @@
         }
         else if (!planAccion.Any())
         {
-            <div class="mt-2">No hay plan de accion registrado.</div>
+            <div class="mt-2">No hay plan de acción registrado.</div>
         }
         else
         {

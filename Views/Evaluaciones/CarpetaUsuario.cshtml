@@ -3,15 +3,42 @@
 
 @{
     ViewData["Title"] = "Carpeta del usuario";
+    var fotoUrl = Url.Action("Foto", "Usuarios", new { id = Model.UsuarioId }) ?? string.Empty;
 }
 
 <h2 class="mt-4">Carpeta de @Model.NombreUsuario (@Model.CedulaUsuario)</h2>
 
-<div class="card mt-3">
+<div class="card mt-3 shadow-sm border-0">
     <div class="card-body">
-        <p class="card-text mb-1">
-            <strong>Cargo:</strong> @Model.Cargo
-        </p>
+        <div class="row g-3 align-items-center">
+            <div class="col-12 col-lg">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <div class="small text-muted">Cargo</div>
+                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.Cargo) ? "-" : Model.Cargo)</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Gerencia</div>
+                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.Gerencia) ? "-" : Model.Gerencia)</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Proyecto</div>
+                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(Model.Proyecto) ? "-" : Model.Proyecto)</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Correo electrónico</div>
+                        <div class="fw-semibold text-break">@(string.IsNullOrWhiteSpace(Model.CorreoElectronico) ? "-" : Model.CorreoElectronico)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-auto">
+                <div class="ab-user-photo-panel">
+                    <img src="@fotoUrl"
+                         alt="Foto de @Model.NombreUsuario"
+                         class="ab-user-photo-panel-image" />
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -32,8 +59,8 @@ else
                 <th>Próxima evaluación</th>
                 <th>Nivel</th>
                 <th>Tipo</th>
-                <th>Evaluacion normal</th>
-                <th>Evaluacion SST</th>
+                <th>Evaluación normal</th>
+                <th>Evaluación SST</th>
                 <th style="width: 220px;">Acciones</th>
             </tr>
         </thead>

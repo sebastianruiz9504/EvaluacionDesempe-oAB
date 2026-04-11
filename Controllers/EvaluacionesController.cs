@@ -225,6 +225,11 @@ namespace EvaluacionDesempenoAB.Controllers
                 })
                 .ToList();
 
+        private static string? GetTipoFormularioNombre(int tipoFormulario)
+            => TipoFormularioNiveles.TryGetValue(tipoFormulario, out var tipoInfo)
+                ? tipoInfo.Nombre
+                : null;
+
         private static Dictionary<Guid, Competencia> BuildCompetenciasLookup(IEnumerable<Competencia> competencias)
             => competencias
                 .GroupBy(c => c.Id)
@@ -554,10 +559,10 @@ namespace EvaluacionDesempenoAB.Controllers
                         NombreUsuario = usuario.NombreCompleto,
                         CedulaUsuario = usuario.Cedula,
                         GerenciaUsuario = evaluacion.Gerencia ?? usuario.Gerencia ?? string.Empty,
-                        ProyectoUsuario = evaluacion.Proyecto ?? string.Empty,
+                        ProyectoUsuario = evaluacion.Proyecto ?? usuario.Proyecto ?? string.Empty,
                         NivelNombre = nivel.Nombre,
                         NivelCodigo = nivel.Codigo,
-                        Proyecto = evaluacion.Proyecto ?? usuario.Cargo,
+                        Proyecto = evaluacion.Proyecto ?? usuario.Proyecto,
                         Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
                         TipoEvaluacion = evaluacion.TipoEvaluacion,
                         ResultadoFinal = cobertura.AmbasPartesCompletas
@@ -700,6 +705,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 CedulaUsuario = usuario.Cedula,
                 Cargo = usuario.Cargo,
                 Gerencia = usuario.Gerencia,
+                Proyecto = usuario.Proyecto,
                 NombreNivel = nivel.Nombre,
                 AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
                 TipoEvaluacion = evaluacionOrigenId.HasValue ? "Seguimiento" : "Inicial",
@@ -785,6 +791,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 CedulaUsuario = usuario.Cedula,
                 Cargo = usuario.Cargo,
                 Gerencia = usuario.Gerencia,
+                Proyecto = evaluacion.Proyecto ?? usuario.Proyecto,
                 NombreNivel = nivel.Nombre,
                 AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
                 EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
@@ -933,8 +940,8 @@ namespace EvaluacionDesempenoAB.Controllers
                     : (accion == "finalizar" ? "Parcial" : "Borrador"),
                 FechaProximaEvaluacion = fechaProxima,
                 EvaluadorNombre = usuario.EvaluadorNombre ?? evaluacionExistente?.EvaluadorNombre ?? GetCorreoActual(evaluador),
-                Proyecto = model.Cargo,
-                Gerencia = model.Gerencia,
+                Proyecto = string.IsNullOrWhiteSpace(model.Proyecto) ? usuario.Proyecto : model.Proyecto,
+                Gerencia = string.IsNullOrWhiteSpace(model.Gerencia) ? usuario.Gerencia : model.Gerencia,
                 Total = cobertura.TotalCalculado,
                 ReporteFirmadoId = evaluacionExistente?.ReporteFirmadoId,
                 ReporteFirmadoNombre = evaluacionExistente?.ReporteFirmadoNombre
@@ -1050,10 +1057,10 @@ namespace EvaluacionDesempenoAB.Controllers
                     NombreUsuario = usuario.NombreCompleto,
                     CedulaUsuario = usuario.Cedula,
                     GerenciaUsuario = evaluacion.Gerencia ?? usuario.Gerencia ?? string.Empty,
-                    ProyectoUsuario = evaluacion.Proyecto ?? string.Empty,
+                    ProyectoUsuario = evaluacion.Proyecto ?? usuario.Proyecto ?? string.Empty,
                     NivelNombre = nivel.Nombre,
                     NivelCodigo = nivel.Codigo,
-                    Proyecto = evaluacion.Proyecto ?? usuario.Cargo,
+                    Proyecto = evaluacion.Proyecto ?? usuario.Proyecto,
                     Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
                     TipoEvaluacion = evaluacion.TipoEvaluacion,
                     ResultadoFinal = cobertura.AmbasPartesCompletas
@@ -1073,6 +1080,9 @@ namespace EvaluacionDesempenoAB.Controllers
                 NombreUsuario = usuario.NombreCompleto,
                 CedulaUsuario = usuario.Cedula,
                 Cargo = usuario.Cargo,
+                Gerencia = usuario.Gerencia,
+                Proyecto = usuario.Proyecto,
+                CorreoElectronico = usuario.CorreoElectronico,
                 Evaluaciones = lista.OrderByDescending(x => x.FechaEvaluacion).ToList()
             };
 
@@ -1134,7 +1144,7 @@ namespace EvaluacionDesempenoAB.Controllers
             var vm = await BuildReporteEnBlancoViewModelAsync(tipoFormulario.Value);
             if (vm == null)
             {
-                return NotFound("No se encontro el certificado en blanco para el tipo de formulario seleccionado.");
+                return NotFound("No se encontró el certificado en blanco para el tipo de formulario seleccionado.");
             }
 
             ViewBag.EsCertificadoEnBlanco = true;
@@ -1498,7 +1508,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return await ReturnReporteConErrorGuardadoPlanAsync(
                     model,
                     evaluador,
-                    "El plan de accion ya fue firmado y no admite cambios.");
+                    "El plan de acción ya fue firmado y no admite cambios.");
             }
 
             var comportamientosPermitidos = comportamientos
@@ -1589,6 +1599,7 @@ namespace EvaluacionDesempenoAB.Controllers
             {
                 FechaGeneracionReporte = DateTime.Today,
                 NombreNivel = nivel.Nombre,
+                TipoFormularioNombre = GetTipoFormularioNombre(tipoFormulario),
                 Competencias = competenciasVm,
                 OportunidadesMejora = new List<OportunidadMejoraVm>(),
                 PlanAccion = new List<PlanAccionItemVm>()
@@ -1720,7 +1731,10 @@ namespace EvaluacionDesempenoAB.Controllers
                 CedulaUsuario = usuario.Cedula,
                 Cargo = usuario.Cargo,
                 Gerencia = evaluacion.Gerencia ?? usuario.Gerencia,
-                Proyecto = evaluacion.Proyecto,
+                Proyecto = evaluacion.Proyecto ?? usuario.Proyecto,
+                TipoFormularioNombre = usuario.TipoFormulario.HasValue
+                    ? GetTipoFormularioNombre(usuario.TipoFormulario.Value)
+                    : null,
                 NombreJefeInmediatoOEvaluador = string.IsNullOrWhiteSpace(usuario.CorreoEvaluador)
                     ? evaluadorPrincipal?.NombreCompleto ?? usuario.EvaluadorNombre
                     : usuario.CorreoEvaluador,

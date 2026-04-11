@@ -99,7 +99,7 @@ namespace EvaluacionDesempenoAB.Controllers
             {
                 await using var stream = archivo.OpenReadStream();
                 await _repo.UploadFotoUsuarioAsync(id, archivo.FileName, archivo.ContentType, stream);
-                TempData["AdminFotoSuccess"] = "La foto se cargo correctamente en Dataverse.";
+                TempData["AdminFotoSuccess"] = "La foto se cargó correctamente en Dataverse.";
             }
             catch (Exception ex)
             {
