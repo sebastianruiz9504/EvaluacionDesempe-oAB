@@ -6662,7 +6662,7 @@
     ]
   },
   "packageFolders": {
-    "c:\\Users\\SebastianRuiz\\EvaluacionDesempenoAB\\.nuget\\packages\\": {},
+    "C:\\Users\\SebastianRuiz\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
@@ -6671,7 +6671,7 @@
       "projectUniqueName": "C:\\Users\\SebastianRuiz\\EvaluacionDesempenoAB\\EvaluacionDesempenoAB.csproj",
       "projectName": "EvaluacionDesempenoAB",
       "projectPath": "C:\\Users\\SebastianRuiz\\EvaluacionDesempenoAB\\EvaluacionDesempenoAB.csproj",
-      "packagesPath": "c:\\Users\\SebastianRuiz\\EvaluacionDesempenoAB\\.nuget\\packages\\",
+      "packagesPath": "C:\\Users\\SebastianRuiz\\.nuget\\packages\\",
       "outputPath": "C:\\Users\\SebastianRuiz\\EvaluacionDesempenoAB\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
