@@ -26,5 +26,8 @@ namespace EvaluacionDesempenoAB.ViewModels
         public bool EvaluacionSstCompleta { get; set; }
         public decimal? ResultadoFinal { get; set; }
         public Guid? EvaluacionActualId { get; set; }
+        public bool PuedeIniciarEvaluacion { get; set; }
+        public bool PuedeSolicitarActivacion { get; set; }
+        public bool TieneEvaluacionActiva { get; set; }
     }
 }

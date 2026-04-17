@@ -74,30 +74,32 @@ namespace EvaluacionDesempenoAB.Controllers
                        GetCorreoActual(evaluadorActual),
                        evaluadorActual.EsSuperAdministrador));
 
-        private static bool IsWithinWindow(DateTime? targetDate, int windowDays = 25)
+        private async Task<Evaluacion?> SelectPreferredEvaluacionAsync(IEnumerable<Evaluacion> candidates)
         {
-            if (!targetDate.HasValue)
+            var candidatos = candidates
+                .Where(x => x.Id != Guid.Empty)
+                .ToList();
+
+            if (candidatos.Count == 0)
             {
-                return false;
+                return null;
             }
 
-            var start = targetDate.Value.Date.AddDays(-windowDays);
-            var end = targetDate.Value.Date;
-            var today = DateTime.Today;
-            return today >= start && today <= end;
-        }
-
-        private static bool IsWithinActivationWindow(DateTime? activationDate, int windowDays = 25)
-        {
-            if (!activationDate.HasValue)
+            if (candidatos.Count == 1)
             {
-                return false;
+                return candidatos[0];
             }
 
-            var start = activationDate.Value.Date;
-            var end = activationDate.Value.Date.AddDays(windowDays);
-            var today = DateTime.Today;
-            return today >= start && today <= end;
+            var detalles = await _repo.GetDetallesByEvaluacionesAsync(candidatos.Select(x => x.Id));
+            var conteoDetalles = detalles
+                .Where(x => x.EvaluacionId != Guid.Empty)
+                .GroupBy(x => x.EvaluacionId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            return candidatos
+                .OrderByDescending(x => conteoDetalles.TryGetValue(x.Id, out var totalDetalles) ? totalDetalles : 0)
+                .ThenBy(x => x.FechaEvaluacion)
+                .First();
         }
 
         private static Dictionary<Guid, Competencia> BuildCompetenciasLookup(IEnumerable<Competencia> competencias)
@@ -174,6 +176,11 @@ namespace EvaluacionDesempenoAB.Controllers
             foreach (var usuario in usuarios)
             {
                 var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id);
+                var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
+                var evaluacionActiva = ventanaActiva == null
+                    ? null
+                    : await SelectPreferredEvaluacionAsync(
+                        evaluaciones.Where(x => EvaluacionCicloHelper.PerteneceAVentanaInicial(x, ventanaActiva)));
                 Evaluacion? evaluacionActual = null;
                 EvaluacionCoberturaInfo? coberturaActual = null;
 
@@ -214,9 +221,12 @@ namespace EvaluacionDesempenoAB.Controllers
                     FechaFinalizacionContrato = usuario.FechaFinalizacionContrato,
                     FechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba,
                     FechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion,
-                    EvaluacionActualId = evaluacionActual?.Id,
+                    EvaluacionActualId = evaluacionActiva?.Id,
                     EvaluacionNormalCompleta = coberturaActual?.EvaluacionNormalCompleta ?? false,
                     EvaluacionSstCompleta = coberturaActual?.EvaluacionSstCompleta ?? false,
+                    PuedeIniciarEvaluacion = ventanaActiva != null,
+                    PuedeSolicitarActivacion = ventanaActiva == null,
+                    TieneEvaluacionActiva = evaluacionActiva != null,
                     ResultadoFinal = coberturaActual?.AmbasPartesCompletas == true
                         ? evaluacionActual?.Total ?? coberturaActual.TotalCalculado
                         : null
@@ -387,16 +397,20 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            var habilitadoPorFechas =
-                IsWithinWindow(usuario.FechaFinalizacionContrato) ||
-                IsWithinWindow(usuario.FechaFinalizacionPeriodoPrueba);
-            var habilitadoPorActivacion = IsWithinActivationWindow(usuario.FechaActivacionEvaluacion);
-            var puedeIniciar = habilitadoPorFechas || habilitadoPorActivacion;
+            var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
+            var evaluacionActiva = ventanaActiva == null
+                ? null
+                : await SelectPreferredEvaluacionAsync(
+                    (await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id))
+                    .Where(x => EvaluacionCicloHelper.PerteneceAVentanaInicial(x, ventanaActiva)));
+            var puedeIniciar = ventanaActiva != null;
 
             return Json(new
             {
                 puedeIniciar,
-                puedeSolicitar = !puedeIniciar,
+                puedeSolicitar = ventanaActiva == null,
+                tieneEvaluacionActiva = evaluacionActiva != null,
+                evaluacionActualId = evaluacionActiva?.Id,
                 fechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd")
             });
         }

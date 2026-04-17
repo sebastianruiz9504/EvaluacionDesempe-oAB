@@ -18,6 +18,17 @@
                     <p class="card-text mb-1"><strong>Proyecto:</strong> @(string.IsNullOrWhiteSpace(Model.Proyecto) ? "-" : Model.Proyecto)</p>
                     <p class="card-text mb-1"><strong>Nivel de evaluación:</strong> @Model.NombreNivel</p>
                     <p class="card-text mb-1"><strong>Tipo de evaluación:</strong> @Model.TipoEvaluacion</p>
+                    <p class="card-text mb-1">
+                        <strong>ID de evaluación:</strong>
+                        @if (Model.Id.HasValue)
+                        {
+                            <code>@Model.Id.Value</code>
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </p>
                     <p class="card-text mb-1"><strong>Alcance actual:</strong> @Model.AlcanceEvaluadorActual</p>
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <span class="badge @(Model.EvaluacionNormalCompleta ? "bg-success" : "bg-secondary")">

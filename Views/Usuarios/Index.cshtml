@@ -78,7 +78,11 @@ else
                                data-id="@u.Id"
                                data-fecha-finalizacion-contrato="@(u.FechaFinalizacionContrato?.ToString("yyyy-MM-dd") ?? "")"
                                data-fecha-finalizacion-prueba="@(u.FechaFinalizacionPeriodoPrueba?.ToString("yyyy-MM-dd") ?? "")"
-                               data-fecha-activacion-evaluacion="@(u.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd") ?? "")" />
+                               data-fecha-activacion-evaluacion="@(u.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd") ?? "")"
+                               data-puede-iniciar="@u.PuedeIniciarEvaluacion.ToString().ToLower()"
+                               data-puede-solicitar="@u.PuedeSolicitarActivacion.ToString().ToLower()"
+                               data-tiene-evaluacion-activa="@u.TieneEvaluacionActiva.ToString().ToLower()"
+                               data-evaluacion-actual-id="@(u.EvaluacionActualId?.ToString() ?? string.Empty)" />
                     </td>
                     <td>
                         <a asp-controller="Usuarios" asp-action="Detalle" asp-route-id="@u.Id" class="link-primary text-decoration-none">
@@ -121,9 +125,13 @@ else
             const solicitarBtn = document.getElementById('solicitarActivacionBtn');
             const evalInputId = document.getElementById('usuarioEvaluacionId');
             const estadoActivacionUrlBase = '@Url.Action("EstadoActivacion", "Usuarios")';
+            const iniciarBtnDefaultText = iniciarBtn?.textContent?.trim() || 'Iniciar evaluación';
 
-            const setButtonsState = (canStart, canRequest) => {
-                if (iniciarBtn) iniciarBtn.disabled = !canStart;
+            const setButtonsState = (canStart, canRequest, hasActiveEvaluation) => {
+                if (iniciarBtn) {
+                    iniciarBtn.disabled = !canStart;
+                    iniciarBtn.textContent = hasActiveEvaluation ? 'Continuar evaluación' : iniciarBtnDefaultText;
+                }
 
                 if (solicitarBtn) {
                     if (canRequest) {
@@ -137,52 +145,23 @@ else
                 }
             };
 
-            const parseDate = (value) => {
-                if (!value) return null;
-                const date = new Date(`${value}T00:00:00`);
-                return Number.isNaN(date.getTime()) ? null : date;
-            };
-
-            const isWithinWindow = (targetDate, windowDays = 25) => {
-                if (!targetDate) return false;
-                const start = new Date(targetDate);
-                start.setDate(start.getDate() - windowDays);
-                const end = new Date(targetDate);
-                const now = new Date();
-                return now >= start && now <= end;
-            };
-
-            const isWithinActivationWindow = (activationDate, windowDays = 25) => {
-                if (!activationDate) return false;
-                const start = new Date(activationDate);
-                const end = new Date(activationDate);
-                end.setDate(end.getDate() + windowDays);
-                const now = new Date();
-                return now >= start && now <= end;
-            };
-
             const updateSelection = () => {
                 const selected = document.querySelector('.usuario-select:checked');
                 if (!evalInputId) return;
 
                 if (!selected) {
                     evalInputId.value = '';
-                    setButtonsState(false, false);
+                    setButtonsState(false, false, false);
                     return;
                 }
 
                 evalInputId.value = selected.dataset.id || '';
                 if (solicitarBtn) solicitarBtn.dataset.userId = selected.dataset.id || '';
-
-                const fechaContrato = parseDate(selected.dataset.fechaFinalizacionContrato);
-                const fechaPrueba = parseDate(selected.dataset.fechaFinalizacionPrueba);
-                const fechaActivacion = parseDate(selected.dataset.fechaActivacionEvaluacion);
-
-                const habilitadoPorFechas = isWithinWindow(fechaContrato) || isWithinWindow(fechaPrueba);
-                const habilitadoPorActivacion = isWithinActivationWindow(fechaActivacion);
-                const puedeIniciar = habilitadoPorFechas || habilitadoPorActivacion;
-
-                setButtonsState(puedeIniciar, !puedeIniciar);
+                const puedeIniciar = selected.dataset.puedeIniciar === 'true';
+                const puedeSolicitar = selected.dataset.puedeSolicitar === 'true';
+                const tieneEvaluacionActiva = selected.dataset.tieneEvaluacionActiva === 'true' ||
+                    !!selected.dataset.evaluacionActualId;
+                setButtonsState(puedeIniciar, puedeSolicitar, tieneEvaluacionActiva);
             };
 
             const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -197,7 +176,13 @@ else
                 if (!response.ok) throw new Error('No fue posible consultar el estado de activación.');
 
                 const data = await response.json();
-                if (selectedCheckbox) selectedCheckbox.dataset.fechaActivacionEvaluacion = data.fechaActivacionEvaluacion || '';
+                if (selectedCheckbox) {
+                    selectedCheckbox.dataset.fechaActivacionEvaluacion = data.fechaActivacionEvaluacion || '';
+                    selectedCheckbox.dataset.puedeIniciar = data.puedeIniciar === true ? 'true' : 'false';
+                    selectedCheckbox.dataset.puedeSolicitar = data.puedeSolicitar === true ? 'true' : 'false';
+                    selectedCheckbox.dataset.tieneEvaluacionActiva = data.tieneEvaluacionActiva === true ? 'true' : 'false';
+                    selectedCheckbox.dataset.evaluacionActualId = data.evaluacionActualId || '';
+                }
                 updateSelection();
                 return data.puedeIniciar === true;
             };

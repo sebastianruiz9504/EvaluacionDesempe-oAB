@@ -141,6 +141,7 @@ else
         <thead class="table-light">
             <tr>
                 <th style="width: 90px;">Seleccionar</th>
+                <th>ID evaluación</th>
                 <th>Fecha evaluación</th>
                 <th>Próxima evaluación</th>
                 <th>Nombre</th>
@@ -169,6 +170,7 @@ else
                            class="form-check-input"
                            aria-label="Seleccionar evaluación de @e.NombreUsuario" />
                 </td>
+                <td><code>@e.Id</code></td>
                 <td>@e.FechaEvaluacion.ToShortDateString()</td>
                 <td>
                     @if (e.ProximaEvaluacion.HasValue)
