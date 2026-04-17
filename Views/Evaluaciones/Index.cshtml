@@ -7,6 +7,7 @@
     var proyectoFiltro = ViewData["ProyectoFiltro"] as string;
     var hayEvaluaciones = Model.Any();
     var esSuperAdmin = ViewBag.EsSuperAdmin is bool valor && valor;
+    var puedeEliminarEvaluaciones = ViewBag.PuedeEliminarEvaluaciones is bool valorEliminar && valorEliminar;
     var tiposFormularioCertificado = ViewBag.TiposFormularioCertificado as List<TipoFormularioOpcionViewModel> ?? new();
     var errorCarga = ViewBag.ErrorCargaEvaluaciones as string;
     var advertenciaCarga = ViewBag.AdvertenciaCargaEvaluaciones as string;
@@ -62,6 +63,7 @@
          data-base-reevaluar="@Url.Action("Reevaluar", "Evaluaciones")"
          data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
          data-base-exportar="@Url.Action("ExportarExcel", "Evaluaciones")"
+         data-base-eliminar="@(puedeEliminarEvaluaciones ? Url.Action("Eliminar", "Evaluaciones") : string.Empty)"
          data-base-subir-reporte="@Url.Action("SubirReporteFirmado", "Evaluaciones")">
         <div class="card-body">
             <div class="row g-3 align-items-end">
@@ -122,6 +124,15 @@
                                     disabled>
                                 Exportar resultados
                             </button>
+                            @if (puedeEliminarEvaluaciones)
+                            {
+                                <button id="accionEliminar"
+                                        type="button"
+                                        class="btn btn-sm btn-outline-danger"
+                                        disabled>
+                                    Eliminar seleccionadas
+                                </button>
+                            }
                         </div>
                     </div>
                 }
@@ -296,6 +307,9 @@ else
 <form id="exportarExcelToken" method="post" class="d-none">
     @Html.AntiForgeryToken()
 </form>
+<form id="eliminarEvaluacionesToken" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
 <input id="archivoReporteFirmadoInput"
        type="file"
        class="d-none"
@@ -335,6 +349,7 @@ else
             const accionReevaluar = document.getElementById("accionReevaluar");
             const accionCarpeta = document.getElementById("accionCarpeta");
             const accionExportar = document.getElementById("accionExportar");
+            const accionEliminar = document.getElementById("accionEliminar");
             const accionSubirReporte = document.getElementById("accionSubirReporte");
             const archivoReporteFirmadoInput = document.getElementById("archivoReporteFirmadoInput");
             const barraProgresoExportacion = document.getElementById("barraProgresoExportacion");
@@ -343,8 +358,10 @@ else
             const baseReevaluar = acciones?.dataset.baseReevaluar ?? "";
             const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
             const baseExportar = acciones?.dataset.baseExportar ?? "";
+            const baseEliminar = acciones?.dataset.baseEliminar ?? "";
             const baseSubirReporte = acciones?.dataset.baseSubirReporte ?? "";
             const tokenExportarInput = document.querySelector('#exportarExcelToken input[name="__RequestVerificationToken"]');
+            const tokenEliminarInput = document.querySelector('#eliminarEvaluacionesToken input[name="__RequestVerificationToken"]');
             const modalExportarElement = document.getElementById("modalExportandoResultados");
             const modalExportar = modalExportarElement && window.bootstrap?.Modal
                 ? new window.bootstrap.Modal(modalExportarElement, { backdrop: "static", keyboard: false })
@@ -373,6 +390,12 @@ else
             const setExportDisabled = (disabled) => {
                 if (accionExportar instanceof HTMLButtonElement) {
                     accionExportar.disabled = disabled;
+                }
+            };
+
+            const setDeleteDisabled = (disabled) => {
+                if (accionEliminar instanceof HTMLButtonElement) {
+                    accionEliminar.disabled = disabled;
                 }
             };
 
@@ -441,11 +464,13 @@ else
                 updateSelectionState(selectedRows);
                 const row = selectedRows.length === 1 ? selectedRows[0] : null;
 
+                setExportDisabled(selectedRows.length === 0);
+                setDeleteDisabled(selectedRows.length === 0);
+
                 if (!row) {
                     setDisabled(accionImprimir, true);
                     setDisabled(accionReevaluar, true);
                     setDisabled(accionCarpeta, true);
-                    setExportDisabled(selectedRows.length === 0);
                     setUploadDisabled(true);
                     return;
                 }
@@ -461,7 +486,6 @@ else
                 setDisabled(accionImprimir, false);
                 setDisabled(accionCarpeta, false);
                 setDisabled(accionReevaluar, !puedeReevaluar);
-                setExportDisabled(false);
                 setUploadDisabled(false);
             };
 
@@ -575,6 +599,64 @@ else
                     .finally(() => {
                         finalizarBloqueoExportacion();
                     });
+            };
+
+            const eliminarSeleccion = async () => {
+                const idsSeleccionados = getIdsSeleccionados();
+                if (!idsSeleccionados.length || !baseEliminar || !(tokenEliminarInput instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                const mensajeConfirmacion = idsSeleccionados.length === 1
+                    ? "Se eliminará 1 evaluación y todos sus registros relacionados en Dataverse. Esta acción no se puede deshacer. ¿Deseas continuar?"
+                    : `Se eliminarán ${idsSeleccionados.length} evaluaciones y todos sus registros relacionados en Dataverse. Esta acción no se puede deshacer. ¿Deseas continuar?`;
+
+                if (!window.confirm(mensajeConfirmacion)) {
+                    return;
+                }
+
+                const textoOriginal = accionEliminar instanceof HTMLButtonElement
+                    ? accionEliminar.textContent
+                    : "Eliminar seleccionadas";
+
+                if (accionEliminar instanceof HTMLButtonElement) {
+                    accionEliminar.disabled = true;
+                    accionEliminar.textContent = "Eliminando...";
+                }
+
+                try {
+                    const response = await fetch(baseEliminar, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "RequestVerificationToken": tokenEliminarInput.value
+                        },
+                        body: JSON.stringify({ ids: idsSeleccionados })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(await response.text());
+                    }
+
+                    const data = await response.json();
+                    if (data?.message) {
+                        window.alert(data.message);
+                    }
+
+                    window.location.reload();
+                } catch (error) {
+                    const mensajeError = error instanceof Error && error.message
+                        ? error.message
+                        : "No fue posible eliminar las evaluaciones seleccionadas.";
+
+                    window.alert(mensajeError);
+                } finally {
+                    if (accionEliminar instanceof HTMLButtonElement) {
+                        accionEliminar.textContent = textoOriginal ?? "Eliminar seleccionadas";
+                    }
+
+                    updateLinks();
+                }
             };
 
             const actualizarCeldaReporte = (evaluacionId, fileName, downloadUrl) => {
@@ -693,6 +775,10 @@ else
 
             if (accionExportar instanceof HTMLButtonElement) {
                 accionExportar.addEventListener("click", exportarSeleccion);
+            }
+
+            if (accionEliminar instanceof HTMLButtonElement) {
+                accionEliminar.addEventListener("click", eliminarSeleccion);
             }
 
             if (accionSubirReporte instanceof HTMLButtonElement && archivoReporteFirmadoInput instanceof HTMLInputElement) {

@@ -47,8 +47,14 @@ namespace EvaluacionDesempenoAB.Controllers
             public List<Guid> Ids { get; init; } = new();
         }
 
+        public sealed class EliminarEvaluacionesRequest
+        {
+            public List<Guid> Ids { get; init; } = new();
+        }
+
         private const int OportunidadMejoraPuntajeMinimo = 70;
         private const int OportunidadMejoraPuntajeMaximo = 85;
+        private const string DeleteAuthorizedEmail = "jully.pinto@aguasdebogota.com.co";
 
         public EvaluacionesController(IEvaluacionRepository repo, ILogger<EvaluacionesController> logger)
         {
@@ -61,6 +67,24 @@ namespace EvaluacionDesempenoAB.Controllers
             return User.FindFirst("preferred_username")?.Value
                    ?? User.FindFirst(ClaimTypes.Email)?.Value
                    ?? User.FindFirst(ClaimTypes.Upn)?.Value;
+        }
+
+        private static bool EsUsuarioAutorizadoParaEliminar(string? correo)
+            => !string.IsNullOrWhiteSpace(correo) &&
+               string.Equals(
+                   correo.Trim(),
+                   DeleteAuthorizedEmail,
+                   StringComparison.OrdinalIgnoreCase);
+
+        private bool PuedeEliminarEvaluaciones(UsuarioEvaluado? evaluador = null)
+        {
+            if (!_repo.IsDataverseBacked)
+            {
+                return false;
+            }
+
+            return EsUsuarioAutorizadoParaEliminar(evaluador?.CorreoElectronico) ||
+                   EsUsuarioAutorizadoParaEliminar(GetUserEmail());
         }
 
         private string GetCorreoActual(UsuarioEvaluado evaluador)
@@ -643,6 +667,7 @@ namespace EvaluacionDesempenoAB.Controllers
             ViewData["CedulaFiltro"] = cedula;
             ViewData["ProyectoFiltro"] = proyecto;
             ViewBag.EsSuperAdmin = evaluador.EsSuperAdministrador;
+            ViewBag.PuedeEliminarEvaluaciones = PuedeEliminarEvaluaciones(evaluador);
             ViewBag.TiposFormularioCertificado = evaluador.EsSuperAdministrador
                 ? BuildTipoFormularioOpciones()
                 : new List<TipoFormularioOpcionViewModel>();
@@ -773,6 +798,86 @@ namespace EvaluacionDesempenoAB.Controllers
 
                 return View(new List<EvaluacionListaViewModel>());
             }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Eliminar([FromBody] EliminarEvaluacionesRequest request)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            if (!PuedeEliminarEvaluaciones(evaluador))
+            {
+                return Forbid();
+            }
+
+            if (!_repo.IsDataverseBacked)
+            {
+                return StatusCode(
+                    503,
+                    "La conexión activa a Dataverse no está disponible. Se bloqueó la eliminación para evitar borrar solo en memoria.");
+            }
+
+            var ids = request?.Ids?
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList()
+                ?? new List<Guid>();
+
+            if (!ids.Any())
+            {
+                return BadRequest("Debes seleccionar al menos una evaluación.");
+            }
+
+            var idsSolicitados = ids.ToHashSet();
+            var evaluacionesVisibles = await GetEvaluacionesVisiblesAsync(evaluador);
+            var idsPermitidos = evaluacionesVisibles
+                .Where(e => idsSolicitados.Contains(e.Id))
+                .Select(e => e.Id)
+                .ToHashSet();
+
+            if (idsPermitidos.Count != idsSolicitados.Count)
+            {
+                return Forbid();
+            }
+
+            var eliminadas = 0;
+
+            try
+            {
+                foreach (var evaluacionId in ids)
+                {
+                    await _repo.DeleteEvaluacionAsync(evaluacionId);
+                    eliminadas++;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "No fue posible eliminar las evaluaciones seleccionadas en Dataverse para el usuario {Correo}.",
+                    GetCorreoActual(evaluador));
+
+                var mensaje = eliminadas == 0
+                    ? "No fue posible eliminar las evaluaciones seleccionadas en Dataverse."
+                    : $"Se eliminaron {eliminadas} evaluaciones antes de que ocurriera un error. Revisa el estado en Dataverse antes de reintentar.";
+
+                return StatusCode(500, mensaje);
+            }
+
+            var mensajeExito = eliminadas == 1
+                ? "La evaluación y sus registros relacionados se eliminaron correctamente de Dataverse."
+                : $"Se eliminaron {eliminadas} evaluaciones y sus registros relacionados directamente de Dataverse.";
+
+            return Json(new
+            {
+                deletedCount = eliminadas,
+                message = mensajeExito
+            });
         }
 
         // ================== NUEVA EVALUACIÓN ==================

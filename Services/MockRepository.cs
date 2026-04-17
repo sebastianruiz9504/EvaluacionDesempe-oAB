@@ -9,6 +9,8 @@ namespace EvaluacionDesempenoAB.Services
 {
     public class MockRepository : IEvaluacionRepository
     {
+        public bool IsDataverseBacked => false;
+
         private readonly List<UsuarioEvaluado> _usuarios;
         private readonly List<NivelEvaluacion> _niveles;
         private readonly List<Competencia> _competencias;
@@ -414,6 +416,34 @@ namespace EvaluacionDesempenoAB.Services
             }
 
             return Task.CompletedTask;
+        }
+
+        public Task DeleteEvaluacionAsync(Guid evaluacionId)
+        {
+            DeleteEvaluacionRecursive(evaluacionId, new HashSet<Guid>());
+            return Task.CompletedTask;
+        }
+
+        private void DeleteEvaluacionRecursive(Guid evaluacionId, HashSet<Guid> visitados)
+        {
+            if (evaluacionId == Guid.Empty || !visitados.Add(evaluacionId))
+            {
+                return;
+            }
+
+            var evaluacionesRelacionadas = _evaluaciones
+                .Where(x => x.EvaluacionOrigenId == evaluacionId)
+                .Select(x => x.Id)
+                .ToList();
+
+            foreach (var relacionadaId in evaluacionesRelacionadas)
+            {
+                DeleteEvaluacionRecursive(relacionadaId, visitados);
+            }
+
+            _detalles.RemoveAll(x => x.EvaluacionId == evaluacionId);
+            _planes.RemoveAll(x => x.EvaluacionId == evaluacionId);
+            _evaluaciones.RemoveAll(x => x.Id == evaluacionId);
         }
 
         public Task<List<EvaluacionDetalle>> GetDetallesByEvaluacionAsync(Guid evaluacionId)

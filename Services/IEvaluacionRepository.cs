@@ -8,6 +8,8 @@ namespace EvaluacionDesempenoAB.Services
 {
     public interface IEvaluacionRepository
     {
+        bool IsDataverseBacked { get; }
+
         // === USUARIOS ===
 
         // Traer un usuario (evaluador) por su correo electrónico
@@ -64,6 +66,8 @@ namespace EvaluacionDesempenoAB.Services
         Task UpdateEvaluacionAsync(Evaluacion evaluacion,
                                    List<EvaluacionDetalle> detalles,
                                    List<PlanAccion> planAccion);
+
+        Task DeleteEvaluacionAsync(Guid evaluacionId);
 
         // Detalles y planes
         Task<List<EvaluacionDetalle>> GetDetallesByEvaluacionAsync(Guid evaluacionId);

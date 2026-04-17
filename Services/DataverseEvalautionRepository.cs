@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,6 +18,7 @@ namespace EvaluacionDesempenoAB.Services
     public class DataverseEvaluacionRepository : IEvaluacionRepository
     {
         private readonly ServiceClient _client;
+        private readonly ConcurrentDictionary<string, IReadOnlyList<ChildRelationshipInfo>> _childRelationshipsCache = new(StringComparer.OrdinalIgnoreCase);
 
         // TABLAS DE CATÁLOGO
         private const string NivelTable          = "crfb7_nivel";
@@ -32,6 +34,14 @@ namespace EvaluacionDesempenoAB.Services
         private const string FirmaUsuarioColumn = "cr3d2_firma";
         private const string ReporteFirmadoColumn = "cr3d2_reportefirmado";
         private const string ReporteFirmadoNombreColumn = "cr3d2_reportefirmado_name";
+
+        private sealed class ChildRelationshipInfo
+        {
+            public string ReferencingEntity { get; init; } = string.Empty;
+            public string ReferencingAttribute { get; init; } = string.Empty;
+        }
+
+        public bool IsDataverseBacked => true;
 
         public DataverseEvaluacionRepository(ServiceClient client)
         {
@@ -963,9 +973,146 @@ namespace EvaluacionDesempenoAB.Services
             await SaveDetallesYPlanesAsync(evaluacion.Id, detalles, planAccion);
         }
 
+        public Task DeleteEvaluacionAsync(Guid evaluacionId)
+        {
+            if (evaluacionId == Guid.Empty)
+            {
+                return Task.CompletedTask;
+            }
+
+            return DeleteEntityCascadeAsync(
+                EvaluacionTable,
+                evaluacionId,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+
         // =====================================================
         // DETALLES (crfb7_detalledeevaluacion) & PLANES (crfb7_plandeaccion)
         // =====================================================
+
+        private async Task DeleteEntityCascadeAsync(
+            string entityLogicalName,
+            Guid recordId,
+            HashSet<string> visitados)
+        {
+            if (recordId == Guid.Empty)
+            {
+                return;
+            }
+
+            var visitKey = $"{entityLogicalName}:{recordId:D}";
+            if (!visitados.Add(visitKey))
+            {
+                return;
+            }
+
+            foreach (var childRelationship in GetChildRelationships(entityLogicalName))
+            {
+                var childIds = await GetChildRecordIdsAsync(
+                    childRelationship.ReferencingEntity,
+                    childRelationship.ReferencingAttribute,
+                    recordId);
+
+                foreach (var childId in childIds)
+                {
+                    await DeleteEntityCascadeAsync(
+                        childRelationship.ReferencingEntity,
+                        childId,
+                        visitados);
+                }
+            }
+
+            await _client.DeleteAsync(entityLogicalName, recordId);
+        }
+
+        private IReadOnlyList<ChildRelationshipInfo> GetChildRelationships(string entityLogicalName)
+        {
+            return _childRelationshipsCache.GetOrAdd(entityLogicalName, logicalName =>
+            {
+                var request = new RetrieveEntityRequest
+                {
+                    LogicalName = logicalName,
+                    EntityFilters = EntityFilters.Relationships
+                };
+
+                var response = (RetrieveEntityResponse)_client.Execute(request);
+                return response.EntityMetadata?.OneToManyRelationships?
+                    .Where(relationship => ShouldCascadeDeleteRelationship(logicalName, relationship))
+                    .Select(relationship => new ChildRelationshipInfo
+                    {
+                        ReferencingEntity = relationship.ReferencingEntity ?? string.Empty,
+                        ReferencingAttribute = relationship.ReferencingAttribute ?? string.Empty
+                    })
+                    .GroupBy(
+                        relationship => $"{relationship.ReferencingEntity}:{relationship.ReferencingAttribute}",
+                        StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group.First())
+                    .ToList()
+                    ?? new List<ChildRelationshipInfo>();
+            });
+        }
+
+        private async Task<List<Guid>> GetChildRecordIdsAsync(
+            string entityLogicalName,
+            string referencingAttribute,
+            Guid referencedRecordId)
+        {
+            var ids = new List<Guid>();
+            var pageInfo = new PagingInfo
+            {
+                Count = 5000,
+                PageNumber = 1
+            };
+
+            while (true)
+            {
+                var query = new QueryExpression(entityLogicalName)
+                {
+                    ColumnSet = new ColumnSet(false),
+                    PageInfo = pageInfo
+                };
+
+                query.Criteria.AddCondition(referencingAttribute, ConditionOperator.Equal, referencedRecordId);
+
+                var result = await _client.RetrieveMultipleAsync(query);
+                ids.AddRange(result.Entities.Select(entity => entity.Id).Where(id => id != Guid.Empty));
+
+                if (!result.MoreRecords)
+                {
+                    break;
+                }
+
+                pageInfo.PageNumber++;
+                pageInfo.PagingCookie = result.PagingCookie;
+            }
+
+            return ids
+                .Distinct()
+                .ToList();
+        }
+
+        private static bool ShouldCascadeDeleteRelationship(
+            string parentEntityLogicalName,
+            OneToManyRelationshipMetadata relationship)
+        {
+            if (!string.Equals(
+                    relationship.ReferencedEntity,
+                    parentEntityLogicalName,
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(relationship.ReferencingEntity) ||
+                string.IsNullOrWhiteSpace(relationship.ReferencingAttribute))
+            {
+                return false;
+            }
+
+            return IsAppManagedEntity(relationship.ReferencingEntity);
+        }
+
+        private static bool IsAppManagedEntity(string entityLogicalName)
+        {
+            return entityLogicalName.StartsWith("crfb7_", StringComparison.OrdinalIgnoreCase) ||
+                   entityLogicalName.StartsWith("cr3d2_", StringComparison.OrdinalIgnoreCase);
+        }
 
         private async Task SaveDetallesYPlanesAsync(Guid evalId,
                                                     List<EvaluacionDetalle> detalles,
