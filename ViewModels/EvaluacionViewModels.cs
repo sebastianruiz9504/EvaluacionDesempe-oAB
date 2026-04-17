@@ -28,7 +28,6 @@ namespace EvaluacionDesempenoAB.ViewModels
         public decimal? ResultadoEvaluacionSst { get; set; }
         public bool EvaluacionNormalCompleta { get; set; }
         public bool EvaluacionSstCompleta { get; set; }
-        public bool PuedeReevaluar { get; set; }
         public bool TieneReporteFirmado { get; set; }
         public string? ReporteFirmadoNombre { get; set; }
     }

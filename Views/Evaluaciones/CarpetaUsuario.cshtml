@@ -107,19 +107,9 @@ else
                     <a asp-controller="Evaluaciones"
                        asp-action="Reporte"
                        asp-route-id="@e.Id"
-                       class="btn btn-sm btn-outline-primary me-2">
+                       class="btn btn-sm btn-outline-primary">
                         Ver reporte
                     </a>
-
-                    @if (e.PuedeReevaluar)
-                    {
-                        <a asp-controller="Evaluaciones"
-                           asp-action="Reevaluar"
-                           asp-route-id="@e.Id"
-                           class="btn btn-sm btn-warning">
-                            Reevaluar
-                        </a>
-                    }
                 </td>
             </tr>
         }

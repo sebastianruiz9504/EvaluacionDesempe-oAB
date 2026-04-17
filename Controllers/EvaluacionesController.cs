@@ -398,6 +398,70 @@ namespace EvaluacionDesempenoAB.Controllers
             };
         }
 
+        private static bool EsEvaluacionInicial(Evaluacion evaluacion)
+            => evaluacion.Id != Guid.Empty &&
+               !evaluacion.EvaluacionOrigenId.HasValue &&
+               string.Equals(evaluacion.TipoEvaluacion, "Inicial", StringComparison.OrdinalIgnoreCase);
+
+        private async Task<EvaluacionCoberturaInfo> GetCoberturaAsync(
+            Evaluacion evaluacion,
+            IReadOnlyCollection<Competencia>? competencias = null,
+            IDictionary<Guid, List<Comportamiento>>? comportamientosPorNivel = null,
+            IDictionary<Guid, EvaluacionCoberturaInfo>? coberturasPorEvaluacion = null)
+        {
+            if (coberturasPorEvaluacion != null &&
+                coberturasPorEvaluacion.TryGetValue(evaluacion.Id, out var coberturaCacheada))
+            {
+                return coberturaCacheada;
+            }
+
+            competencias ??= await _repo.GetCompetenciasAsync();
+            comportamientosPorNivel ??= new Dictionary<Guid, List<Comportamiento>>();
+
+            if (!comportamientosPorNivel.TryGetValue(evaluacion.NivelId, out var comportamientos))
+            {
+                comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
+                comportamientosPorNivel[evaluacion.NivelId] = comportamientos;
+            }
+
+            var detalles = await _repo.GetDetallesByEvaluacionAsync(evaluacion.Id);
+            var cobertura = BuildCobertura(detalles, competencias, comportamientos);
+
+            if (coberturasPorEvaluacion != null)
+            {
+                coberturasPorEvaluacion[evaluacion.Id] = cobertura;
+            }
+
+            return cobertura;
+        }
+
+        private async Task<Evaluacion?> GetEvaluacionInicialPendienteAsync(
+            Guid usuarioId,
+            IReadOnlyCollection<Competencia>? competencias = null,
+            IDictionary<Guid, List<Comportamiento>>? comportamientosPorNivel = null,
+            IDictionary<Guid, EvaluacionCoberturaInfo>? coberturasPorEvaluacion = null)
+        {
+            var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuarioId);
+
+            foreach (var evaluacion in evaluaciones
+                         .Where(EsEvaluacionInicial)
+                         .OrderByDescending(x => x.FechaEvaluacion))
+            {
+                var cobertura = await GetCoberturaAsync(
+                    evaluacion,
+                    competencias,
+                    comportamientosPorNivel,
+                    coberturasPorEvaluacion);
+
+                if (!cobertura.AmbasPartesCompletas)
+                {
+                    return evaluacion;
+                }
+            }
+
+            return null;
+        }
+
         private static List<EvaluacionDetalle> MergeDetalles(
             IEnumerable<EvaluacionDetalle> existentes,
             IEnumerable<EvaluacionDetalle> nuevos,
@@ -623,6 +687,20 @@ namespace EvaluacionDesempenoAB.Controllers
                 }
             }
 
+            var competencias = await _repo.GetCompetenciasAsync();
+            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
+            var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
+            var evaluacionInicialPendiente = await GetEvaluacionInicialPendienteAsync(
+                usuarioObjetivo.Id,
+                competencias,
+                comportamientosPorNivel,
+                coberturasPorEvaluacion);
+
+            if (evaluacionInicialPendiente != null)
+            {
+                return evaluacionInicialPendiente;
+            }
+
             var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuarioObjetivo);
             if (ventanaActiva == null)
             {
@@ -632,17 +710,44 @@ namespace EvaluacionDesempenoAB.Controllers
             var evaluacionInicialActiva = await GetEvaluacionInicialActivaAsync(usuarioObjetivo.Id, ventanaActiva);
             if (evaluacionInicialActiva != null)
             {
-                return evaluacionInicialActiva;
+                var coberturaActiva = await GetCoberturaAsync(
+                    evaluacionInicialActiva,
+                    competencias,
+                    comportamientosPorNivel,
+                    coberturasPorEvaluacion);
+
+                return coberturaActiva.AmbasPartesCompletas
+                    ? null
+                    : evaluacionInicialActiva;
             }
 
             var inicioLock = GetInicioEvaluacionLock(EvaluacionCicloHelper.BuildLockKey(usuarioObjetivo.Id, ventanaActiva));
             await inicioLock.WaitAsync();
             try
             {
+                evaluacionInicialPendiente = await GetEvaluacionInicialPendienteAsync(
+                    usuarioObjetivo.Id,
+                    competencias,
+                    comportamientosPorNivel,
+                    coberturasPorEvaluacion);
+
+                if (evaluacionInicialPendiente != null)
+                {
+                    return evaluacionInicialPendiente;
+                }
+
                 evaluacionInicialActiva = await GetEvaluacionInicialActivaAsync(usuarioObjetivo.Id, ventanaActiva);
                 if (evaluacionInicialActiva != null)
                 {
-                    return evaluacionInicialActiva;
+                    var coberturaActiva = await GetCoberturaAsync(
+                        evaluacionInicialActiva,
+                        competencias,
+                        comportamientosPorNivel,
+                        coberturasPorEvaluacion);
+
+                    return coberturaActiva.AmbasPartesCompletas
+                        ? null
+                        : evaluacionInicialActiva;
                 }
 
                 return await CreatePlaceholderEvaluacionAsync(
@@ -756,7 +861,6 @@ namespace EvaluacionDesempenoAB.Controllers
                         ResultadoEvaluacionSst = cobertura.TotalEvaluacionSstCalculado,
                         EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
                         EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
-                        PuedeReevaluar = evaluacion.TipoEvaluacion == "Inicial",
                         TieneReporteFirmado = evaluacion.TieneReporteFirmado,
                         ReporteFirmadoNombre = evaluacion.ReporteFirmadoNombre
                     });
@@ -902,6 +1006,20 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            var competencias = await _repo.GetCompetenciasAsync();
+            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
+            var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
+            var evaluacionPendiente = await GetEvaluacionInicialPendienteAsync(
+                usuarioId,
+                competencias,
+                comportamientosPorNivel,
+                coberturasPorEvaluacion);
+
+            if (evaluacionPendiente != null)
+            {
+                return RedirectToAction(nameof(Editar), new { id = evaluacionPendiente.Id });
+            }
+
             var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
             if (ventanaActiva == null)
             {
@@ -911,7 +1029,7 @@ namespace EvaluacionDesempenoAB.Controllers
             var evaluacionActiva = await GetEvaluacionInicialActivaAsync(usuarioId, ventanaActiva);
             if (evaluacionActiva != null)
             {
-                return RedirectToAction(nameof(Editar), new { id = evaluacionActiva.Id });
+                return BadRequest("La evaluación de esta ventana ya fue iniciada y no se puede repetir.");
             }
 
             var niveles = await _repo.GetNivelesActivosAsync();
@@ -950,11 +1068,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            if (!evaluacionOrigenId.HasValue && EvaluacionCicloHelper.ResolveVentanaActiva(usuario) == null)
-            {
-                return BadRequest("La evaluación solo se puede iniciar dentro del rango de fechas permitido o con una activación vigente.");
-            }
-
             var evaluacionEditable = await GetOrCreateEvaluacionEditableAsync(
                 evaluador,
                 usuario,
@@ -963,7 +1076,7 @@ namespace EvaluacionDesempenoAB.Controllers
 
             if (evaluacionEditable == null)
             {
-                return BadRequest("No fue posible iniciar la evaluación en este momento.");
+                return BadRequest("La evaluación no se puede iniciar nuevamente para esta ventana o está fuera del rango permitido.");
             }
 
             return RedirectToAction(nameof(Editar), new { id = evaluacionEditable.Id });
@@ -1191,43 +1304,11 @@ namespace EvaluacionDesempenoAB.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // ================== REEVALUAR (SEGUIMIENTO) ==================
-
         [HttpGet]
-        public async Task<IActionResult> Reevaluar(Guid id)
+        public IActionResult Reevaluar(Guid id)
         {
-            var evaluador = await GetEvaluadorActualAsync();
-            if (evaluador == null)
-            {
-                return Forbid();
-            }
-
-            var evaluacionOriginal = await _repo.GetEvaluacionByIdAsync(id);
-            if (evaluacionOriginal == null)
-            {
-                return NotFound();
-            }
-
-            if (!await PuedeAccederAEvaluacionAsync(evaluador, evaluacionOriginal))
-            {
-                return Forbid();
-            }
-
-            var seguimientoExistente = (await _repo.GetEvaluacionesByUsuarioAsync(evaluacionOriginal.UsuarioId))
-                .OrderByDescending(e => e.FechaEvaluacion)
-                .FirstOrDefault(e => e.EvaluacionOrigenId == evaluacionOriginal.Id);
-
-            if (seguimientoExistente != null)
-            {
-                return RedirectToAction(nameof(Editar), new { id = seguimientoExistente.Id });
-            }
-
-            return RedirectToAction(nameof(Formulario), new
-            {
-                usuarioId = evaluacionOriginal.UsuarioId,
-                nivelId = evaluacionOriginal.NivelId,
-                evaluacionOrigenId = evaluacionOriginal.Id
-            });
+            _ = id;
+            return BadRequest("La opción de reevaluar está deshabilitada.");
         }
 
         // ================== CARPETA POR USUARIO ==================
@@ -1297,7 +1378,6 @@ namespace EvaluacionDesempenoAB.Controllers
                     ResultadoEvaluacionSst = cobertura.TotalEvaluacionSstCalculado,
                     EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
                     EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
-                    PuedeReevaluar = evaluacion.TipoEvaluacion == "Inicial",
                     TieneReporteFirmado = evaluacion.TieneReporteFirmado,
                     ReporteFirmadoNombre = evaluacion.ReporteFirmadoNombre
                 });
@@ -1351,6 +1431,11 @@ namespace EvaluacionDesempenoAB.Controllers
             if (vm == null)
             {
                 return NotFound();
+            }
+
+            if (!vm.EvaluacionNormalCompleta || !vm.EvaluacionSstCompleta)
+            {
+                return BadRequest("El certificado solo se puede exportar cuando ambas partes hayan completado la evaluación.");
             }
 
             return View("ReporteImpresion", vm);

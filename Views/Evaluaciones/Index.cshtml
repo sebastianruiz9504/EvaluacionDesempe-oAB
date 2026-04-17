@@ -60,7 +60,6 @@
     <div class="card mt-3 shadow-sm border-0"
          data-evaluaciones-acciones
          data-base-imprimir="@Url.Action("ImprimirResultados", "Evaluaciones")"
-         data-base-reevaluar="@Url.Action("Reevaluar", "Evaluaciones")"
          data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
          data-base-exportar="@Url.Action("ExportarExcel", "Evaluaciones")"
          data-base-eliminar="@(puedeEliminarEvaluaciones ? Url.Action("Eliminar", "Evaluaciones") : string.Empty)"
@@ -100,12 +99,6 @@
                                href="#"
                                aria-disabled="true">
                                 Carpeta usuario
-                            </a>
-                            <a id="accionReevaluar"
-                               class="btn btn-sm btn-warning disabled"
-                               href="#"
-                               aria-disabled="true">
-                                Reevaluar
                             </a>
                             <button id="accionSubirReporte"
                                     type="button"
@@ -213,7 +206,7 @@ else
             {
                 <tr data-evaluacion-id="@e.Id"
                     data-usuario-id="@e.UsuarioId"
-                    data-puede-reevaluar="@e.PuedeReevaluar.ToString().ToLower()"
+                    data-puede-imprimir="@((e.EvaluacionNormalCompleta && e.EvaluacionSstCompleta).ToString().ToLower())"
                     data-proyecto="@e.ProyectoUsuario"
                     data-cedula="@e.CedulaUsuario">
                     <td class="text-center">
@@ -346,7 +339,6 @@ else
             const resumenSeleccion = document.getElementById("resumenSeleccion");
             const ayudaAccionesEvaluaciones = document.getElementById("ayudaAccionesEvaluaciones");
             const accionImprimir = document.getElementById("accionImprimir");
-            const accionReevaluar = document.getElementById("accionReevaluar");
             const accionCarpeta = document.getElementById("accionCarpeta");
             const accionExportar = document.getElementById("accionExportar");
             const accionEliminar = document.getElementById("accionEliminar");
@@ -355,7 +347,6 @@ else
             const barraProgresoExportacion = document.getElementById("barraProgresoExportacion");
             const textoEstadoExportacion = document.getElementById("textoEstadoExportacion");
             const baseImprimir = acciones?.dataset.baseImprimir ?? "";
-            const baseReevaluar = acciones?.dataset.baseReevaluar ?? "";
             const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
             const baseExportar = acciones?.dataset.baseExportar ?? "";
             const baseEliminar = acciones?.dataset.baseEliminar ?? "";
@@ -452,7 +443,7 @@ else
                     if (!seleccionadas) {
                         ayudaAccionesEvaluaciones.textContent = "Selecciona una o varias evaluaciones para habilitar las acciones disponibles.";
                     } else if (seleccionadas === 1) {
-                        ayudaAccionesEvaluaciones.textContent = "Con una evaluación seleccionada puedes usar las acciones individuales y también exportar.";
+                        ayudaAccionesEvaluaciones.textContent = "Con una evaluación seleccionada puedes abrir su carpeta, adjuntar reporte y, si ambas partes completaron, imprimir el certificado.";
                     } else {
                         ayudaAccionesEvaluaciones.textContent = "Con varias evaluaciones seleccionadas puedes exportar; las demás acciones requieren una sola evaluación.";
                     }
@@ -469,7 +460,6 @@ else
 
                 if (!row) {
                     setDisabled(accionImprimir, true);
-                    setDisabled(accionReevaluar, true);
                     setDisabled(accionCarpeta, true);
                     setUploadDisabled(true);
                     return;
@@ -477,15 +467,13 @@ else
 
                 const evaluacionId = row.dataset.evaluacionId;
                 const usuarioId = row.dataset.usuarioId;
-                const puedeReevaluar = row.dataset.puedeReevaluar === "true";
+                const puedeImprimir = row.dataset.puedeImprimir === "true";
 
-                accionImprimir.href = `${baseImprimir}?id=${evaluacionId}`;
+                accionImprimir.href = puedeImprimir ? `${baseImprimir}?id=${evaluacionId}` : "#";
                 accionCarpeta.href = `${baseCarpeta}?usuarioId=${usuarioId}`;
-                accionReevaluar.href = puedeReevaluar ? `${baseReevaluar}?id=${evaluacionId}` : "#";
 
-                setDisabled(accionImprimir, false);
+                setDisabled(accionImprimir, !puedeImprimir);
                 setDisabled(accionCarpeta, false);
-                setDisabled(accionReevaluar, !puedeReevaluar);
                 setUploadDisabled(false);
             };
 
@@ -765,7 +753,7 @@ else
                 });
             }
 
-            [accionImprimir, accionReevaluar, accionCarpeta].forEach((accion) => {
+            [accionImprimir, accionCarpeta].forEach((accion) => {
                 accion?.addEventListener("click", (event) => {
                     if (accion.getAttribute("aria-disabled") === "true") {
                         event.preventDefault();
