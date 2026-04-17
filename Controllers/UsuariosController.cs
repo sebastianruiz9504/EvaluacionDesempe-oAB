@@ -179,6 +179,26 @@ namespace EvaluacionDesempenoAB.Controllers
             return cobertura;
         }
 
+        private static bool EstaParteCompleta(EvaluacionCoberturaInfo cobertura, TipoParteEvaluacion parte)
+        {
+            if (parte == (TipoParteEvaluacion.Normal | TipoParteEvaluacion.Sst))
+            {
+                return cobertura.AmbasPartesCompletas;
+            }
+
+            if (EvaluacionRolesHelper.TieneParte(parte, TipoParteEvaluacion.Normal))
+            {
+                return cobertura.EvaluacionNormalCompleta;
+            }
+
+            if (EvaluacionRolesHelper.TieneParte(parte, TipoParteEvaluacion.Sst))
+            {
+                return cobertura.EvaluacionSstCompleta;
+            }
+
+            return false;
+        }
+
         // ================== ACCIONES ==================
 
         public async Task<IActionResult> Index(string? cedula)
@@ -204,15 +224,19 @@ namespace EvaluacionDesempenoAB.Controllers
 
             foreach (var usuario in usuarios)
             {
+                var parteActual = EvaluacionRolesHelper.ResolveParte(
+                    usuario,
+                    GetCorreoActual(evaluador),
+                    evaluador.EsSuperAdministrador);
                 var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id);
                 var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
-                var evaluacionActiva = ventanaActiva == null
+                var evaluacionGuardadaEnVentana = ventanaActiva == null
                     ? null
                     : await SelectPreferredEvaluacionAsync(
                         evaluaciones.Where(x => EvaluacionCicloHelper.PerteneceAVentanaInicial(x, ventanaActiva)));
                 Evaluacion? evaluacionActual = null;
                 EvaluacionCoberturaInfo? coberturaActual = null;
-                Evaluacion? evaluacionInicialPendiente = null;
+                Evaluacion? evaluacionPendienteParaParte = null;
                 var encontroEvaluacionPendiente = false;
 
                 foreach (var evaluacion in evaluaciones.OrderByDescending(e => e.FechaEvaluacion))
@@ -229,11 +253,11 @@ namespace EvaluacionDesempenoAB.Controllers
                         coberturaActual = cobertura;
                     }
 
-                    if (evaluacionInicialPendiente == null &&
+                    if (evaluacionPendienteParaParte == null &&
                         EsEvaluacionInicial(evaluacion) &&
-                        !cobertura.AmbasPartesCompletas)
+                        !EstaParteCompleta(cobertura, parteActual))
                     {
-                        evaluacionInicialPendiente = evaluacion;
+                        evaluacionPendienteParaParte = evaluacion;
                     }
 
                     if (!cobertura.AmbasPartesCompletas)
@@ -247,10 +271,8 @@ namespace EvaluacionDesempenoAB.Controllers
                     }
                 }
 
-                var tieneEvaluacionActiva = evaluacionInicialPendiente != null;
-                var puedeCrearNueva = ventanaActiva != null &&
-                                      evaluacionActiva == null &&
-                                      !tieneEvaluacionActiva;
+                var tieneEvaluacionActiva = evaluacionPendienteParaParte != null;
+                var puedeCrearNueva = ventanaActiva != null && evaluacionGuardadaEnVentana == null;
                 var puedeIniciarOContinuar = tieneEvaluacionActiva || puedeCrearNueva;
 
                 vm.Add(new UsuarioPortalEvaluadorViewModel
@@ -265,7 +287,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     FechaFinalizacionContrato = usuario.FechaFinalizacionContrato,
                     FechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba,
                     FechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion,
-                    EvaluacionActualId = evaluacionInicialPendiente?.Id,
+                    EvaluacionActualId = evaluacionPendienteParaParte?.Id,
                     EvaluacionNormalCompleta = coberturaActual?.EvaluacionNormalCompleta ?? false,
                     EvaluacionSstCompleta = coberturaActual?.EvaluacionSstCompleta ?? false,
                     PuedeIniciarEvaluacion = puedeIniciarOContinuar,
@@ -442,15 +464,19 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
+            var parteActual = EvaluacionRolesHelper.ResolveParte(
+                usuario,
+                GetCorreoActual(evaluador),
+                evaluador.EsSuperAdministrador);
             var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id);
-            var evaluacionActiva = ventanaActiva == null
+            var evaluacionGuardadaEnVentana = ventanaActiva == null
                 ? null
                 : await SelectPreferredEvaluacionAsync(
                     evaluaciones.Where(x => EvaluacionCicloHelper.PerteneceAVentanaInicial(x, ventanaActiva)));
             var competencias = await _repo.GetCompetenciasAsync();
             var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
             var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
-            Evaluacion? evaluacionInicialPendiente = null;
+            Evaluacion? evaluacionPendienteParaParte = null;
 
             foreach (var evaluacion in evaluaciones
                          .Where(EsEvaluacionInicial)
@@ -462,17 +488,15 @@ namespace EvaluacionDesempenoAB.Controllers
                     comportamientosPorNivel,
                     coberturasPorEvaluacion);
 
-                if (!cobertura.AmbasPartesCompletas)
+                if (!EstaParteCompleta(cobertura, parteActual))
                 {
-                    evaluacionInicialPendiente = evaluacion;
+                    evaluacionPendienteParaParte = evaluacion;
                     break;
                 }
             }
 
-            var tieneEvaluacionActiva = evaluacionInicialPendiente != null;
-            var puedeCrearNueva = ventanaActiva != null &&
-                                  evaluacionActiva == null &&
-                                  !tieneEvaluacionActiva;
+            var tieneEvaluacionActiva = evaluacionPendienteParaParte != null;
+            var puedeCrearNueva = ventanaActiva != null && evaluacionGuardadaEnVentana == null;
             var puedeIniciar = tieneEvaluacionActiva || puedeCrearNueva;
 
             return Json(new
@@ -480,7 +504,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 puedeIniciar,
                 puedeSolicitar = !puedeIniciar && ventanaActiva == null,
                 tieneEvaluacionActiva,
-                evaluacionActualId = evaluacionInicialPendiente?.Id,
+                evaluacionActualId = evaluacionPendienteParaParte?.Id,
                 fechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd")
             });
         }

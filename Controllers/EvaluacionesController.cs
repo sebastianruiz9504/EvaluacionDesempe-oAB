@@ -462,6 +462,167 @@ namespace EvaluacionDesempenoAB.Controllers
             return null;
         }
 
+        private static bool EstaParteCompleta(EvaluacionCoberturaInfo cobertura, TipoParteEvaluacion parte)
+        {
+            if (parte == (TipoParteEvaluacion.Normal | TipoParteEvaluacion.Sst))
+            {
+                return cobertura.AmbasPartesCompletas;
+            }
+
+            if (EvaluacionRolesHelper.TieneParte(parte, TipoParteEvaluacion.Normal))
+            {
+                return cobertura.EvaluacionNormalCompleta;
+            }
+
+            if (EvaluacionRolesHelper.TieneParte(parte, TipoParteEvaluacion.Sst))
+            {
+                return cobertura.EvaluacionSstCompleta;
+            }
+
+            return false;
+        }
+
+        private async Task<Evaluacion?> GetEvaluacionInicialPendienteParaParteAsync(
+            Guid usuarioId,
+            TipoParteEvaluacion parte,
+            IReadOnlyCollection<Competencia>? competencias = null,
+            IDictionary<Guid, List<Comportamiento>>? comportamientosPorNivel = null,
+            IDictionary<Guid, EvaluacionCoberturaInfo>? coberturasPorEvaluacion = null)
+        {
+            var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuarioId);
+
+            foreach (var evaluacion in evaluaciones
+                         .Where(EsEvaluacionInicial)
+                         .OrderByDescending(x => x.FechaEvaluacion))
+            {
+                var cobertura = await GetCoberturaAsync(
+                    evaluacion,
+                    competencias,
+                    comportamientosPorNivel,
+                    coberturasPorEvaluacion);
+
+                if (!EstaParteCompleta(cobertura, parte))
+                {
+                    return evaluacion;
+                }
+            }
+
+            return null;
+        }
+
+        private static string? MergeObservaciones(string? existentes, string? nuevas)
+        {
+            if (string.IsNullOrWhiteSpace(nuevas))
+            {
+                return existentes;
+            }
+
+            if (string.IsNullOrWhiteSpace(existentes))
+            {
+                return nuevas;
+            }
+
+            return string.Equals(existentes.Trim(), nuevas.Trim(), StringComparison.Ordinal)
+                ? existentes
+                : $"{existentes}{Environment.NewLine}{Environment.NewLine}{nuevas}";
+        }
+
+        private void ValidarGuardadoUnicoPorParte(
+            EvaluacionFormularioViewModel model,
+            IReadOnlySet<Guid> comportamientosParteActual)
+        {
+            var puntajesPorComportamiento = model.Competencias
+                .SelectMany(comp => comp.Comportamientos)
+                .Where(c => comportamientosParteActual.Contains(c.ComportamientoId))
+                .GroupBy(c => c.ComportamientoId)
+                .ToDictionary(g => g.Key, g => g.Last().Puntaje);
+
+            var faltantes = comportamientosParteActual.Count(id =>
+                !puntajesPorComportamiento.TryGetValue(id, out var puntaje) || !puntaje.HasValue);
+
+            if (faltantes > 0)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "Debes responder todos los comportamientos de tu bloque en un solo guardado. Después de guardar, tu parte quedará bloqueada.");
+            }
+        }
+
+        private async Task<EvaluacionFormularioViewModel> BuildFormularioViewModelAsync(
+            UsuarioEvaluado evaluador,
+            UsuarioEvaluado usuario,
+            NivelEvaluacion nivel,
+            Evaluacion? evaluacion = null,
+            Guid? evaluacionOrigenId = null)
+        {
+            var detalles = evaluacion == null
+                ? new List<EvaluacionDetalle>()
+                : await _repo.GetDetallesByEvaluacionAsync(evaluacion.Id);
+
+            var competencias = await _repo.GetCompetenciasAsync();
+            var competenciasById = BuildCompetenciasLookup(competencias);
+            var comportamientos = await _repo.GetComportamientosByNivelAsync(nivel.Id);
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            var comportamientosPermitidos = FilterComportamientosPermitidos(parteActual, comportamientos, competenciasById);
+            var cobertura = BuildCobertura(detalles, competencias, comportamientos);
+
+            var vm = new EvaluacionFormularioViewModel
+            {
+                Id = evaluacion?.Id,
+                UsuarioId = usuario.Id,
+                NivelId = nivel.Id,
+                NombreUsuario = usuario.NombreCompleto,
+                CedulaUsuario = usuario.Cedula,
+                Cargo = usuario.Cargo,
+                Gerencia = usuario.Gerencia,
+                Proyecto = evaluacion?.Proyecto ?? usuario.Proyecto,
+                NombreNivel = nivel.Nombre,
+                AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
+                EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
+                EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
+                ParteActualGuardada = evaluacion != null && EstaParteCompleta(cobertura, parteActual),
+                FechaEvaluacion = evaluacion?.FechaEvaluacion ?? DateTime.Today,
+                ObservacionesGenerales = evaluacion?.Observaciones,
+                TipoEvaluacion = evaluacion?.TipoEvaluacion ?? (evaluacionOrigenId.HasValue ? "Seguimiento" : "Inicial"),
+                EvaluacionOrigenId = evaluacion?.EvaluacionOrigenId ?? evaluacionOrigenId
+            };
+
+            foreach (var competencia in competencias.OrderBy(c => c.Orden))
+            {
+                if (!EvaluacionRolesHelper.DebeVerCompetencia(parteActual, competencia.Nombre))
+                {
+                    continue;
+                }
+
+                var compVm = new CompetenciaEvaluacionVm
+                {
+                    Nombre = competencia.Nombre
+                };
+
+                foreach (var comportamiento in comportamientosPermitidos
+                             .Where(x => x.CompetenciaId == competencia.Id)
+                             .OrderBy(x => x.Orden))
+                {
+                    var detalle = detalles.FirstOrDefault(d => d.ComportamientoId == comportamiento.Id);
+
+                    compVm.Comportamientos.Add(new ComportamientoEvaluacionVm
+                    {
+                        ComportamientoId = comportamiento.Id,
+                        Descripcion = comportamiento.Descripcion,
+                        Puntaje = detalle?.Puntaje,
+                        Comentario = detalle?.Comentario
+                    });
+                }
+
+                if (compVm.Comportamientos.Any())
+                {
+                    vm.Competencias.Add(compVm);
+                }
+            }
+
+            return vm;
+        }
+
         private static List<EvaluacionDetalle> MergeDetalles(
             IEnumerable<EvaluacionDetalle> existentes,
             IEnumerable<EvaluacionDetalle> nuevos,
@@ -1006,11 +1167,13 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            var parteActual = GetParteEvaluador(evaluador, usuario);
             var competencias = await _repo.GetCompetenciasAsync();
             var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
             var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
-            var evaluacionPendiente = await GetEvaluacionInicialPendienteAsync(
+            var evaluacionPendiente = await GetEvaluacionInicialPendienteParaParteAsync(
                 usuarioId,
+                parteActual,
                 competencias,
                 comportamientosPorNivel,
                 coberturasPorEvaluacion);
@@ -1029,7 +1192,15 @@ namespace EvaluacionDesempenoAB.Controllers
             var evaluacionActiva = await GetEvaluacionInicialActivaAsync(usuarioId, ventanaActiva);
             if (evaluacionActiva != null)
             {
-                return BadRequest("La evaluación de esta ventana ya fue iniciada y no se puede repetir.");
+                var coberturaActiva = await GetCoberturaAsync(
+                    evaluacionActiva,
+                    competencias,
+                    comportamientosPorNivel,
+                    coberturasPorEvaluacion);
+
+                return EstaParteCompleta(coberturaActiva, parteActual)
+                    ? BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.")
+                    : RedirectToAction(nameof(Editar), new { id = evaluacionActiva.Id });
             }
 
             var niveles = await _repo.GetNivelesActivosAsync();
@@ -1068,18 +1239,58 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            var evaluacionEditable = await GetOrCreateEvaluacionEditableAsync(
+            if (evaluacionOrigenId.HasValue)
+            {
+                return BadRequest("La opción de reevaluar está deshabilitada.");
+            }
+
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            var competencias = await _repo.GetCompetenciasAsync();
+            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
+            var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
+            var evaluacionPendiente = await GetEvaluacionInicialPendienteParaParteAsync(
+                usuarioId,
+                parteActual,
+                competencias,
+                comportamientosPorNivel,
+                coberturasPorEvaluacion);
+
+            if (evaluacionPendiente != null)
+            {
+                return RedirectToAction(nameof(Editar), new { id = evaluacionPendiente.Id });
+            }
+
+            var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
+            if (ventanaActiva == null)
+            {
+                return BadRequest("La evaluación solo se puede iniciar dentro del rango de fechas permitido o con una activación vigente.");
+            }
+
+            var evaluacionActiva = await GetEvaluacionInicialActivaAsync(usuarioId, ventanaActiva);
+            if (evaluacionActiva != null)
+            {
+                var coberturaActiva = await GetCoberturaAsync(
+                    evaluacionActiva,
+                    competencias,
+                    comportamientosPorNivel,
+                    coberturasPorEvaluacion);
+
+                if (EstaParteCompleta(coberturaActiva, parteActual))
+                {
+                    return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
+                }
+
+                return RedirectToAction(nameof(Editar), new { id = evaluacionActiva.Id });
+            }
+
+            var vm = await BuildFormularioViewModelAsync(
                 evaluador,
                 usuario,
                 nivel,
-                evaluacionOrigenId);
+                evaluacion: null,
+                evaluacionOrigenId: null);
 
-            if (evaluacionEditable == null)
-            {
-                return BadRequest("La evaluación no se puede iniciar nuevamente para esta ventana o está fuera del rango permitido.");
-            }
-
-            return RedirectToAction(nameof(Editar), new { id = evaluacionEditable.Id });
+            return View("Formulario", vm);
         }
 
         // ================== EDITAR EVALUACIÓN EXISTENTE ==================
@@ -1110,68 +1321,7 @@ namespace EvaluacionDesempenoAB.Controllers
             {
                 return Forbid();
             }
-
-            var detalles = await _repo.GetDetallesByEvaluacionAsync(id);
-            var competencias = await _repo.GetCompetenciasAsync();
-            var competenciasById = BuildCompetenciasLookup(competencias);
-            var comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
-            var parteActual = GetParteEvaluador(evaluador, usuario);
-            var comportamientosPermitidos = FilterComportamientosPermitidos(parteActual, comportamientos, competenciasById);
-            var cobertura = BuildCobertura(detalles, competencias, comportamientos);
-
-            var vm = new EvaluacionFormularioViewModel
-            {
-                Id = evaluacion.Id,
-                UsuarioId = usuario.Id,
-                NivelId = nivel.Id,
-                NombreUsuario = usuario.NombreCompleto,
-                CedulaUsuario = usuario.Cedula,
-                Cargo = usuario.Cargo,
-                Gerencia = usuario.Gerencia,
-                Proyecto = evaluacion.Proyecto ?? usuario.Proyecto,
-                NombreNivel = nivel.Nombre,
-                AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
-                EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
-                EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
-                FechaEvaluacion = evaluacion.FechaEvaluacion,
-                ObservacionesGenerales = evaluacion.Observaciones,
-                TipoEvaluacion = evaluacion.TipoEvaluacion,
-                EvaluacionOrigenId = evaluacion.EvaluacionOrigenId
-            };
-
-            foreach (var competencia in competencias.OrderBy(c => c.Orden))
-            {
-                if (!EvaluacionRolesHelper.DebeVerCompetencia(parteActual, competencia.Nombre))
-                {
-                    continue;
-                }
-
-                var compVm = new CompetenciaEvaluacionVm
-                {
-                    Nombre = competencia.Nombre
-                };
-
-                foreach (var comportamiento in comportamientosPermitidos
-                             .Where(x => x.CompetenciaId == competencia.Id)
-                             .OrderBy(x => x.Orden))
-                {
-                    var detalle = detalles.FirstOrDefault(d => d.ComportamientoId == comportamiento.Id);
-
-                    compVm.Comportamientos.Add(new ComportamientoEvaluacionVm
-                    {
-                        ComportamientoId = comportamiento.Id,
-                        Descripcion = comportamiento.Descripcion,
-                        Puntaje = detalle?.Puntaje,
-                        Comentario = detalle?.Comentario
-                    });
-                }
-
-                if (compVm.Comportamientos.Any())
-                {
-                    vm.Competencias.Add(compVm);
-                }
-            }
-
+            var vm = await BuildFormularioViewModelAsync(evaluador, usuario, nivel, evaluacion);
             return View("Formulario", vm);
         }
 
@@ -1206,97 +1356,174 @@ namespace EvaluacionDesempenoAB.Controllers
             var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
 
             model.AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual);
+            ValidarGuardadoUnicoPorParte(model, comportamientosParteActual);
 
             if (!ModelState.IsValid)
             {
                 return View("Formulario", model);
             }
 
-            Evaluacion? evaluacionExistente = null;
-            if (model.Id.HasValue)
+            if (model.EvaluacionOrigenId.HasValue)
             {
-                evaluacionExistente = await _repo.GetEvaluacionByIdAsync(model.Id.Value);
-            }
-            else
-            {
-                evaluacionExistente = await GetOrCreateEvaluacionEditableAsync(
-                    evaluador,
-                    usuario,
-                    nivel,
-                    model.EvaluacionOrigenId);
+                return BadRequest("La opción de reevaluar está deshabilitada.");
             }
 
-            if (evaluacionExistente == null)
+            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>
             {
-                return BadRequest("No fue posible identificar una evaluación activa para guardar la información.");
-            }
-
-            var detallesExistentes = evaluacionExistente != null
-                ? await _repo.GetDetallesByEvaluacionAsync(evaluacionExistente.Id)
-                : new List<EvaluacionDetalle>();
-
-            var planesExistentes = evaluacionExistente != null
-                ? await _repo.GetPlanesByEvaluacionAsync(evaluacionExistente.Id)
-                : new List<PlanAccion>();
-
-            var nuevosDetalles = model.Competencias
-                .SelectMany(comp => comp.Comportamientos)
-                .Where(c => c.Puntaje.HasValue && comportamientosParteActual.Contains(c.ComportamientoId))
-                .Select(c => new EvaluacionDetalle
-                {
-                    Id = Guid.NewGuid(),
-                    EvaluacionId = evaluacionExistente?.Id ?? Guid.Empty,
-                    ComportamientoId = c.ComportamientoId,
-                    Puntaje = c.Puntaje!.Value,
-                    Comentario = c.Comentario
-                })
-                .ToList();
-
-            var detallesFinales = MergeDetalles(detallesExistentes, nuevosDetalles, comportamientosParteActual);
-            var cobertura = BuildCobertura(detallesFinales, competencias, comportamientos);
-
-            var fechaProxima = evaluacionExistente?.FechaProximaEvaluacion
-                               ?? (model.TipoEvaluacion == "Inicial"
-                                   ? model.FechaEvaluacion.AddMonths(6)
-                                   : null);
-
-            var observaciones = string.IsNullOrWhiteSpace(model.ObservacionesGenerales)
-                ? evaluacionExistente?.Observaciones
-                : model.ObservacionesGenerales;
-
-            var evaluacion = new Evaluacion
-            {
-                Id = evaluacionExistente?.Id ?? model.Id ?? Guid.NewGuid(),
-                UsuarioId = model.UsuarioId,
-                NivelId = model.NivelId,
-                FechaEvaluacion = evaluacionExistente != null
-                    ? evaluacionExistente.FechaEvaluacion
-                    : model.FechaEvaluacion,
-                TipoEvaluacion = model.TipoEvaluacion,
-                EvaluacionOrigenId = model.EvaluacionOrigenId,
-                Observaciones = observaciones,
-                Estado = cobertura.AmbasPartesCompletas
-                    ? "Finalizada"
-                    : (accion == "finalizar" ? "Parcial" : "Borrador"),
-                FechaProximaEvaluacion = fechaProxima,
-                EvaluadorNombre = usuario.EvaluadorNombre ?? evaluacionExistente?.EvaluadorNombre ?? GetCorreoActual(evaluador),
-                Proyecto = string.IsNullOrWhiteSpace(model.Proyecto) ? usuario.Proyecto : model.Proyecto,
-                Gerencia = string.IsNullOrWhiteSpace(model.Gerencia) ? usuario.Gerencia : model.Gerencia,
-                Total = cobertura.TotalCalculado,
-                ReporteFirmadoId = evaluacionExistente?.ReporteFirmadoId,
-                ReporteFirmadoNombre = evaluacionExistente?.ReporteFirmadoNombre
+                [model.NivelId] = comportamientos
             };
+            var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
 
-            if (evaluacionExistente == null)
+            var evaluacionPendienteParaParte = await GetEvaluacionInicialPendienteParaParteAsync(
+                model.UsuarioId,
+                parteActual,
+                competencias,
+                comportamientosPorNivel,
+                coberturasPorEvaluacion);
+
+            string lockKey;
+            if (evaluacionPendienteParaParte != null)
             {
-                await _repo.CreateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
+                lockKey = EvaluacionCicloHelper.BuildLockKey(evaluacionPendienteParaParte.Id);
             }
             else
             {
-                await _repo.UpdateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
+                var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
+                if (ventanaActiva == null)
+                {
+                    return BadRequest("La evaluación solo se puede guardar dentro del rango de fechas permitido o sobre una evaluación ya creada.");
+                }
+
+                lockKey = EvaluacionCicloHelper.BuildLockKey(usuario.Id, ventanaActiva);
             }
 
-            if (accion == "finalizar")
+            var saveLock = GetInicioEvaluacionLock(lockKey);
+            await saveLock.WaitAsync();
+
+            Evaluacion evaluacion;
+            EvaluacionCoberturaInfo cobertura;
+
+            try
+            {
+                coberturasPorEvaluacion.Clear();
+
+                var evaluacionExistente = model.Id.HasValue
+                    ? await _repo.GetEvaluacionByIdAsync(model.Id.Value)
+                    : null;
+
+                if (evaluacionExistente == null)
+                {
+                    evaluacionExistente = await GetEvaluacionInicialPendienteParaParteAsync(
+                        model.UsuarioId,
+                        parteActual,
+                        competencias,
+                        comportamientosPorNivel,
+                        coberturasPorEvaluacion);
+                }
+
+                if (evaluacionExistente == null)
+                {
+                    var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
+                    if (ventanaActiva == null)
+                    {
+                        return BadRequest("La evaluación solo se puede guardar dentro del rango de fechas permitido.");
+                    }
+
+                    var evaluacionEnVentana = await GetEvaluacionInicialActivaAsync(model.UsuarioId, ventanaActiva);
+                    if (evaluacionEnVentana != null)
+                    {
+                        var coberturaVentana = await GetCoberturaAsync(
+                            evaluacionEnVentana,
+                            competencias,
+                            comportamientosPorNivel,
+                            coberturasPorEvaluacion);
+
+                        if (EstaParteCompleta(coberturaVentana, parteActual))
+                        {
+                            return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
+                        }
+
+                        evaluacionExistente = evaluacionEnVentana;
+                    }
+                }
+
+                var detallesExistentes = evaluacionExistente == null
+                    ? new List<EvaluacionDetalle>()
+                    : await _repo.GetDetallesByEvaluacionAsync(evaluacionExistente.Id);
+                var planesExistentes = evaluacionExistente == null
+                    ? new List<PlanAccion>()
+                    : await _repo.GetPlanesByEvaluacionAsync(evaluacionExistente.Id);
+
+                if (evaluacionExistente != null)
+                {
+                    var coberturaAntesDeGuardar = BuildCobertura(detallesExistentes, competencias, comportamientos);
+                    if (EstaParteCompleta(coberturaAntesDeGuardar, parteActual))
+                    {
+                        return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
+                    }
+                }
+
+                var nuevosDetalles = model.Competencias
+                    .SelectMany(comp => comp.Comportamientos)
+                    .Where(c => c.Puntaje.HasValue && comportamientosParteActual.Contains(c.ComportamientoId))
+                    .Select(c => new EvaluacionDetalle
+                    {
+                        Id = Guid.NewGuid(),
+                        EvaluacionId = evaluacionExistente?.Id ?? Guid.Empty,
+                        ComportamientoId = c.ComportamientoId,
+                        Puntaje = c.Puntaje!.Value,
+                        Comentario = c.Comentario
+                    })
+                    .ToList();
+
+                var detallesFinales = evaluacionExistente == null
+                    ? nuevosDetalles
+                    : MergeDetalles(detallesExistentes, nuevosDetalles, comportamientosParteActual);
+                cobertura = BuildCobertura(detallesFinales, competencias, comportamientos);
+
+                var fechaProxima = evaluacionExistente?.FechaProximaEvaluacion
+                                   ?? (model.TipoEvaluacion == "Inicial"
+                                       ? model.FechaEvaluacion.AddMonths(6)
+                                       : null);
+
+                var observaciones = MergeObservaciones(
+                    evaluacionExistente?.Observaciones,
+                    model.ObservacionesGenerales);
+
+                evaluacion = new Evaluacion
+                {
+                    Id = evaluacionExistente?.Id ?? Guid.NewGuid(),
+                    UsuarioId = model.UsuarioId,
+                    NivelId = model.NivelId,
+                    FechaEvaluacion = evaluacionExistente?.FechaEvaluacion ?? model.FechaEvaluacion,
+                    TipoEvaluacion = model.TipoEvaluacion,
+                    EvaluacionOrigenId = null,
+                    Observaciones = observaciones,
+                    Estado = cobertura.AmbasPartesCompletas ? "Finalizada" : "Parcial",
+                    FechaProximaEvaluacion = fechaProxima,
+                    EvaluadorNombre = usuario.EvaluadorNombre ?? evaluacionExistente?.EvaluadorNombre ?? GetCorreoActual(evaluador),
+                    Proyecto = string.IsNullOrWhiteSpace(model.Proyecto) ? usuario.Proyecto : model.Proyecto,
+                    Gerencia = string.IsNullOrWhiteSpace(model.Gerencia) ? usuario.Gerencia : model.Gerencia,
+                    Total = cobertura.TotalCalculado,
+                    ReporteFirmadoId = evaluacionExistente?.ReporteFirmadoId,
+                    ReporteFirmadoNombre = evaluacionExistente?.ReporteFirmadoNombre
+                };
+
+                if (evaluacionExistente == null)
+                {
+                    await _repo.CreateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
+                }
+                else
+                {
+                    await _repo.UpdateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
+                }
+            }
+            finally
+            {
+                saveLock.Release();
+            }
+
+            if (cobertura.AmbasPartesCompletas)
             {
                 return RedirectToAction(nameof(Reporte), new { id = evaluacion.Id });
             }

@@ -69,6 +69,7 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string AlcanceEvaluadorActual { get; set; } = string.Empty;
         public bool EvaluacionNormalCompleta { get; set; }
         public bool EvaluacionSstCompleta { get; set; }
+        public bool ParteActualGuardada { get; set; }
 
         public DateTime FechaEvaluacion { get; set; } = DateTime.Today;
 

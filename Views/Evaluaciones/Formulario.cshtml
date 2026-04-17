@@ -26,7 +26,7 @@
                         }
                         else
                         {
-                            <span>-</span>
+                            <span>Se generará al guardar</span>
                         }
                     </p>
                     <p class="card-text mb-1"><strong>Alcance actual:</strong> @Model.AlcanceEvaluadorActual</p>
@@ -54,6 +54,13 @@
     {
         <div class="alert alert-info mt-3">
             Solo estás calificando los comportamientos que corresponden a tu bloque. El resultado final se calculará cuando ambas partes estén completas.
+        </div>
+    }
+
+    @if (Model.ParteActualGuardada)
+    {
+        <div class="alert alert-warning mt-3">
+            Tu bloque ya fue guardado y no admite cambios.
         </div>
     }
 
@@ -89,6 +96,9 @@
         <input asp-for="Cargo" type="hidden" />
         <input asp-for="Gerencia" type="hidden" />
         <input asp-for="Proyecto" type="hidden" />
+
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        <fieldset class="border-0 p-0" disabled="@(Model.ParteActualGuardada ? "disabled" : null)">
 
         <div class="mb-3">
             <label asp-for="FechaEvaluacion" class="form-label">Fecha de evaluación</label>
@@ -149,10 +159,13 @@
         </div>
 
         <div class="mt-4">
-            <button type="submit" name="accion" value="borrador" class="btn btn-secondary me-2">Guardar borrador</button>
-            <button type="submit" name="accion" value="finalizar" class="btn btn-primary">Finalizar evaluación</button>
+            @if (!Model.ParteActualGuardada)
+            {
+                <button type="submit" name="accion" value="guardar" class="btn btn-primary">Guardar evaluación</button>
+            }
             <a asp-action="Index" class="btn btn-outline-secondary ms-2">Cancelar</a>
         </div>
+        </fieldset>
     </form>
 </div>
 
