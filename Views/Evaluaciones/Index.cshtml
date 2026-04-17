@@ -54,71 +54,111 @@
     </div>
 </form>
 
-<div class="d-flex flex-wrap gap-2 align-items-center mt-3"
-     data-evaluaciones-acciones
-     data-base-imprimir="@Url.Action("ImprimirResultados", "Evaluaciones")"
-     data-base-reevaluar="@Url.Action("Reevaluar", "Evaluaciones")"
-     data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
-     data-base-exportar="@Url.Action("ExportarExcel", "Evaluaciones")"
-     data-base-subir-reporte="@Url.Action("SubirReporteFirmado", "Evaluaciones")">
-    @if (hayEvaluaciones)
-    {
-        <span class="text-muted">Selecciona una evaluación para habilitar las acciones dependientes de una evaluación.</span>
-        <a id="accionImprimir"
-           class="btn btn-sm btn-outline-success disabled"
-           href="#"
-           aria-disabled="true">
-            Imprimir resultados
-        </a>
-    }
-    @if (esSuperAdmin)
-    {
-        <form method="get"
-              asp-action="CertificadoEnBlanco"
-              class="d-flex flex-wrap align-items-center gap-2">
-            <select name="tipoFormulario"
-                    class="form-select form-select-sm"
-                    style="min-width: 240px;"
-                    required>
-                <option value="">Selecciona tipo de formulario</option>
-                @foreach (var tipo in tiposFormularioCertificado)
+@if (hayEvaluaciones || esSuperAdmin)
+{
+    <div class="card mt-3 shadow-sm border-0"
+         data-evaluaciones-acciones
+         data-base-imprimir="@Url.Action("ImprimirResultados", "Evaluaciones")"
+         data-base-reevaluar="@Url.Action("Reevaluar", "Evaluaciones")"
+         data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
+         data-base-exportar="@Url.Action("ExportarExcel", "Evaluaciones")"
+         data-base-subir-reporte="@Url.Action("SubirReporteFirmado", "Evaluaciones")">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                @if (hayEvaluaciones)
                 {
-                    <option value="@tipo.Valor">@tipo.Nombre</option>
+                    <div class="col-12 col-xxl">
+                        <div class="small text-muted text-uppercase fw-semibold mb-2">Selección</div>
+                        <div class="d-flex flex-wrap align-items-center gap-3">
+                            <div class="form-check mb-0">
+                                <input id="seleccionarTodasEvaluaciones"
+                                       type="checkbox"
+                                       class="form-check-input"
+                                       disabled />
+                                <label class="form-check-label" for="seleccionarTodasEvaluaciones">
+                                    Seleccionar todos
+                                </label>
+                            </div>
+                            <span id="resumenSeleccion" class="text-muted small">
+                                No hay evaluaciones seleccionadas.
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-12 col-xxl-auto">
+                        <div class="small text-muted text-uppercase fw-semibold mb-2">Acciones individuales</div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a id="accionImprimir"
+                               class="btn btn-sm btn-outline-success disabled"
+                               href="#"
+                               aria-disabled="true">
+                                Imprimir resultados
+                            </a>
+                            <a id="accionCarpeta"
+                               class="btn btn-sm btn-outline-secondary disabled"
+                               href="#"
+                               aria-disabled="true">
+                                Carpeta usuario
+                            </a>
+                            <a id="accionReevaluar"
+                               class="btn btn-sm btn-warning disabled"
+                               href="#"
+                               aria-disabled="true">
+                                Reevaluar
+                            </a>
+                            <button id="accionSubirReporte"
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary"
+                                    disabled>
+                                Subir reporte
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-12 col-xxl-auto">
+                        <div class="small text-muted text-uppercase fw-semibold mb-2">Acciones múltiples</div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button id="accionExportar"
+                                    type="button"
+                                    class="btn btn-sm btn-outline-dark"
+                                    disabled>
+                                Exportar resultados
+                            </button>
+                        </div>
+                    </div>
                 }
-            </select>
-            <button type="submit" class="btn btn-sm btn-outline-success">
-                Certificado en blanco
-            </button>
-        </form>
-    }
-    @if (hayEvaluaciones)
-    {
-        <a id="accionReevaluar"
-           class="btn btn-sm btn-warning disabled"
-           href="#"
-           aria-disabled="true">
-            Reevaluar
-        </a>
-        <a id="accionCarpeta"
-           class="btn btn-sm btn-outline-secondary disabled"
-           href="#"
-           aria-disabled="true">
-            Carpeta usuario
-        </a>
-        <button id="accionExportar"
-                type="button"
-                class="btn btn-sm btn-outline-dark"
-                disabled>
-            Exportar resultados
-        </button>
-        <button id="accionSubirReporte"
-                type="button"
-                class="btn btn-sm btn-outline-primary"
-                disabled>
-            Subir reporte
-        </button>
-    }
-</div>
+                @if (esSuperAdmin)
+                {
+                    <div class="col-12 col-xxl-auto">
+                        <div class="small text-muted text-uppercase fw-semibold mb-2">Certificados</div>
+                        <form method="get"
+                              asp-action="CertificadoEnBlanco"
+                              class="d-flex flex-wrap align-items-center gap-2">
+                            <select name="tipoFormulario"
+                                    class="form-select form-select-sm"
+                                    style="min-width: 240px;"
+                                    required>
+                                <option value="">Selecciona tipo de formulario</option>
+                                @foreach (var tipo in tiposFormularioCertificado)
+                                {
+                                    <option value="@tipo.Valor">@tipo.Nombre</option>
+                                }
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-success">
+                                Certificado en blanco
+                            </button>
+                        </form>
+                    </div>
+                }
+            </div>
+
+            @if (hayEvaluaciones)
+            {
+                <div id="ayudaAccionesEvaluaciones" class="small text-muted mt-3">
+                    Selecciona una o varias evaluaciones para habilitar las acciones disponibles.
+                </div>
+            }
+        </div>
+    </div>
+}
 
 @if (!hayEvaluaciones)
 {
@@ -137,107 +177,117 @@ else
                class="form-control"
                placeholder="Filtrar por proyecto o cédula..." />
     </div>
-    <table class="table table-striped table-bordered mt-3">
-        <thead class="table-light">
-            <tr>
-                <th style="width: 90px;">Seleccionar</th>
-                <th>ID evaluación</th>
-                <th>Fecha evaluación</th>
-                <th>Próxima evaluación</th>
-                <th>Nombre</th>
-                <th>Cédula</th>
-                <th>Gerencia</th>
-                <th>Proyecto</th>
-                <th>Nivel</th>
-                <th>Tipo</th>
-                <th>Resultado final</th>
-                <th>Evaluación normal</th>
-                <th>Evaluación SST</th>
-                <th>Reporte firmado</th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var e in Model.OrderByDescending(x => x.FechaEvaluacion))
-        {
-            <tr data-evaluacion-id="@e.Id"
-                data-usuario-id="@e.UsuarioId"
-                data-puede-reevaluar="@e.PuedeReevaluar.ToString().ToLower()"
-                data-proyecto="@e.ProyectoUsuario"
-                data-cedula="@e.CedulaUsuario">
-                <td class="text-center">
-                    <input type="checkbox"
-                           name="evaluacionesSeleccionadas"
-                           class="form-check-input"
-                           aria-label="Seleccionar evaluación de @e.NombreUsuario" />
-                </td>
-                <td><code>@e.Id</code></td>
-                <td>@e.FechaEvaluacion.ToShortDateString()</td>
-                <td>
-                    @if (e.ProximaEvaluacion.HasValue)
-                    {
-                        @e.ProximaEvaluacion.Value.ToShortDateString()
-                    }
-                </td>
-                <td>@e.NombreUsuario</td>
-                <td>@e.CedulaUsuario</td>
-                <td>@e.GerenciaUsuario</td>
-                <td>@e.ProyectoUsuario</td>
-                <td>
-                    @e.NivelNombre
-                    @if (!string.IsNullOrWhiteSpace(e.NivelCodigo))
-                    {
-                        <span class="badge bg-secondary ms-1">@e.NivelCodigo</span>
-                    }
-                </td>
-                <td>@e.TipoEvaluacion</td>
-                <td>
-                    @if (e.ResultadoFinal.HasValue)
-                    {
-                        @e.ResultadoFinal.Value.ToString("0.##")<span>%</span>
-                    }
-                    else
-                    {
-                        <span>-</span>
-                    }
-                </td>
-                <td class="text-center">
-                    @if (e.EvaluacionNormalCompleta)
-                    {
-                        <span class="badge bg-success">Completada</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-secondary">Pendiente</span>
-                    }
-                </td>
-                <td class="text-center">
-                    @if (e.EvaluacionSstCompleta)
-                    {
-                        <span class="badge bg-success">Completada</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-secondary">Pendiente</span>
-                    }
-                </td>
-                <td class="reporte-firmado-cell">
-                    @if (e.TieneReporteFirmado)
-                    {
-                        <a class="reporte-firmado-link"
-                           href="@Url.Action("DescargarReporteFirmado", "Evaluaciones", new { id = e.Id })"
-                           data-file-name="@e.ReporteFirmadoNombre">
-                            @e.ReporteFirmadoNombre
-                        </a>
-                    }
-                    else
-                    {
-                        <span class="text-muted reporte-firmado-empty">Sin adjunto</span>
-                    }
-                </td>
-            </tr>
-        }
-        </tbody>
-    </table>
+    <div class="table-responsive mt-3">
+        <table id="tablaMisEvaluaciones" class="table table-striped table-bordered align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 90px;">Seleccionar</th>
+                    <th>ID evaluación</th>
+                    <th>Fecha evaluación</th>
+                    <th>Próxima evaluación</th>
+                    <th>Nombre</th>
+                    <th>Cédula</th>
+                    <th>Gerencia</th>
+                    <th>Proyecto</th>
+                    <th>Nivel</th>
+                    <th>Tipo</th>
+                    <th>Resultado final</th>
+                    <th>Evaluación normal</th>
+                    <th>Evaluación SST</th>
+                    <th>Reporte firmado</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var e in Model.OrderByDescending(x => x.FechaEvaluacion))
+            {
+                <tr data-evaluacion-id="@e.Id"
+                    data-usuario-id="@e.UsuarioId"
+                    data-puede-reevaluar="@e.PuedeReevaluar.ToString().ToLower()"
+                    data-proyecto="@e.ProyectoUsuario"
+                    data-cedula="@e.CedulaUsuario">
+                    <td class="text-center">
+                        <input type="checkbox"
+                               name="evaluacionesSeleccionadas"
+                               class="form-check-input"
+                               aria-label="Seleccionar evaluación de @e.NombreUsuario" />
+                    </td>
+                    <td><code>@e.Id</code></td>
+                    <td>@e.FechaEvaluacion.ToShortDateString()</td>
+                    <td>
+                        @if (e.ProximaEvaluacion.HasValue)
+                        {
+                            @e.ProximaEvaluacion.Value.ToShortDateString()
+                        }
+                    </td>
+                    <td>@e.NombreUsuario</td>
+                    <td>@e.CedulaUsuario</td>
+                    <td>@e.GerenciaUsuario</td>
+                    <td>@e.ProyectoUsuario</td>
+                    <td>
+                        @e.NivelNombre
+                        @if (!string.IsNullOrWhiteSpace(e.NivelCodigo))
+                        {
+                            <span class="badge bg-secondary ms-1">@e.NivelCodigo</span>
+                        }
+                    </td>
+                    <td>@e.TipoEvaluacion</td>
+                    <td>
+                        @if (e.ResultadoFinal.HasValue)
+                        {
+                            @e.ResultadoFinal.Value.ToString("0.##")<span>%</span>
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </td>
+                    <td class="text-center">
+                        @if (e.ResultadoEvaluacionNormal.HasValue)
+                        {
+                            <div class="fw-semibold">@e.ResultadoEvaluacionNormal.Value.ToString("0.##")%</div>
+                        }
+                        else
+                        {
+                            <div class="text-muted">-</div>
+                        }
+
+                        <span class="badge @(e.EvaluacionNormalCompleta ? "bg-success" : "bg-secondary") mt-1">
+                            @(e.EvaluacionNormalCompleta ? "Completada" : "Pendiente")
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        @if (e.ResultadoEvaluacionSst.HasValue)
+                        {
+                            <div class="fw-semibold">@e.ResultadoEvaluacionSst.Value.ToString("0.##")%</div>
+                        }
+                        else
+                        {
+                            <div class="text-muted">-</div>
+                        }
+
+                        <span class="badge @(e.EvaluacionSstCompleta ? "bg-success" : "bg-secondary") mt-1">
+                            @(e.EvaluacionSstCompleta ? "Completada" : "Pendiente")
+                        </span>
+                    </td>
+                    <td class="reporte-firmado-cell">
+                        @if (e.TieneReporteFirmado)
+                        {
+                            <a class="reporte-firmado-link"
+                               href="@Url.Action("DescargarReporteFirmado", "Evaluaciones", new { id = e.Id })"
+                               data-file-name="@e.ReporteFirmadoNombre">
+                                @e.ReporteFirmadoNombre
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="text-muted reporte-firmado-empty">Sin adjunto</span>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
 }
 
 <form id="subirReporteFirmadoToken" method="post" class="d-none">
@@ -252,9 +302,12 @@ else
 {
     <script>
         (() => {
-            const tabla = document.querySelector("table");
+            const tabla = document.getElementById("tablaMisEvaluaciones");
             const acciones = document.querySelector("[data-evaluaciones-acciones]");
             const filtroTablaEvaluaciones = document.getElementById("filtroTablaEvaluaciones");
+            const selectorTodasEvaluaciones = document.getElementById("seleccionarTodasEvaluaciones");
+            const resumenSeleccion = document.getElementById("resumenSeleccion");
+            const ayudaAccionesEvaluaciones = document.getElementById("ayudaAccionesEvaluaciones");
             const accionImprimir = document.getElementById("accionImprimir");
             const accionReevaluar = document.getElementById("accionReevaluar");
             const accionCarpeta = document.getElementById("accionCarpeta");
@@ -296,25 +349,70 @@ else
                 }
             };
 
+            const getCheckboxesVisibles = () =>
+                Array.from(tabla.querySelectorAll("tbody tr"))
+                    .filter((row) => row instanceof HTMLTableRowElement && row.style.display !== "none")
+                    .map((row) => row.querySelector("input[name='evaluacionesSeleccionadas']"))
+                    .filter((input) => input instanceof HTMLInputElement);
+
             const getFilasSeleccionadas = () =>
-                Array.from(tabla.querySelectorAll("tbody input[type='checkbox']:checked"))
-                    .map((input) => input.closest("tr"))
-                    .filter((row) => row instanceof HTMLTableRowElement);
+                Array.from(tabla.querySelectorAll("tbody tr"))
+                    .filter((row) => row instanceof HTMLTableRowElement && row.style.display !== "none")
+                    .filter((row) => {
+                        const input = row.querySelector("input[name='evaluacionesSeleccionadas']");
+                        return input instanceof HTMLInputElement && input.checked;
+                    });
 
             const getIdsSeleccionados = () =>
                 getFilasSeleccionadas()
                     .map((row) => row.dataset.evaluacionId)
                     .filter((id) => !!id);
 
+            const updateSelectionState = (selectedRows) => {
+                const visibles = getCheckboxesVisibles();
+                const seleccionadas = selectedRows.length;
+
+                if (resumenSeleccion) {
+                    if (!visibles.length) {
+                        resumenSeleccion.textContent = "No hay evaluaciones visibles para seleccionar.";
+                    } else if (!seleccionadas) {
+                        resumenSeleccion.textContent = "No hay evaluaciones seleccionadas.";
+                    } else if (seleccionadas === 1) {
+                        resumenSeleccion.textContent = "1 evaluación seleccionada.";
+                    } else {
+                        resumenSeleccion.textContent = `${seleccionadas} evaluaciones seleccionadas.`;
+                    }
+                }
+
+                if (selectorTodasEvaluaciones instanceof HTMLInputElement) {
+                    const totalVisibles = visibles.length;
+                    const totalSeleccionadas = visibles.filter((input) => input.checked).length;
+                    selectorTodasEvaluaciones.disabled = totalVisibles === 0;
+                    selectorTodasEvaluaciones.checked = totalVisibles > 0 && totalSeleccionadas === totalVisibles;
+                    selectorTodasEvaluaciones.indeterminate = totalSeleccionadas > 0 && totalSeleccionadas < totalVisibles;
+                }
+
+                if (ayudaAccionesEvaluaciones) {
+                    if (!seleccionadas) {
+                        ayudaAccionesEvaluaciones.textContent = "Selecciona una o varias evaluaciones para habilitar las acciones disponibles.";
+                    } else if (seleccionadas === 1) {
+                        ayudaAccionesEvaluaciones.textContent = "Con una evaluación seleccionada puedes usar las acciones individuales y también exportar.";
+                    } else {
+                        ayudaAccionesEvaluaciones.textContent = "Con varias evaluaciones seleccionadas puedes exportar; las demás acciones requieren una sola evaluación.";
+                    }
+                }
+            };
+
             const updateLinks = () => {
                 const selectedRows = getFilasSeleccionadas();
-                const row = selectedRows[0];
+                updateSelectionState(selectedRows);
+                const row = selectedRows.length === 1 ? selectedRows[0] : null;
 
                 if (!row) {
                     setDisabled(accionImprimir, true);
                     setDisabled(accionReevaluar, true);
                     setDisabled(accionCarpeta, true);
-                    setExportDisabled(true);
+                    setExportDisabled(selectedRows.length === 0);
                     setUploadDisabled(true);
                     return;
                 }
@@ -322,7 +420,6 @@ else
                 const evaluacionId = row.dataset.evaluacionId;
                 const usuarioId = row.dataset.usuarioId;
                 const puedeReevaluar = row.dataset.puedeReevaluar === "true";
-                const singleSelection = selectedRows.length === 1;
 
                 accionImprimir.href = `${baseImprimir}?id=${evaluacionId}`;
                 accionCarpeta.href = `${baseCarpeta}?usuarioId=${usuarioId}`;
@@ -332,7 +429,7 @@ else
                 setDisabled(accionCarpeta, false);
                 setDisabled(accionReevaluar, !puedeReevaluar);
                 setExportDisabled(false);
-                setUploadDisabled(!singleSelection);
+                setUploadDisabled(false);
             };
 
             const exportarSeleccion = () => {
@@ -423,7 +520,16 @@ else
                     const cedula = (row.dataset.cedula ?? "").toLowerCase();
                     const coincide = !filtro || proyecto.includes(filtro) || cedula.includes(filtro);
                     row.style.display = coincide ? "" : "none";
+
+                    if (!coincide) {
+                        const checkbox = row.querySelector("input[name='evaluacionesSeleccionadas']");
+                        if (checkbox instanceof HTMLInputElement) {
+                            checkbox.checked = false;
+                        }
+                    }
                 });
+
+                updateLinks();
             };
 
             tabla.addEventListener("change", (event) => {
@@ -434,6 +540,16 @@ else
 
                 updateLinks();
             });
+
+            if (selectorTodasEvaluaciones instanceof HTMLInputElement) {
+                selectorTodasEvaluaciones.addEventListener("change", () => {
+                    getCheckboxesVisibles().forEach((input) => {
+                        input.checked = selectorTodasEvaluaciones.checked;
+                    });
+
+                    updateLinks();
+                });
+            }
 
             [accionImprimir, accionReevaluar, accionCarpeta].forEach((accion) => {
                 accion?.addEventListener("click", (event) => {
@@ -474,7 +590,6 @@ else
                 filtroTablaEvaluaciones.addEventListener("input", applyFilter);
             }
 
-            updateLinks();
             applyFilter();
         })();
     </script>

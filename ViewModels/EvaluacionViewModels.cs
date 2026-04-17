@@ -24,6 +24,8 @@ namespace EvaluacionDesempenoAB.ViewModels
 
         public string TipoEvaluacion { get; set; } = string.Empty;
         public decimal? ResultadoFinal { get; set; }
+        public decimal? ResultadoEvaluacionNormal { get; set; }
+        public decimal? ResultadoEvaluacionSst { get; set; }
         public bool EvaluacionNormalCompleta { get; set; }
         public bool EvaluacionSstCompleta { get; set; }
         public bool PuedeReevaluar { get; set; }

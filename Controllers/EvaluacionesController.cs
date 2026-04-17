@@ -37,6 +37,8 @@ namespace EvaluacionDesempenoAB.Controllers
             public bool EvaluacionNormalCompleta { get; init; }
             public bool EvaluacionSstCompleta { get; init; }
             public decimal? TotalCalculado { get; init; }
+            public decimal? TotalEvaluacionNormalCalculado { get; init; }
+            public decimal? TotalEvaluacionSstCalculado { get; init; }
             public bool AmbasPartesCompletas => EvaluacionNormalCompleta && EvaluacionSstCompleta;
         }
 
@@ -292,6 +294,26 @@ namespace EvaluacionDesempenoAB.Controllers
                 .ToList();
         }
 
+        private static decimal? CalcularPromedioModulo(
+            IReadOnlyDictionary<Guid, EvaluacionDetalle> detallesPorComportamiento,
+            IReadOnlyCollection<Guid> comportamientosModulo,
+            bool moduloCompleto)
+        {
+            if (!moduloCompleto || comportamientosModulo.Count == 0)
+            {
+                return null;
+            }
+
+            var puntajes = comportamientosModulo
+                .Where(detallesPorComportamiento.ContainsKey)
+                .Select(comportamientoId => (decimal)detallesPorComportamiento[comportamientoId].Puntaje)
+                .ToList();
+
+            return puntajes.Count == 0
+                ? null
+                : Math.Round(puntajes.Average(), 2);
+        }
+
         private static EvaluacionCoberturaInfo BuildCobertura(
             IReadOnlyCollection<EvaluacionDetalle> detalles,
             IReadOnlyCollection<Competencia> competencias,
@@ -314,25 +336,36 @@ namespace EvaluacionDesempenoAB.Controllers
                 }
             }
 
-            var respondidos = detalles
+            var detallesPorComportamiento = detalles
                 .Where(d => d.ComportamientoId != Guid.Empty)
-                .Select(d => d.ComportamientoId)
-                .ToHashSet();
+                .GroupBy(d => d.ComportamientoId)
+                .ToDictionary(g => g.Key, g => g.Last());
+            var respondidos = detallesPorComportamiento.Keys.ToHashSet();
 
             var evaluacionNormalCompleta = comportamientosNormales.Count == 0 || comportamientosNormales.All(respondidos.Contains);
             var evaluacionSstCompleta = comportamientosSst.Count == 0 || comportamientosSst.All(respondidos.Contains);
+            var totalEvaluacionNormalCalculado = CalcularPromedioModulo(
+                detallesPorComportamiento,
+                comportamientosNormales,
+                evaluacionNormalCompleta);
+            var totalEvaluacionSstCalculado = CalcularPromedioModulo(
+                detallesPorComportamiento,
+                comportamientosSst,
+                evaluacionSstCompleta);
 
             decimal? totalCalculado = null;
-            if (evaluacionNormalCompleta && evaluacionSstCompleta && detalles.Any())
+            if (evaluacionNormalCompleta && evaluacionSstCompleta && detallesPorComportamiento.Count > 0)
             {
-                totalCalculado = Math.Round(detalles.Average(d => (decimal)d.Puntaje), 2);
+                totalCalculado = Math.Round(detallesPorComportamiento.Values.Average(d => (decimal)d.Puntaje), 2);
             }
 
             return new EvaluacionCoberturaInfo
             {
                 EvaluacionNormalCompleta = evaluacionNormalCompleta,
                 EvaluacionSstCompleta = evaluacionSstCompleta,
-                TotalCalculado = totalCalculado
+                TotalCalculado = totalCalculado,
+                TotalEvaluacionNormalCalculado = totalEvaluacionNormalCalculado,
+                TotalEvaluacionSstCalculado = totalEvaluacionSstCalculado
             };
         }
 
@@ -689,6 +722,8 @@ namespace EvaluacionDesempenoAB.Controllers
                         ResultadoFinal = cobertura.AmbasPartesCompletas
                             ? evaluacion.Total ?? cobertura.TotalCalculado
                             : null,
+                        ResultadoEvaluacionNormal = cobertura.TotalEvaluacionNormalCalculado,
+                        ResultadoEvaluacionSst = cobertura.TotalEvaluacionSstCalculado,
                         EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
                         EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
                         PuedeReevaluar = evaluacion.TipoEvaluacion == "Inicial",
@@ -1148,6 +1183,8 @@ namespace EvaluacionDesempenoAB.Controllers
                     ResultadoFinal = cobertura.AmbasPartesCompletas
                         ? evaluacion.Total ?? cobertura.TotalCalculado
                         : null,
+                    ResultadoEvaluacionNormal = cobertura.TotalEvaluacionNormalCalculado,
+                    ResultadoEvaluacionSst = cobertura.TotalEvaluacionSstCalculado,
                     EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
                     EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
                     PuedeReevaluar = evaluacion.TipoEvaluacion == "Inicial",
@@ -1418,7 +1455,9 @@ namespace EvaluacionDesempenoAB.Controllers
                 "Nivel",
                 "Código nivel",
                 "Tipo evaluación",
-                "Resultado final (%)"
+                "Resultado final (%)",
+                "Total evaluador normal (%)",
+                "Total SST (%)"
             };
 
             for (var i = 0; i < headers.Length; i++)
@@ -1473,6 +1512,10 @@ namespace EvaluacionDesempenoAB.Controllers
                     ? evaluacion.Total ?? cobertura.TotalCalculado
                     : null;
                 worksheet.Cell(row, 8).Style.NumberFormat.Format = "0.00";
+                worksheet.Cell(row, 9).Value = cobertura.TotalEvaluacionNormalCalculado;
+                worksheet.Cell(row, 9).Style.NumberFormat.Format = "0.00";
+                worksheet.Cell(row, 10).Value = cobertura.TotalEvaluacionSstCalculado;
+                worksheet.Cell(row, 10).Style.NumberFormat.Format = "0.00";
 
                 row++;
             }
@@ -1489,6 +1532,9 @@ namespace EvaluacionDesempenoAB.Controllers
             worksheet.Column(3).Width = Math.Min(worksheet.Column(3).Width + 5, 45);
             worksheet.Column(5).Width = Math.Min(worksheet.Column(5).Width + 4, 35);
             worksheet.Column(7).Width = Math.Min(worksheet.Column(7).Width + 3, 25);
+            worksheet.Column(8).Width = Math.Max(worksheet.Column(8).Width, 18);
+            worksheet.Column(9).Width = Math.Max(worksheet.Column(9).Width, 22);
+            worksheet.Column(10).Width = Math.Max(worksheet.Column(10).Width, 18);
 
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
@@ -1790,7 +1836,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 planVm.Add(new PlanAccionItemVm());
             }
 
-            var evaluadorPrincipal = await ResolveUsuarioPorCorreosAsync(usuario.EvaluadorNombre, usuario.CorreoEvaluador);
+            var evaluadorPrincipal = await ResolveUsuarioPorCorreosAsync(usuario.CorreoEvaluador, usuario.EvaluadorNombre);
             var evaluadorSst = await ResolveUsuarioPorCorreosAsync(usuario.CorreoEvaluadorSst);
             var firmaEvaluador = evaluadorPrincipal == null
                 ? null
@@ -1817,12 +1863,12 @@ namespace EvaluacionDesempenoAB.Controllers
                 TipoFormularioNombre = usuario.TipoFormulario.HasValue
                     ? GetTipoFormularioNombre(usuario.TipoFormulario.Value)
                     : null,
-                NombreJefeInmediatoOEvaluador = string.IsNullOrWhiteSpace(usuario.CorreoEvaluador)
-                    ? evaluadorPrincipal?.NombreCompleto ?? usuario.EvaluadorNombre
-                    : usuario.CorreoEvaluador,
-                CargoJefeInmediatoOEvaluador = usuario.CargoJefeInmediato,
+                NombreJefeInmediatoOEvaluador = evaluadorPrincipal?.NombreCompleto
+                    ?? usuario.CorreoEvaluador
+                    ?? usuario.EvaluadorNombre,
+                CargoJefeInmediatoOEvaluador = evaluadorPrincipal?.Cargo ?? usuario.CargoJefeInmediato,
                 NombreEvaluadorSst = evaluadorSst?.NombreCompleto ?? usuario.CorreoEvaluadorSst,
-                CargoEvaluadorSst = usuario.CargoEvaluadorSst,
+                CargoEvaluadorSst = evaluadorSst?.Cargo ?? usuario.CargoEvaluadorSst,
                 FechaIngreso = usuario.FechaIngreso,
                 FechaGeneracionReporte = DateTime.Today,
                 FechaEvaluacion = evaluacion.FechaEvaluacion,
