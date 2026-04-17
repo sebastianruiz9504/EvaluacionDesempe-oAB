@@ -42,6 +42,11 @@ namespace EvaluacionDesempenoAB.Controllers
             public bool AmbasPartesCompletas => EvaluacionNormalCompleta && EvaluacionSstCompleta;
         }
 
+        public sealed class ExportarExcelRequest
+        {
+            public List<Guid> Ids { get; init; } = new();
+        }
+
         private const int OportunidadMejoraPuntajeMinimo = 70;
         private const int OportunidadMejoraPuntajeMaximo = 85;
 
@@ -1415,6 +1420,14 @@ namespace EvaluacionDesempenoAB.Controllers
 
         [HttpGet]
         public async Task<IActionResult> ExportarExcel([FromQuery] List<Guid> ids)
+            => await ExportarExcelCoreAsync(ids);
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ExportarExcel([FromBody] ExportarExcelRequest request)
+            => await ExportarExcelCoreAsync(request?.Ids ?? new List<Guid>());
+
+        private async Task<IActionResult> ExportarExcelCoreAsync(List<Guid> ids)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
@@ -1427,9 +1440,10 @@ namespace EvaluacionDesempenoAB.Controllers
                 return BadRequest("Debes seleccionar al menos una evaluación.");
             }
 
+            var idsSet = ids.Distinct().ToHashSet();
             var evaluaciones = await GetEvaluacionesVisiblesAsync(evaluador);
             var seleccionadas = evaluaciones
-                .Where(e => ids.Contains(e.Id))
+                .Where(e => idsSet.Contains(e.Id))
                 .OrderByDescending(e => e.FechaEvaluacion)
                 .ToList();
 

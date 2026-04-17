@@ -293,10 +293,33 @@ else
 <form id="subirReporteFirmadoToken" method="post" class="d-none">
     @Html.AntiForgeryToken()
 </form>
+<form id="exportarExcelToken" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
 <input id="archivoReporteFirmadoInput"
        type="file"
        class="d-none"
        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" />
+
+<div class="modal fade" id="modalExportandoResultados" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Exportando resultados</h5>
+            </div>
+            <div class="modal-body">
+                <p id="textoEstadoExportacion" class="mb-2 text-muted">Preparando exportación...</p>
+                <div class="progress" role="progressbar" aria-label="Progreso de exportación" aria-valuemin="0" aria-valuemax="100">
+                    <div id="barraProgresoExportacion"
+                         class="progress-bar progress-bar-striped progress-bar-animated"
+                         style="width: 0%;">
+                        0%
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts
 {
@@ -314,11 +337,21 @@ else
             const accionExportar = document.getElementById("accionExportar");
             const accionSubirReporte = document.getElementById("accionSubirReporte");
             const archivoReporteFirmadoInput = document.getElementById("archivoReporteFirmadoInput");
+            const barraProgresoExportacion = document.getElementById("barraProgresoExportacion");
+            const textoEstadoExportacion = document.getElementById("textoEstadoExportacion");
             const baseImprimir = acciones?.dataset.baseImprimir ?? "";
             const baseReevaluar = acciones?.dataset.baseReevaluar ?? "";
             const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
             const baseExportar = acciones?.dataset.baseExportar ?? "";
             const baseSubirReporte = acciones?.dataset.baseSubirReporte ?? "";
+            const tokenExportarInput = document.querySelector('#exportarExcelToken input[name="__RequestVerificationToken"]');
+            const modalExportarElement = document.getElementById("modalExportandoResultados");
+            const modalExportar = modalExportarElement && window.bootstrap?.Modal
+                ? new window.bootstrap.Modal(modalExportarElement, { backdrop: "static", keyboard: false })
+                : null;
+            let exportandoEnCurso = false;
+            let progresoExportacion = 0;
+            let intervaloProgresoExportacion = null;
 
             if (!tabla || !acciones) {
                 return;
@@ -433,16 +466,115 @@ else
             };
 
             const exportarSeleccion = () => {
-                const idsSeleccionados = getIdsSeleccionados();
-                if (!idsSeleccionados.length || !baseExportar) {
+                if (exportandoEnCurso) {
                     return;
                 }
 
-                const query = idsSeleccionados
-                    .map((id) => `ids=${encodeURIComponent(id)}`)
-                    .join("&");
+                const idsSeleccionados = getIdsSeleccionados();
+                if (!idsSeleccionados.length || !baseExportar || !(tokenExportarInput instanceof HTMLInputElement)) {
+                    return;
+                }
 
-                window.location.href = `${baseExportar}?${query}`;
+                const actualizarProgreso = (siguiente, mensaje) => {
+                    progresoExportacion = Math.max(progresoExportacion, Math.min(siguiente, 100));
+                    if (barraProgresoExportacion instanceof HTMLDivElement) {
+                        barraProgresoExportacion.style.width = `${progresoExportacion}%`;
+                        barraProgresoExportacion.textContent = `${progresoExportacion}%`;
+                    }
+
+                    if (textoEstadoExportacion) {
+                        textoEstadoExportacion.textContent = mensaje;
+                    }
+                };
+
+                const iniciarBloqueoExportacion = () => {
+                    exportandoEnCurso = true;
+                    setExportDisabled(true);
+                    if (accionExportar instanceof HTMLButtonElement) {
+                        accionExportar.textContent = "Exportando...";
+                    }
+
+                    progresoExportacion = 0;
+                    actualizarProgreso(8, "Validando selección...");
+                    modalExportar?.show();
+
+                    if (intervaloProgresoExportacion) {
+                        window.clearInterval(intervaloProgresoExportacion);
+                    }
+
+                    intervaloProgresoExportacion = window.setInterval(() => {
+                        if (progresoExportacion < 92) {
+                            actualizarProgreso(progresoExportacion + 6, "Generando archivo Excel...");
+                        }
+                    }, 500);
+                };
+
+                const finalizarBloqueoExportacion = () => {
+                    if (intervaloProgresoExportacion) {
+                        window.clearInterval(intervaloProgresoExportacion);
+                        intervaloProgresoExportacion = null;
+                    }
+
+                    exportandoEnCurso = false;
+                    if (accionExportar instanceof HTMLButtonElement) {
+                        accionExportar.textContent = "Exportar resultados";
+                    }
+
+                    updateLinks();
+                    window.setTimeout(() => {
+                        modalExportar?.hide();
+                    }, 450);
+                };
+
+                const descargarArchivo = (blob, fileName) => {
+                    const enlace = document.createElement("a");
+                    const fileUrl = window.URL.createObjectURL(blob);
+                    enlace.href = fileUrl;
+                    enlace.download = fileName;
+                    document.body.appendChild(enlace);
+                    enlace.click();
+                    enlace.remove();
+                    window.URL.revokeObjectURL(fileUrl);
+                };
+
+                const obtenerNombreArchivo = (contentDisposition) => {
+                    if (!contentDisposition) {
+                        return `Evaluaciones_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "_")}.xlsx`;
+                    }
+
+                    const match = contentDisposition.match(/filename\*?=(?:UTF-8''|\"?)([^\";]+)/i);
+                    if (!match?.[1]) {
+                        return "Evaluaciones.xlsx";
+                    }
+
+                    return decodeURIComponent(match[1]).replace(/\"/g, "");
+                };
+
+                iniciarBloqueoExportacion();
+                fetch(baseExportar, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "RequestVerificationToken": tokenExportarInput.value
+                    },
+                    body: JSON.stringify({ ids: idsSeleccionados })
+                })
+                    .then(async (response) => {
+                        if (!response.ok) {
+                            throw new Error(await response.text());
+                        }
+
+                        actualizarProgreso(100, "Exportación completada.");
+                        const blob = await response.blob();
+                        const fileName = obtenerNombreArchivo(response.headers.get("Content-Disposition"));
+                        descargarArchivo(blob, fileName);
+                    })
+                    .catch(() => {
+                        window.alert("No fue posible exportar los resultados seleccionados.");
+                    })
+                    .finally(() => {
+                        finalizarBloqueoExportacion();
+                    });
             };
 
             const actualizarCeldaReporte = (evaluacionId, fileName, downloadUrl) => {
