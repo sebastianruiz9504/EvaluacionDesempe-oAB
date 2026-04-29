@@ -10,9 +10,12 @@
     var mostrarModalGuardarPlan = ViewBag.MostrarModalGuardarPlan is bool abrirModal && abrirModal;
     var errorGuardadoPlan = ViewBag.ErrorGuardadoPlan as string;
     var tieneFirmaActualGuardada = !string.IsNullOrWhiteSpace(Model.FirmaActualDataUrl);
-    var etiquetaVistaPreviaFirma = Model.EtiquetaFirmaActual == "Evaluador SST"
-        ? "Firma del evaluador SST"
-        : "Firma del evaluador";
+    var etiquetaVistaPreviaFirma = Model.EtiquetaFirmaActual switch
+    {
+        "Evaluador SST" => "Firma del evaluador SST",
+        "Evaluador y evaluador SST" => "Firma del evaluador y evaluador SST",
+        _ => "Firma del evaluador"
+    };
 }
 
 @functions {
@@ -70,16 +73,18 @@
         justify-content: center;
         padding: 0 8px;
         box-sizing: border-box;
-        overflow: hidden;
+        overflow: visible;
     }
 
     .firma-preview-image {
-        width: 100%;
-        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
         object-fit: contain;
-        object-position: center bottom;
+        object-position: center center;
         display: block;
-        flex: 0 0 auto;
+        flex: 0 1 auto;
     }
 
     .firma-preview-line {

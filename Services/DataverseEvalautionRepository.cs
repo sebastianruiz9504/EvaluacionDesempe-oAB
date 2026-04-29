@@ -76,6 +76,7 @@ namespace EvaluacionDesempenoAB.Services
 
             var filter = new FilterExpression(LogicalOperator.Or);
             filter.AddCondition("crfb7_evaluadorid", ConditionOperator.Equal, evaluadorCorreo);
+            filter.AddCondition("crfb7_correoevaluador", ConditionOperator.Equal, evaluadorCorreo);
             filter.AddCondition("cr3d2_correoevaluadorsst", ConditionOperator.Equal, evaluadorCorreo);
             q.Criteria.AddFilter(filter);
 

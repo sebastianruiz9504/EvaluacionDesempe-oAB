@@ -161,6 +161,11 @@ namespace EvaluacionDesempenoAB.Controllers
 
         private static string? GetEtiquetaFirmaParaParte(TipoParteEvaluacion parte)
         {
+            if (parte == (TipoParteEvaluacion.Normal | TipoParteEvaluacion.Sst))
+            {
+                return "Evaluador y evaluador SST";
+            }
+
             if (parte == TipoParteEvaluacion.Normal)
             {
                 return "Evaluador";
@@ -1523,7 +1528,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 saveLock.Release();
             }
 
-            if (cobertura.AmbasPartesCompletas)
+            if (EstaParteCompleta(cobertura, parteActual))
             {
                 return RedirectToAction(nameof(Reporte), new { id = evaluacion.Id });
             }

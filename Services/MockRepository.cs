@@ -160,6 +160,7 @@ namespace EvaluacionDesempenoAB.Services
             var lista = _usuarios
                 .Where(x =>
                     string.Equals(x.EvaluadorNombre, evaluadorCorreo, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(x.CorreoEvaluador, evaluadorCorreo, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(x.CorreoEvaluadorSst, evaluadorCorreo, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
@@ -284,6 +285,7 @@ namespace EvaluacionDesempenoAB.Services
             var usuarioIds = _usuarios
                 .Where(x =>
                     string.Equals(x.EvaluadorNombre, evaluadorCorreo, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(x.CorreoEvaluador, evaluadorCorreo, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(x.CorreoEvaluadorSst, evaluadorCorreo, StringComparison.OrdinalIgnoreCase))
                 .Select(x => x.Id)
                 .ToHashSet();

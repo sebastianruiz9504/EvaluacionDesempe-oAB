@@ -32,17 +32,20 @@ namespace EvaluacionDesempenoAB.Helpers
                 return TipoParteEvaluacion.Ninguna;
             }
 
+            var parte = TipoParteEvaluacion.Ninguna;
+
+            if (SonCorreosIguales(usuarioObjetivo.EvaluadorNombre, correoActual) ||
+                SonCorreosIguales(usuarioObjetivo.CorreoEvaluador, correoActual))
+            {
+                parte |= TipoParteEvaluacion.Normal;
+            }
+
             if (SonCorreosIguales(usuarioObjetivo.CorreoEvaluadorSst, correoActual))
             {
-                return TipoParteEvaluacion.Sst;
+                parte |= TipoParteEvaluacion.Sst;
             }
 
-            if (SonCorreosIguales(usuarioObjetivo.EvaluadorNombre, correoActual))
-            {
-                return TipoParteEvaluacion.Normal;
-            }
-
-            return TipoParteEvaluacion.Ninguna;
+            return parte;
         }
 
         public static bool TieneParte(TipoParteEvaluacion parte, TipoParteEvaluacion requerida)
