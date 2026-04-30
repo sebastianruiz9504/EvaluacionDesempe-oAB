@@ -234,6 +234,12 @@ namespace EvaluacionDesempenoAB.Services
 
             if (metadata is ImageAttributeMetadata imageMetadata)
             {
+                if (imageMetadata.CanStoreFullImage == true)
+                {
+                    await UploadFileColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, fileName, contentType, content);
+                    return;
+                }
+
                 await UploadImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, imageMetadata, content);
                 return;
             }
@@ -252,6 +258,19 @@ namespace EvaluacionDesempenoAB.Services
 
             if (metadata is ImageAttributeMetadata)
             {
+                var imageMetadata = (ImageAttributeMetadata)metadata;
+                if (imageMetadata.CanStoreFullImage == true)
+                {
+                    try
+                    {
+                        return await DownloadFileColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
+                    }
+                    catch (Exception ex) when (IsFullImageNotAvailable(ex))
+                    {
+                        return await DownloadImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
+                    }
+                }
+
                 return await DownloadImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
             }
 
@@ -833,6 +852,13 @@ namespace EvaluacionDesempenoAB.Services
                 ImageAttributeMetadata imageColumn when imageColumn.MaxSizeInKB.HasValue => imageColumn.MaxSizeInKB.Value,
                 _ => throw new InvalidPluginExecutionException($"{entityLogicalName}.{attributeLogicalName} no expone un tamaño máximo válido.")
             };
+        }
+
+        private static bool IsFullImageNotAvailable(Exception ex)
+        {
+            var message = ex.ToString();
+            return message.Contains("ObjectDoesNotExist", StringComparison.OrdinalIgnoreCase) ||
+                   message.Contains("No FileAttachment records found", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string InferImageContentType(byte[] bytes)
