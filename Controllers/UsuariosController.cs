@@ -291,7 +291,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     EvaluacionNormalCompleta = coberturaActual?.EvaluacionNormalCompleta ?? false,
                     EvaluacionSstCompleta = coberturaActual?.EvaluacionSstCompleta ?? false,
                     PuedeIniciarEvaluacion = puedeIniciarOContinuar,
-                    PuedeSolicitarActivacion = !puedeIniciarOContinuar && ventanaActiva == null,
+                    PuedeSolicitarActivacion = !puedeIniciarOContinuar,
                     TieneEvaluacionActiva = tieneEvaluacionActiva,
                     ResultadoFinal = coberturaActual?.AmbasPartesCompletas == true
                         ? evaluacionActual?.Total ?? coberturaActual.TotalCalculado
@@ -502,7 +502,7 @@ namespace EvaluacionDesempenoAB.Controllers
             return Json(new
             {
                 puedeIniciar,
-                puedeSolicitar = !puedeIniciar && ventanaActiva == null,
+                puedeSolicitar = !puedeIniciar,
                 tieneEvaluacionActiva,
                 evaluacionActualId = evaluacionPendienteParaParte?.Id,
                 fechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd")
