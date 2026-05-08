@@ -108,10 +108,12 @@ builder.Services.AddScoped<IEvaluacionRepository>(sp =>
 
 var app = builder.Build();
 
-// Manejo de errores y HSTS en producción
+// Manejo centralizado de errores para evitar la pagina generica HTTP 500 del navegador.
+app.UseExceptionHandler("/Home/Error");
+app.UseStatusCodePagesWithReExecute("/Home/StatusCodePage", "?code={0}");
+
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
 
