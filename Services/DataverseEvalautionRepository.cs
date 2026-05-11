@@ -21,15 +21,15 @@ namespace EvaluacionDesempenoAB.Services
         private readonly ConcurrentDictionary<string, IReadOnlyList<ChildRelationshipInfo>> _childRelationshipsCache = new(StringComparer.OrdinalIgnoreCase);
 
         // TABLAS DE CATÁLOGO
-        private const string NivelTable          = "crfb7_nivel";
-        private const string CompetenciaTable    = "crfb7_competencia";
+        private const string NivelTable = "crfb7_nivel";
+        private const string CompetenciaTable = "crfb7_competencia";
         private const string ComportamientoTable = "crfb7_comportamiento";
 
         // TABLAS DE NEGOCIO
-        private const string UsuarioTable    = "crfb7_usuario";
+        private const string UsuarioTable = "crfb7_usuario";
         private const string EvaluacionTable = "crfb7_evaluacion";
-        private const string DetalleTable    = "crfb7_detalledeevaluacion";
-        private const string PlanTable       = "crfb7_plandeaccion";
+        private const string DetalleTable = "crfb7_detalledeevaluacion";
+        private const string PlanTable = "crfb7_plandeaccion";
         private const string FotoUsuarioColumn = "cr3d2_foto";
         private const string FirmaUsuarioColumn = "cr3d2_firma";
         private const string ReporteFirmadoColumn = "cr3d2_reportefirmado";
@@ -138,12 +138,12 @@ namespace EvaluacionDesempenoAB.Services
             return new UsuarioEvaluado
             {
                 Id = e.Id,
-                NombreCompleto   = e.GetAttributeValue<string>("crfb7_nombredeusuario") ?? "",
-                Cedula           = e.GetAttributeValue<string>("crfb7_cedula") ?? "",
-                Cargo            = e.GetAttributeValue<string>("crfb7_cargo"),
-                Gerencia         = e.GetAttributeValue<string>("crfb7_gerencia"),
-                Proyecto         = e.GetAttributeValue<string>("cr3d2_proyecto"),
-                FechaIngreso     = e.GetAttributeValue<DateTime?>("crfb7_fechaingreso"),
+                NombreCompleto = e.GetAttributeValue<string>("crfb7_nombredeusuario") ?? "",
+                Cedula = e.GetAttributeValue<string>("crfb7_cedula") ?? "",
+                Cargo = e.GetAttributeValue<string>("crfb7_cargo"),
+                Gerencia = e.GetAttributeValue<string>("crfb7_gerencia"),
+                Proyecto = e.GetAttributeValue<string>("cr3d2_proyecto"),
+                FechaIngreso = e.GetAttributeValue<DateTime?>("crfb7_fechaingreso"),
                 FechaInicioContrato = e.GetAttributeValue<DateTime?>("crfb7_fechainiciocontrato"),
                 FechaFinalizacionContrato = e.GetAttributeValue<DateTime?>("crfb7_fechafinalizacioncontrato"),
                 FechaFinalizacionPeriodoPrueba =
@@ -151,12 +151,12 @@ namespace EvaluacionDesempenoAB.Services
                 FechaActivacionEvaluacion =
                     e.GetAttributeValue<DateTime?>("crfb7_fechaactivacionevaluacion"),
                 CorreoElectronico = e.GetAttributeValue<string>("crfb7_correoelectronico"),
-                EvaluadorNombre   = e.GetAttributeValue<string>("crfb7_evaluadorid"),
-                CorreoEvaluador   = e.GetAttributeValue<string>("crfb7_correoevaluador"),
+                EvaluadorNombre = e.GetAttributeValue<string>("crfb7_evaluadorid"),
+                CorreoEvaluador = e.GetAttributeValue<string>("crfb7_correoevaluador"),
                 CorreoEvaluadorSst = e.GetAttributeValue<string>("cr3d2_correoevaluadorsst"),
                 CargoJefeInmediato = e.GetAttributeValue<string>("cr3d2_cargodeljefeinmediato"),
                 CargoEvaluadorSst = e.GetAttributeValue<string>("cr3d2_cargosst"),
-                TipoFormulario    = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value,
+                TipoFormulario = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value,
                 EsSuperAdministrador = GetBoolOrOptionSet(e, "crfb7_superadministrador"),
                 Novedades = e.GetAttributeValue<string>("crfb7_novedades")
 
@@ -336,7 +336,7 @@ namespace EvaluacionDesempenoAB.Services
         {
             return new NivelEvaluacion
             {
-                Id     = e.Id,
+                Id = e.Id,
                 Nombre = e.GetAttributeValue<string>("crfb7_nombrenivel") ?? "",
                 Codigo = e.GetAttributeValue<string>("crfb7_codigo")
             };
@@ -359,9 +359,9 @@ namespace EvaluacionDesempenoAB.Services
 
             return result.Entities.Select(e => new Competencia
             {
-                Id     = e.Id,
+                Id = e.Id,
                 Nombre = e.GetAttributeValue<string>("crfb7_competencia1") ?? "",
-                Orden  = e.GetAttributeValue<int?>("crfb7_dt_orden") ?? 0
+                Orden = e.GetAttributeValue<int?>("crfb7_dt_orden") ?? 0
             }).ToList();
         }
 
@@ -387,13 +387,13 @@ namespace EvaluacionDesempenoAB.Services
 
             return result.Entities.Select(e => new Comportamiento
             {
-                Id          = e.Id,
+                Id = e.Id,
                 Descripcion = e.GetAttributeValue<string>("crfb7_descripciondelcomportamiento")
                               ?? e.GetAttributeValue<string>("crfb7_comportamiento1")
                               ?? "",
-                Orden        = 0, // si agregas un campo de orden lo conectamos aquí
+                Orden = 0, // si agregas un campo de orden lo conectamos aquí
                 CompetenciaId = e.GetAttributeValue<EntityReference>("crfb7_competencia")?.Id ?? Guid.Empty,
-                NivelId       = e.GetAttributeValue<EntityReference>("crfb7_niveldeevaluacion")?.Id ?? Guid.Empty
+                NivelId = e.GetAttributeValue<EntityReference>("crfb7_niveldeevaluacion")?.Id ?? Guid.Empty
             }).ToList();
         }
 
@@ -512,15 +512,15 @@ namespace EvaluacionDesempenoAB.Services
         {
             return new Evaluacion
             {
-                Id             = e.Id,
-                UsuarioId      = e.GetAttributeValue<EntityReference>("crfb7_usuario")?.Id ?? Guid.Empty,
+                Id = e.Id,
+                UsuarioId = e.GetAttributeValue<EntityReference>("crfb7_usuario")?.Id ?? Guid.Empty,
                 // No usamos EvaluadorId (Guid) en este modelo ahora
-                EvaluadorId    = Guid.Empty,
-                NivelId        = e.GetAttributeValue<EntityReference>("crfb7_nivel")?.Id ?? Guid.Empty,
+                EvaluadorId = Guid.Empty,
+                NivelId = e.GetAttributeValue<EntityReference>("crfb7_nivel")?.Id ?? Guid.Empty,
                 FechaEvaluacion = e.GetAttributeValue<DateTime?>("createdon") ?? DateTime.MinValue,
-                TipoEvaluacion  = e.GetAttributeValue<string>("crfb7_tipo") ?? "",
-                Total           = e.GetAttributeValue<decimal?>("crfb7_total"),
-                Observaciones   = e.GetAttributeValue<string>("crfb7_observaciones"),
+                TipoEvaluacion = e.GetAttributeValue<string>("crfb7_tipo") ?? "",
+                Total = e.GetAttributeValue<decimal?>("crfb7_total"),
+                Observaciones = e.GetAttributeValue<string>("crfb7_observaciones"),
                 FechaProximaEvaluacion = e.GetAttributeValue<DateTime?>("crfb7_fechaproxima"),
                 EvaluacionOrigenId = e.GetAttributeValue<EntityReference>("crfb7_evaluacionorigen")?.Id,
                 EvaluadorNombre = e.GetAttributeValue<string>("crfb7_evaluadorid"),
@@ -828,7 +828,16 @@ namespace EvaluacionDesempenoAB.Services
             string imageColumnLogicalName,
             string defaultFileName)
         {
-            var entity = await _client.RetrieveAsync(entityLogicalName, recordId, new ColumnSet(imageColumnLogicalName));
+            Entity entity;
+            try
+            {
+                entity = await _client.RetrieveAsync(entityLogicalName, recordId, new ColumnSet(imageColumnLogicalName));
+            }
+            catch (Exception ex) when (IsFullImageNotAvailable(ex))
+            {
+                return null;
+            }
+
             var bytes = entity?.GetAttributeValue<byte[]>(imageColumnLogicalName);
             if (bytes == null || bytes.Length == 0)
             {
@@ -858,7 +867,8 @@ namespace EvaluacionDesempenoAB.Services
         {
             var message = ex.ToString();
             return message.Contains("ObjectDoesNotExist", StringComparison.OrdinalIgnoreCase) ||
-                   message.Contains("No FileAttachment records found", StringComparison.OrdinalIgnoreCase);
+                   message.Contains("No FileAttachment records found", StringComparison.OrdinalIgnoreCase) ||
+                   message.Contains("No ImageDescriptor records found", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string InferImageContentType(byte[] bytes)
@@ -932,8 +942,8 @@ namespace EvaluacionDesempenoAB.Services
             var e = new Entity(EvaluacionTable);
 
             e["crfb7_usuario"] = new EntityReference(UsuarioTable, evaluacion.UsuarioId);
-            e["crfb7_nivel"]   = new EntityReference(NivelTable, evaluacion.NivelId);
-            e["crfb7_tipo"]    = evaluacion.TipoEvaluacion;
+            e["crfb7_nivel"] = new EntityReference(NivelTable, evaluacion.NivelId);
+            e["crfb7_tipo"] = evaluacion.TipoEvaluacion;
 
             if (!string.IsNullOrWhiteSpace(evaluacion.EvaluadorNombre))
                 e["crfb7_evaluadorid"] = evaluacion.EvaluadorNombre;
@@ -973,8 +983,8 @@ namespace EvaluacionDesempenoAB.Services
             };
 
             e["crfb7_usuario"] = new EntityReference(UsuarioTable, evaluacion.UsuarioId);
-            e["crfb7_nivel"]   = new EntityReference(NivelTable, evaluacion.NivelId);
-            e["crfb7_tipo"]    = evaluacion.TipoEvaluacion;
+            e["crfb7_nivel"] = new EntityReference(NivelTable, evaluacion.NivelId);
+            e["crfb7_tipo"] = evaluacion.TipoEvaluacion;
 
             e["crfb7_evaluadorid"] = string.IsNullOrWhiteSpace(evaluacion.EvaluadorNombre)
                 ? null
@@ -1215,11 +1225,11 @@ namespace EvaluacionDesempenoAB.Services
             var r = await _client.RetrieveMultipleAsync(q);
             return r.Entities.Select(e => new EvaluacionDetalle
             {
-                Id              = e.Id,
-                EvaluacionId    = evalId,
+                Id = e.Id,
+                EvaluacionId = evalId,
                 ComportamientoId = e.GetAttributeValue<EntityReference>("crfb7_dt_comportamientoid")?.Id ?? Guid.Empty,
-                Puntaje         = e.GetAttributeValue<int?>("crfb7_dt_puntaje") ?? 0,
-                Comentario      = e.GetAttributeValue<string>("crfb7_dt_comentario")
+                Puntaje = e.GetAttributeValue<int?>("crfb7_dt_puntaje") ?? 0,
+                Comentario = e.GetAttributeValue<string>("crfb7_dt_comentario")
             }).ToList();
         }
 
@@ -1272,12 +1282,12 @@ namespace EvaluacionDesempenoAB.Services
             var r = await _client.RetrieveMultipleAsync(q);
             return r.Entities.Select(e => new PlanAccion
             {
-                Id               = e.Id,
-                EvaluacionId     = evalId,
+                Id = e.Id,
+                EvaluacionId = evalId,
                 ComportamientoNombre = e.GetAttributeValue<string>("crfb7_responsable"),
                 DescripcionAccion = e.GetAttributeValue<string>("crfb7_descripciondelaaccion") ?? "",
-                Responsable      = e.GetAttributeValue<string>("crfb7_responsable"),
-                FechaCompromiso  = e.GetAttributeValue<DateTime?>("crfb7_fechacompromiso")
+                Responsable = e.GetAttributeValue<string>("crfb7_responsable"),
+                FechaCompromiso = e.GetAttributeValue<DateTime?>("crfb7_fechacompromiso")
             }).ToList();
         }
     }

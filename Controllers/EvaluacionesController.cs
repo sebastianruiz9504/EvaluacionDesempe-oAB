@@ -137,6 +137,23 @@ namespace EvaluacionDesempenoAB.Controllers
         private static bool TieneContenido(ArchivoEvaluacion? archivo)
             => archivo != null && archivo.Contenido.Length > 0;
 
+        private async Task<ArchivoEvaluacion?> DownloadFirmaUsuarioOrNullAsync(Guid usuarioId, string? contexto = null)
+        {
+            try
+            {
+                return await _repo.DownloadFirmaUsuarioAsync(usuarioId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "No fue posible cargar la firma del usuario {UsuarioId}. Contexto: {Contexto}. Se continuará sin mostrar firma.",
+                    usuarioId,
+                    contexto ?? "sin contexto");
+                return null;
+            }
+        }
+
         private static bool EsPuntajeOportunidadMejora(int? puntaje)
             => puntaje.HasValue &&
                puntaje.Value >= OportunidadMejoraPuntajeMinimo &&
@@ -626,6 +643,98 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             return vm;
+        }
+
+        private async Task<IActionResult> ReturnFormularioConErrorGuardadoAsync(
+            EvaluacionFormularioViewModel model,
+            UsuarioEvaluado evaluador,
+            UsuarioEvaluado usuario,
+            NivelEvaluacion nivel,
+            string? mensajeError)
+        {
+            if (!string.IsNullOrWhiteSpace(mensajeError))
+            {
+                ModelState.AddModelError(string.Empty, mensajeError);
+            }
+
+            try
+            {
+                var evaluacion = model.Id.HasValue
+                    ? await _repo.GetEvaluacionByIdAsync(model.Id.Value)
+                    : null;
+                var vm = await BuildFormularioViewModelAsync(
+                    evaluador,
+                    usuario,
+                    nivel,
+                    evaluacion,
+                    model.EvaluacionOrigenId);
+
+                vm.FechaEvaluacion = model.FechaEvaluacion == default
+                    ? DateTime.Today
+                    : model.FechaEvaluacion;
+                vm.TipoEvaluacion = string.IsNullOrWhiteSpace(model.TipoEvaluacion)
+                    ? vm.TipoEvaluacion
+                    : model.TipoEvaluacion;
+                vm.EvaluacionOrigenId = model.EvaluacionOrigenId;
+                vm.ObservacionesGenerales = model.ObservacionesGenerales;
+                vm.Gerencia = string.IsNullOrWhiteSpace(model.Gerencia) ? vm.Gerencia : model.Gerencia;
+                vm.Proyecto = string.IsNullOrWhiteSpace(model.Proyecto) ? vm.Proyecto : model.Proyecto;
+
+                AplicarRespuestasPublicadas(vm, model);
+                return View("Formulario", vm);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "No fue posible reconstruir el formulario despues de un error de guardado para el usuario {UsuarioId}.",
+                    model.UsuarioId);
+                return View("Formulario", model);
+            }
+        }
+
+        private static void AplicarRespuestasPublicadas(
+            EvaluacionFormularioViewModel destino,
+            EvaluacionFormularioViewModel publicado)
+        {
+            var respuestas = publicado.Competencias
+                .SelectMany(comp => comp.Comportamientos)
+                .Where(c => c.ComportamientoId != Guid.Empty)
+                .GroupBy(c => c.ComportamientoId)
+                .ToDictionary(g => g.Key, g => g.Last());
+
+            foreach (var comportamiento in destino.Competencias.SelectMany(comp => comp.Comportamientos))
+            {
+                if (!respuestas.TryGetValue(comportamiento.ComportamientoId, out var respuesta))
+                {
+                    continue;
+                }
+
+                comportamiento.Puntaje = respuesta.Puntaje;
+                comportamiento.Comentario = respuesta.Comentario;
+            }
+        }
+
+        private string BuildMensajeErrorGuardado(Exception ex)
+        {
+            var detalle = GetMensajeTecnicoCorto(ex);
+            return "No fue posible guardar la evaluación en Dataverse. " +
+                   $"Código de soporte: {HttpContext.TraceIdentifier}. " +
+                   $"Detalle técnico: {detalle}";
+        }
+
+        private static string GetMensajeTecnicoCorto(Exception ex)
+        {
+            var current = ex;
+            while (current.InnerException != null &&
+                   string.IsNullOrWhiteSpace(current.Message))
+            {
+                current = current.InnerException;
+            }
+
+            return string.IsNullOrWhiteSpace(current.Message)
+                ? current.GetType().Name
+                : current.Message;
         }
 
         private static List<EvaluacionDetalle> MergeDetalles(
@@ -1354,186 +1463,205 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            var competencias = await _repo.GetCompetenciasAsync();
-            var competenciasById = BuildCompetenciasLookup(competencias);
-            var comportamientos = await _repo.GetComportamientosByNivelAsync(model.NivelId);
-            var parteActual = GetParteEvaluador(evaluador, usuario);
-            var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
-
-            model.AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual);
-            ValidarGuardadoUnicoPorParte(model, comportamientosParteActual);
-
-            if (!ModelState.IsValid)
-            {
-                return View("Formulario", model);
-            }
-
-            if (model.EvaluacionOrigenId.HasValue)
-            {
-                return BadRequest("La opción de reevaluar está deshabilitada.");
-            }
-
-            var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>
-            {
-                [model.NivelId] = comportamientos
-            };
-            var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
-
-            var evaluacionPendienteParaParte = await GetEvaluacionInicialPendienteParaParteAsync(
-                model.UsuarioId,
-                parteActual,
-                competencias,
-                comportamientosPorNivel,
-                coberturasPorEvaluacion);
-
-            string lockKey;
-            if (evaluacionPendienteParaParte != null)
-            {
-                lockKey = EvaluacionCicloHelper.BuildLockKey(evaluacionPendienteParaParte.Id);
-            }
-            else
-            {
-                var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
-                if (ventanaActiva == null)
-                {
-                    return BadRequest("La evaluación solo se puede guardar dentro del rango de fechas permitido o sobre una evaluación ya creada.");
-                }
-
-                lockKey = EvaluacionCicloHelper.BuildLockKey(usuario.Id, ventanaActiva);
-            }
-
-            var saveLock = GetInicioEvaluacionLock(lockKey);
-            await saveLock.WaitAsync();
-
-            Evaluacion evaluacion;
-            EvaluacionCoberturaInfo cobertura;
-
             try
             {
-                coberturasPorEvaluacion.Clear();
+                var competencias = await _repo.GetCompetenciasAsync();
+                var competenciasById = BuildCompetenciasLookup(competencias);
+                var comportamientos = await _repo.GetComportamientosByNivelAsync(model.NivelId);
+                var parteActual = GetParteEvaluador(evaluador, usuario);
+                var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
 
-                var evaluacionExistente = model.Id.HasValue
-                    ? await _repo.GetEvaluacionByIdAsync(model.Id.Value)
-                    : null;
+                model.AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual);
+                ValidarGuardadoUnicoPorParte(model, comportamientosParteActual);
 
-                if (evaluacionExistente == null)
+                if (!ModelState.IsValid)
                 {
-                    evaluacionExistente = await GetEvaluacionInicialPendienteParaParteAsync(
-                        model.UsuarioId,
-                        parteActual,
-                        competencias,
-                        comportamientosPorNivel,
-                        coberturasPorEvaluacion);
+                    return await ReturnFormularioConErrorGuardadoAsync(model, evaluador, usuario, nivel, null);
                 }
 
-                if (evaluacionExistente == null)
+                if (model.EvaluacionOrigenId.HasValue)
+                {
+                    return BadRequest("La opción de reevaluar está deshabilitada.");
+                }
+
+                var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>
+                {
+                    [model.NivelId] = comportamientos
+                };
+                var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
+
+                var evaluacionPendienteParaParte = await GetEvaluacionInicialPendienteParaParteAsync(
+                    model.UsuarioId,
+                    parteActual,
+                    competencias,
+                    comportamientosPorNivel,
+                    coberturasPorEvaluacion);
+
+                string lockKey;
+                if (evaluacionPendienteParaParte != null)
+                {
+                    lockKey = EvaluacionCicloHelper.BuildLockKey(evaluacionPendienteParaParte.Id);
+                }
+                else
                 {
                     var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
                     if (ventanaActiva == null)
                     {
-                        return BadRequest("La evaluación solo se puede guardar dentro del rango de fechas permitido.");
+                        return BadRequest("La evaluación solo se puede guardar dentro del rango de fechas permitido o sobre una evaluación ya creada.");
                     }
 
-                    var evaluacionEnVentana = await GetEvaluacionInicialActivaAsync(model.UsuarioId, ventanaActiva);
-                    if (evaluacionEnVentana != null)
+                    lockKey = EvaluacionCicloHelper.BuildLockKey(usuario.Id, ventanaActiva);
+                }
+
+                var saveLock = GetInicioEvaluacionLock(lockKey);
+                await saveLock.WaitAsync();
+
+                Evaluacion evaluacion;
+                EvaluacionCoberturaInfo cobertura;
+
+                try
+                {
+                    coberturasPorEvaluacion.Clear();
+
+                    var evaluacionExistente = model.Id.HasValue
+                        ? await _repo.GetEvaluacionByIdAsync(model.Id.Value)
+                        : null;
+
+                    if (evaluacionExistente == null)
                     {
-                        var coberturaVentana = await GetCoberturaAsync(
-                            evaluacionEnVentana,
+                        evaluacionExistente = await GetEvaluacionInicialPendienteParaParteAsync(
+                            model.UsuarioId,
+                            parteActual,
                             competencias,
                             comportamientosPorNivel,
                             coberturasPorEvaluacion);
+                    }
 
-                        if (EstaParteCompleta(coberturaVentana, parteActual))
+                    if (evaluacionExistente == null)
+                    {
+                        var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
+                        if (ventanaActiva == null)
+                        {
+                            return BadRequest("La evaluación solo se puede guardar dentro del rango de fechas permitido.");
+                        }
+
+                        var evaluacionEnVentana = await GetEvaluacionInicialActivaAsync(model.UsuarioId, ventanaActiva);
+                        if (evaluacionEnVentana != null)
+                        {
+                            var coberturaVentana = await GetCoberturaAsync(
+                                evaluacionEnVentana,
+                                competencias,
+                                comportamientosPorNivel,
+                                coberturasPorEvaluacion);
+
+                            if (EstaParteCompleta(coberturaVentana, parteActual))
+                            {
+                                return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
+                            }
+
+                            evaluacionExistente = evaluacionEnVentana;
+                        }
+                    }
+
+                    var detallesExistentes = evaluacionExistente == null
+                        ? new List<EvaluacionDetalle>()
+                        : await _repo.GetDetallesByEvaluacionAsync(evaluacionExistente.Id);
+                    var planesExistentes = evaluacionExistente == null
+                        ? new List<PlanAccion>()
+                        : await _repo.GetPlanesByEvaluacionAsync(evaluacionExistente.Id);
+
+                    if (evaluacionExistente != null)
+                    {
+                        var coberturaAntesDeGuardar = BuildCobertura(detallesExistentes, competencias, comportamientos);
+                        if (EstaParteCompleta(coberturaAntesDeGuardar, parteActual))
                         {
                             return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
                         }
+                    }
 
-                        evaluacionExistente = evaluacionEnVentana;
+                    var nuevosDetalles = model.Competencias
+                        .SelectMany(comp => comp.Comportamientos)
+                        .Where(c => c.Puntaje.HasValue && comportamientosParteActual.Contains(c.ComportamientoId))
+                        .Select(c => new EvaluacionDetalle
+                        {
+                            Id = Guid.NewGuid(),
+                            EvaluacionId = evaluacionExistente?.Id ?? Guid.Empty,
+                            ComportamientoId = c.ComportamientoId,
+                            Puntaje = c.Puntaje!.Value,
+                            Comentario = c.Comentario
+                        })
+                        .ToList();
+
+                    var detallesFinales = evaluacionExistente == null
+                        ? nuevosDetalles
+                        : MergeDetalles(detallesExistentes, nuevosDetalles, comportamientosParteActual);
+                    cobertura = BuildCobertura(detallesFinales, competencias, comportamientos);
+
+                    var fechaProxima = evaluacionExistente?.FechaProximaEvaluacion
+                                       ?? (model.TipoEvaluacion == "Inicial"
+                                           ? model.FechaEvaluacion.AddMonths(6)
+                                           : null);
+
+                    var observaciones = MergeObservaciones(
+                        evaluacionExistente?.Observaciones,
+                        model.ObservacionesGenerales);
+
+                    evaluacion = new Evaluacion
+                    {
+                        Id = evaluacionExistente?.Id ?? Guid.NewGuid(),
+                        UsuarioId = model.UsuarioId,
+                        NivelId = model.NivelId,
+                        FechaEvaluacion = evaluacionExistente?.FechaEvaluacion ?? model.FechaEvaluacion,
+                        TipoEvaluacion = model.TipoEvaluacion,
+                        EvaluacionOrigenId = null,
+                        Observaciones = observaciones,
+                        Estado = cobertura.AmbasPartesCompletas ? "Finalizada" : "Parcial",
+                        FechaProximaEvaluacion = fechaProxima,
+                        EvaluadorNombre = usuario.EvaluadorNombre ?? evaluacionExistente?.EvaluadorNombre ?? GetCorreoActual(evaluador),
+                        Proyecto = string.IsNullOrWhiteSpace(model.Proyecto) ? usuario.Proyecto : model.Proyecto,
+                        Gerencia = string.IsNullOrWhiteSpace(model.Gerencia) ? usuario.Gerencia : model.Gerencia,
+                        Total = cobertura.TotalCalculado,
+                        ReporteFirmadoId = evaluacionExistente?.ReporteFirmadoId,
+                        ReporteFirmadoNombre = evaluacionExistente?.ReporteFirmadoNombre
+                    };
+
+                    if (evaluacionExistente == null)
+                    {
+                        await _repo.CreateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
+                    }
+                    else
+                    {
+                        await _repo.UpdateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
                     }
                 }
-
-                var detallesExistentes = evaluacionExistente == null
-                    ? new List<EvaluacionDetalle>()
-                    : await _repo.GetDetallesByEvaluacionAsync(evaluacionExistente.Id);
-                var planesExistentes = evaluacionExistente == null
-                    ? new List<PlanAccion>()
-                    : await _repo.GetPlanesByEvaluacionAsync(evaluacionExistente.Id);
-
-                if (evaluacionExistente != null)
+                finally
                 {
-                    var coberturaAntesDeGuardar = BuildCobertura(detallesExistentes, competencias, comportamientos);
-                    if (EstaParteCompleta(coberturaAntesDeGuardar, parteActual))
-                    {
-                        return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
-                    }
+                    saveLock.Release();
                 }
 
-                var nuevosDetalles = model.Competencias
-                    .SelectMany(comp => comp.Comportamientos)
-                    .Where(c => c.Puntaje.HasValue && comportamientosParteActual.Contains(c.ComportamientoId))
-                    .Select(c => new EvaluacionDetalle
-                    {
-                        Id = Guid.NewGuid(),
-                        EvaluacionId = evaluacionExistente?.Id ?? Guid.Empty,
-                        ComportamientoId = c.ComportamientoId,
-                        Puntaje = c.Puntaje!.Value,
-                        Comentario = c.Comentario
-                    })
-                    .ToList();
-
-                var detallesFinales = evaluacionExistente == null
-                    ? nuevosDetalles
-                    : MergeDetalles(detallesExistentes, nuevosDetalles, comportamientosParteActual);
-                cobertura = BuildCobertura(detallesFinales, competencias, comportamientos);
-
-                var fechaProxima = evaluacionExistente?.FechaProximaEvaluacion
-                                   ?? (model.TipoEvaluacion == "Inicial"
-                                       ? model.FechaEvaluacion.AddMonths(6)
-                                       : null);
-
-                var observaciones = MergeObservaciones(
-                    evaluacionExistente?.Observaciones,
-                    model.ObservacionesGenerales);
-
-                evaluacion = new Evaluacion
+                if (EstaParteCompleta(cobertura, parteActual))
                 {
-                    Id = evaluacionExistente?.Id ?? Guid.NewGuid(),
-                    UsuarioId = model.UsuarioId,
-                    NivelId = model.NivelId,
-                    FechaEvaluacion = evaluacionExistente?.FechaEvaluacion ?? model.FechaEvaluacion,
-                    TipoEvaluacion = model.TipoEvaluacion,
-                    EvaluacionOrigenId = null,
-                    Observaciones = observaciones,
-                    Estado = cobertura.AmbasPartesCompletas ? "Finalizada" : "Parcial",
-                    FechaProximaEvaluacion = fechaProxima,
-                    EvaluadorNombre = usuario.EvaluadorNombre ?? evaluacionExistente?.EvaluadorNombre ?? GetCorreoActual(evaluador),
-                    Proyecto = string.IsNullOrWhiteSpace(model.Proyecto) ? usuario.Proyecto : model.Proyecto,
-                    Gerencia = string.IsNullOrWhiteSpace(model.Gerencia) ? usuario.Gerencia : model.Gerencia,
-                    Total = cobertura.TotalCalculado,
-                    ReporteFirmadoId = evaluacionExistente?.ReporteFirmadoId,
-                    ReporteFirmadoNombre = evaluacionExistente?.ReporteFirmadoNombre
-                };
-
-                if (evaluacionExistente == null)
-                {
-                    await _repo.CreateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
+                    return RedirectToAction(nameof(Reporte), new { id = evaluacion.Id });
                 }
-                else
-                {
-                    await _repo.UpdateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
-                }
+
+                return RedirectToAction(nameof(Index));
             }
-            finally
+            catch (Exception ex)
             {
-                saveLock.Release();
-            }
+                _logger.LogError(
+                    ex,
+                    "No fue posible guardar la evaluacion para el usuario {UsuarioId} ({Cedula}) por el evaluador {CorreoEvaluador}.",
+                    usuario.Id,
+                    usuario.Cedula,
+                    GetCorreoActual(evaluador));
 
-            if (EstaParteCompleta(cobertura, parteActual))
-            {
-                return RedirectToAction(nameof(Reporte), new { id = evaluacion.Id });
+                return await ReturnFormularioConErrorGuardadoAsync(
+                    model,
+                    evaluador,
+                    usuario,
+                    nivel,
+                    BuildMensajeErrorGuardado(ex));
             }
-
-            return RedirectToAction(nameof(Index));
         }
 
         [HttpGet]
@@ -1754,7 +1882,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 });
             }
 
-            var firmaGuardada = await _repo.DownloadFirmaUsuarioAsync(evaluador.Id);
+            var firmaGuardada = await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "firma recien cargada");
 
             return Json(new
             {
@@ -2013,7 +2141,7 @@ namespace EvaluacionDesempenoAB.Controllers
             var parteActual = GetParteEvaluador(evaluador, usuario);
             var requiereFirma = !evaluador.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual);
             var firmaActual = requiereFirma
-                ? await _repo.DownloadFirmaUsuarioAsync(evaluador.Id)
+                ? await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "guardar plan de accion")
                 : null;
 
             if (requiereFirma)
@@ -2043,7 +2171,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     {
                         await using var stream = firmaArchivo.OpenReadStream();
                         await _repo.UploadFirmaUsuarioAsync(evaluador.Id, firmaArchivo.FileName, firmaArchivo.ContentType, stream);
-                        firmaActual = await _repo.DownloadFirmaUsuarioAsync(evaluador.Id);
+                        firmaActual = await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "firma recien cargada en plan de accion");
                     }
                     catch (Exception ex)
                     {
@@ -2276,12 +2404,12 @@ namespace EvaluacionDesempenoAB.Controllers
             var evaluadorSst = await ResolveUsuarioPorCorreosAsync(usuario.CorreoEvaluadorSst);
             var firmaEvaluador = evaluadorPrincipal == null
                 ? null
-                : await _repo.DownloadFirmaUsuarioAsync(evaluadorPrincipal.Id);
+                : await DownloadFirmaUsuarioOrNullAsync(evaluadorPrincipal.Id, $"reporte evaluador principal {evaluacion.Id}");
             var firmaEvaluadorSst = evaluadorSst == null
                 ? null
-                : await _repo.DownloadFirmaUsuarioAsync(evaluadorSst.Id);
+                : await DownloadFirmaUsuarioOrNullAsync(evaluadorSst.Id, $"reporte evaluador SST {evaluacion.Id}");
             var firmaActual = !evaluadorActual.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual)
-                ? await _repo.DownloadFirmaUsuarioAsync(evaluadorActual.Id)
+                ? await DownloadFirmaUsuarioOrNullAsync(evaluadorActual.Id, $"reporte evaluador actual {evaluacion.Id}")
                 : null;
             var etiquetaFirmaActual = GetEtiquetaFirmaParaParte(parteActual);
             var planAccionBloqueado = etiquetaFirmaActual != null &&

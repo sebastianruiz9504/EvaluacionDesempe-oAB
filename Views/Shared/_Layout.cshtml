@@ -16,8 +16,15 @@
 
         if (!string.IsNullOrWhiteSpace(email))
         {
-            var usuario = await EvaluacionRepository.GetUsuarioByCorreoAsync(email);
-            isSuperAdmin = usuario?.EsSuperAdministrador == true;
+            try
+            {
+                var usuario = await EvaluacionRepository.GetUsuarioByCorreoAsync(email);
+                isSuperAdmin = usuario?.EsSuperAdministrador == true;
+            }
+            catch
+            {
+                isSuperAdmin = false;
+            }
         }
     }
 }
