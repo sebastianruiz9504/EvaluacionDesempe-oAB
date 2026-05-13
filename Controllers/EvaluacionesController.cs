@@ -127,15 +127,17 @@ namespace EvaluacionDesempenoAB.Controllers
                 return null;
             }
 
-            var tipoContenido = string.IsNullOrWhiteSpace(archivo.TipoContenido)
-                ? "application/octet-stream"
-                : archivo.TipoContenido;
+            var tipoContenido = DetectarTipoContenidoFirma(archivo.Contenido);
+            if (string.IsNullOrWhiteSpace(tipoContenido))
+            {
+                return null;
+            }
 
             return $"data:{tipoContenido};base64,{Convert.ToBase64String(archivo.Contenido)}";
         }
 
-        private static bool TieneContenido(ArchivoEvaluacion? archivo)
-            => archivo != null && archivo.Contenido.Length > 0;
+        private static bool TieneFirmaValida(ArchivoEvaluacion? archivo)
+            => archivo != null && !string.IsNullOrWhiteSpace(DetectarTipoContenidoFirma(archivo.Contenido));
 
         private async Task<ArchivoEvaluacion?> DownloadFirmaUsuarioOrNullAsync(Guid usuarioId, string? contexto = null)
         {
@@ -160,20 +162,51 @@ namespace EvaluacionDesempenoAB.Controllers
                puntaje.Value <= OportunidadMejoraPuntajeMaximo;
 
         private static bool EsFirmaImagenValida(IFormFile archivo)
-        {
-            var contentTypeValido =
-                string.Equals(archivo.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(archivo.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase);
+            => !string.IsNullOrWhiteSpace(GetTipoContenidoFirma(archivo));
 
-            if (contentTypeValido)
+        private static string? GetTipoContenidoFirma(IFormFile archivo)
+        {
+            if (archivo.Length == 0)
             {
-                return true;
+                return null;
             }
 
-            var extension = Path.GetExtension(archivo.FileName);
-            return string.Equals(extension, ".png", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(extension, ".jpg", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(extension, ".jpeg", StringComparison.OrdinalIgnoreCase);
+            using var stream = archivo.OpenReadStream();
+            Span<byte> buffer = stackalloc byte[8];
+            var bytesRead = stream.Read(buffer);
+            var tipoContenido = DetectarTipoContenidoFirma(buffer[..bytesRead]);
+            if (!string.IsNullOrWhiteSpace(tipoContenido))
+            {
+                return tipoContenido;
+            }
+
+            return null;
+        }
+
+        private static string? DetectarTipoContenidoFirma(ReadOnlySpan<byte> bytes)
+        {
+            if (bytes.Length >= 8 &&
+                bytes[0] == 0x89 &&
+                bytes[1] == 0x50 &&
+                bytes[2] == 0x4E &&
+                bytes[3] == 0x47 &&
+                bytes[4] == 0x0D &&
+                bytes[5] == 0x0A &&
+                bytes[6] == 0x1A &&
+                bytes[7] == 0x0A)
+            {
+                return "image/png";
+            }
+
+            if (bytes.Length >= 3 &&
+                bytes[0] == 0xFF &&
+                bytes[1] == 0xD8 &&
+                bytes[2] == 0xFF)
+            {
+                return "image/jpeg";
+            }
+
+            return null;
         }
 
         private static string? GetEtiquetaFirmaParaParte(TipoParteEvaluacion parte)
@@ -212,7 +245,8 @@ namespace EvaluacionDesempenoAB.Controllers
                 : new List<PlanAccionItemVm> { new() };
             vm.FechaProximaEvaluacion = model.FechaProximaEvaluacion;
 
-            ViewBag.MostrarModalGuardarPlan = true;
+            ViewBag.ModoPlanAccion = true;
+            ViewBag.MostrarModalFirma = true;
             ViewBag.ErrorGuardadoPlan = mensajeError;
 
             return View("Reporte", vm);
@@ -231,11 +265,23 @@ namespace EvaluacionDesempenoAB.Controllers
         private TipoParteEvaluacion GetParteEvaluador(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
             => EvaluacionRolesHelper.ResolveParte(
                 usuarioObjetivo,
-                GetCorreoActual(evaluadorActual),
-                evaluadorActual.EsSuperAdministrador);
+                GetCorreoActual(evaluadorActual));
 
         private bool PuedeAccederAUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
             => evaluadorActual.EsSuperAdministrador || EvaluacionRolesHelper.TieneAcceso(GetParteEvaluador(evaluadorActual, usuarioObjetivo));
+
+        private bool PuedeDiligenciarUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
+            => EvaluacionRolesHelper.TieneAcceso(GetParteEvaluador(evaluadorActual, usuarioObjetivo));
+
+        private static BadRequestObjectResult EvaluadorSinBloqueAsignado()
+            => new("Solo el evaluador asignado o el evaluador SST asignado pueden diligenciar esta evaluación.");
+
+        private static string GetEtiquetaAlcance(TipoParteEvaluacion parte, bool esSuperAdministrador)
+            => EvaluacionRolesHelper.TieneAcceso(parte)
+                ? EvaluacionRolesHelper.GetEtiquetaParte(parte)
+                : esSuperAdministrador
+                    ? "Administrador (solo consulta)"
+                    : EvaluacionRolesHelper.GetEtiquetaParte(parte);
 
         private async Task<bool> PuedeAccederAEvaluacionAsync(UsuarioEvaluado evaluadorActual, Evaluacion evaluacion)
         {
@@ -484,6 +530,10 @@ namespace EvaluacionDesempenoAB.Controllers
             return null;
         }
 
+        private static bool TieneFirmasCompletasParaCertificado(EvaluacionReporteViewModel vm)
+            => !string.IsNullOrWhiteSpace(vm.FirmaEvaluadorDataUrl) &&
+               !string.IsNullOrWhiteSpace(vm.FirmaEvaluadorSstDataUrl);
+
         private static bool EstaParteCompleta(EvaluacionCoberturaInfo cobertura, TipoParteEvaluacion parte)
         {
             if (parte == (TipoParteEvaluacion.Normal | TipoParteEvaluacion.Sst))
@@ -599,7 +649,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 Gerencia = usuario.Gerencia,
                 Proyecto = evaluacion?.Proyecto ?? usuario.Proyecto,
                 NombreNivel = nivel.Nombre,
-                AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
+                AlcanceEvaluadorActual = GetEtiquetaAlcance(parteActual, evaluador.EsSuperAdministrador),
                 EvaluacionNormalCompleta = cobertura.EvaluacionNormalCompleta,
                 EvaluacionSstCompleta = cobertura.EvaluacionSstCompleta,
                 ParteActualGuardada = evaluacion != null && EstaParteCompleta(cobertura, parteActual),
@@ -1281,6 +1331,11 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            if (!PuedeDiligenciarUsuario(evaluador, usuario))
+            {
+                return EvaluadorSinBloqueAsignado();
+            }
+
             var parteActual = GetParteEvaluador(evaluador, usuario);
             var competencias = await _repo.GetCompetenciasAsync();
             var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
@@ -1351,6 +1406,11 @@ namespace EvaluacionDesempenoAB.Controllers
             if (!PuedeAccederAUsuario(evaluador, usuario))
             {
                 return Forbid();
+            }
+
+            if (!PuedeDiligenciarUsuario(evaluador, usuario))
+            {
+                return EvaluadorSinBloqueAsignado();
             }
 
             if (evaluacionOrigenId.HasValue)
@@ -1435,6 +1495,12 @@ namespace EvaluacionDesempenoAB.Controllers
             {
                 return Forbid();
             }
+
+            if (!PuedeDiligenciarUsuario(evaluador, usuario))
+            {
+                return EvaluadorSinBloqueAsignado();
+            }
+
             var vm = await BuildFormularioViewModelAsync(evaluador, usuario, nivel, evaluacion);
             return View("Formulario", vm);
         }
@@ -1463,6 +1529,11 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            if (!PuedeDiligenciarUsuario(evaluador, usuario))
+            {
+                return EvaluadorSinBloqueAsignado();
+            }
+
             try
             {
                 var competencias = await _repo.GetCompetenciasAsync();
@@ -1471,7 +1542,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 var parteActual = GetParteEvaluador(evaluador, usuario);
                 var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
 
-                model.AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual);
+                model.AlcanceEvaluadorActual = GetEtiquetaAlcance(parteActual, evaluador.EsSuperAdministrador);
                 ValidarGuardadoUnicoPorParte(model, comportamientosParteActual);
 
                 if (!ModelState.IsValid)
@@ -1641,7 +1712,7 @@ namespace EvaluacionDesempenoAB.Controllers
 
                 if (EstaParteCompleta(cobertura, parteActual))
                 {
-                    return RedirectToAction(nameof(Reporte), new { id = evaluacion.Id });
+                    return RedirectToAction(nameof(PlanAccion), new { id = evaluacion.Id });
                 }
 
                 return RedirectToAction(nameof(Index));
@@ -1779,6 +1850,25 @@ namespace EvaluacionDesempenoAB.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> PlanAccion(Guid id)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            var vm = await BuildReporteViewModelAsync(id, evaluador);
+            if (vm == null)
+            {
+                return NotFound();
+            }
+
+            ViewBag.ModoPlanAccion = true;
+            return View("Reporte", vm);
+        }
+
+        [HttpGet]
         public async Task<IActionResult> ImprimirResultados(Guid id)
         {
             var evaluador = await GetEvaluadorActualAsync();
@@ -1796,6 +1886,11 @@ namespace EvaluacionDesempenoAB.Controllers
             if (!vm.EvaluacionNormalCompleta || !vm.EvaluacionSstCompleta)
             {
                 return BadRequest("El certificado solo se puede exportar cuando ambas partes hayan completado la evaluación.");
+            }
+
+            if (!TieneFirmasCompletasParaCertificado(vm))
+            {
+                return BadRequest("El certificado solo se puede exportar cuando existan firmas válidas en PNG o JPG para el evaluador y el evaluador SST.");
             }
 
             return View("ReporteImpresion", vm);
@@ -1845,9 +1940,10 @@ namespace EvaluacionDesempenoAB.Controllers
                 return BadRequest(new { ok = false, message = "Debes adjuntar una firma." });
             }
 
-            if (!EsFirmaImagenValida(archivo))
+            var tipoContenidoFirma = GetTipoContenidoFirma(archivo);
+            if (string.IsNullOrWhiteSpace(tipoContenidoFirma))
             {
-                return BadRequest(new { ok = false, message = "La firma debe estar en formato PNG o JPG." });
+                return BadRequest(new { ok = false, message = "La firma debe ser una imagen válida en formato PNG o JPG." });
             }
 
             var evaluacion = await _repo.GetEvaluacionByIdAsync(id);
@@ -1863,15 +1959,17 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             var parteActual = GetParteEvaluador(evaluador, usuario);
-            if (evaluador.EsSuperAdministrador || !EvaluacionRolesHelper.TieneAcceso(parteActual))
+            if (!EvaluacionRolesHelper.TieneAcceso(parteActual))
             {
                 return Forbid();
             }
 
+            var planesExistentes = await _repo.GetPlanesByEvaluacionAsync(id);
+
             try
             {
                 await using var stream = archivo.OpenReadStream();
-                await _repo.UploadFirmaUsuarioAsync(evaluador.Id, archivo.FileName, archivo.ContentType, stream);
+                await _repo.UploadFirmaUsuarioAsync(evaluador.Id, archivo.FileName, tipoContenidoFirma, stream);
             }
             catch (Exception ex)
             {
@@ -1883,11 +1981,13 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             var firmaGuardada = await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "firma recien cargada");
+            var quedaBloqueado = TieneFirmaValida(firmaGuardada) && planesExistentes.Any(p => !string.IsNullOrWhiteSpace(p.DescripcionAccion));
 
             return Json(new
             {
                 ok = true,
                 firmaDataUrl = ConvertirArchivoADataUrl(firmaGuardada),
+                planAccionBloqueado = quedaBloqueado,
                 message = "La firma se guardó correctamente."
             });
         }
@@ -2139,45 +2239,9 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             var parteActual = GetParteEvaluador(evaluador, usuario);
-            var requiereFirma = !evaluador.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual);
-            var firmaActual = requiereFirma
-                ? await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "guardar plan de accion")
-                : null;
-
-            if (requiereFirma)
+            if (!EvaluacionRolesHelper.TieneAcceso(parteActual))
             {
-                if (firmaArchivo == null || firmaArchivo.Length == 0)
-                {
-                    if (!TieneContenido(firmaActual))
-                    {
-                        return await ReturnReporteConErrorGuardadoPlanAsync(
-                            model,
-                            evaluador,
-                            "Debes adjuntar la firma en formato PNG o JPG para guardar el plan de acción.");
-                    }
-                }
-
-                else if (!EsFirmaImagenValida(firmaArchivo))
-                {
-                    return await ReturnReporteConErrorGuardadoPlanAsync(
-                        model,
-                        evaluador,
-                        "La firma debe estar en formato PNG o JPG.");
-                }
-
-                else
-                {
-                    try
-                    {
-                        await using var stream = firmaArchivo.OpenReadStream();
-                        await _repo.UploadFirmaUsuarioAsync(evaluador.Id, firmaArchivo.FileName, firmaArchivo.ContentType, stream);
-                        firmaActual = await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "firma recien cargada en plan de accion");
-                    }
-                    catch (Exception ex)
-                    {
-                        return await ReturnReporteConErrorGuardadoPlanAsync(model, evaluador, ex.Message);
-                    }
-                }
+                return EvaluadorSinBloqueAsignado();
             }
 
             var competencias = await _repo.GetCompetenciasAsync();
@@ -2188,8 +2252,9 @@ namespace EvaluacionDesempenoAB.Controllers
 
             var detalles = await _repo.GetDetallesByEvaluacionAsync(model.EvaluacionId);
             var planesExistentes = await _repo.GetPlanesByEvaluacionAsync(model.EvaluacionId);
-            var planAccionBloqueado = requiereFirma &&
-                                      TieneContenido(firmaActual) &&
+            var firmaActual = await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "guardar plan de accion");
+            var tieneFirmaActualValida = TieneFirmaValida(firmaActual);
+            var planAccionBloqueado = tieneFirmaActualValida &&
                                       TienePlanAccionRegistrado(
                                           planesExistentes,
                                           comportamientosParteActual,
@@ -2201,6 +2266,36 @@ namespace EvaluacionDesempenoAB.Controllers
                     model,
                     evaluador,
                     "El plan de acción ya fue firmado y no admite cambios.");
+            }
+
+            if (!tieneFirmaActualValida && (firmaArchivo == null || firmaArchivo.Length == 0))
+            {
+                return await ReturnReporteConErrorGuardadoPlanAsync(
+                    model,
+                    evaluador,
+                    "Debes adjuntar una firma válida en formato PNG o JPG para guardar el plan de acción.");
+            }
+
+            if (firmaArchivo != null && firmaArchivo.Length > 0)
+            {
+                var tipoContenidoFirma = GetTipoContenidoFirma(firmaArchivo);
+                if (string.IsNullOrWhiteSpace(tipoContenidoFirma))
+                {
+                    return await ReturnReporteConErrorGuardadoPlanAsync(
+                        model,
+                        evaluador,
+                        "La firma debe ser una imagen válida en formato PNG o JPG.");
+                }
+
+                try
+                {
+                    await using var stream = firmaArchivo.OpenReadStream();
+                    await _repo.UploadFirmaUsuarioAsync(evaluador.Id, firmaArchivo.FileName, tipoContenidoFirma, stream);
+                }
+                catch (Exception ex)
+                {
+                    return await ReturnReporteConErrorGuardadoPlanAsync(model, evaluador, ex.Message);
+                }
             }
 
             var comportamientosPermitidos = comportamientos
@@ -2216,7 +2311,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 })
                 .ToDictionary(c => c.Id, c => c);
 
-            var planesActualizados = model.PlanAccion
+            var planesActualizados = (model.PlanAccion ?? new List<PlanAccionItemVm>())
                 .Where(p =>
                     p.ComportamientoId.HasValue &&
                     comportamientosPermitidos.ContainsKey(p.ComportamientoId.Value) &&
@@ -2248,7 +2343,7 @@ namespace EvaluacionDesempenoAB.Controllers
 
             await _repo.UpdateEvaluacionAsync(evaluacion, detalles, planesFinales);
 
-            return RedirectToAction(nameof(Reporte), new { id = model.EvaluacionId });
+            return RedirectToAction(nameof(PlanAccion), new { id = model.EvaluacionId });
         }
 
         private async Task<EvaluacionReporteViewModel?> BuildReporteEnBlancoViewModelAsync(int tipoFormulario)
@@ -2325,7 +2420,13 @@ namespace EvaluacionDesempenoAB.Controllers
             var comportamientos = await _repo.GetComportamientosByNivelAsync(evaluacion.NivelId);
             var comportamientosPorDescripcion = BuildComportamientosPorDescripcion(comportamientos);
             var parteActual = GetParteEvaluador(evaluadorActual, usuario);
-            var comportamientosParteActual = GetComportamientosPermitidos(parteActual, comportamientos, competenciasById);
+            var puedeDiligenciarParte = EvaluacionRolesHelper.TieneAcceso(parteActual);
+            var partePlanVisible = puedeDiligenciarParte
+                ? parteActual
+                : evaluadorActual.EsSuperAdministrador
+                    ? TipoParteEvaluacion.Normal | TipoParteEvaluacion.Sst
+                    : TipoParteEvaluacion.Ninguna;
+            var comportamientosPlanVisible = GetComportamientosPermitidos(partePlanVisible, comportamientos, competenciasById);
             var cobertura = BuildCobertura(detalles, competencias, comportamientos);
 
             var competenciasVm = new List<CompetenciaReporteVm>();
@@ -2383,9 +2484,11 @@ namespace EvaluacionDesempenoAB.Controllers
                     }))
                 .ToList();
 
-            var planOptions = BuildPlanOptions(parteActual, competencias, comportamientos, detalles);
+            var planOptions = puedeDiligenciarParte
+                ? BuildPlanOptions(parteActual, competencias, comportamientos, detalles)
+                : new List<PlanAccionOpcionVm>();
             var planVm = planes
-                .Where(p => PlanPerteneceAParte(p, comportamientosParteActual, comportamientosPorDescripcion))
+                .Where(p => PlanPerteneceAParte(p, comportamientosPlanVisible, comportamientosPorDescripcion))
                 .Select(p => new PlanAccionItemVm
                 {
                     Id = p.Id,
@@ -2408,12 +2511,13 @@ namespace EvaluacionDesempenoAB.Controllers
             var firmaEvaluadorSst = evaluadorSst == null
                 ? null
                 : await DownloadFirmaUsuarioOrNullAsync(evaluadorSst.Id, $"reporte evaluador SST {evaluacion.Id}");
-            var firmaActual = !evaluadorActual.EsSuperAdministrador && EvaluacionRolesHelper.TieneAcceso(parteActual)
+            var firmaActual = puedeDiligenciarParte
                 ? await DownloadFirmaUsuarioOrNullAsync(evaluadorActual.Id, $"reporte evaluador actual {evaluacion.Id}")
                 : null;
             var etiquetaFirmaActual = GetEtiquetaFirmaParaParte(parteActual);
-            var planAccionBloqueado = etiquetaFirmaActual != null &&
-                                      TieneContenido(firmaActual) &&
+            var planAccionBloqueado = puedeDiligenciarParte &&
+                                      etiquetaFirmaActual != null &&
+                                      TieneFirmaValida(firmaActual) &&
                                       TienePlanAccionRegistrado(planVm);
 
             return new EvaluacionReporteViewModel
@@ -2438,7 +2542,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 FechaEvaluacion = evaluacion.FechaEvaluacion,
                 TipoEvaluacion = evaluacion.TipoEvaluacion,
                 NombreNivel = nivel.Nombre,
-                AlcanceEvaluadorActual = EvaluacionRolesHelper.GetEtiquetaParte(parteActual),
+                AlcanceEvaluadorActual = GetEtiquetaAlcance(parteActual, evaluadorActual.EsSuperAdministrador),
                 PromedioGeneral = cobertura.AmbasPartesCompletas
                     ? evaluacion.Total ?? cobertura.TotalCalculado
                     : null,
@@ -2452,9 +2556,9 @@ namespace EvaluacionDesempenoAB.Controllers
                 FirmaEvaluadorDataUrl = ConvertirArchivoADataUrl(firmaEvaluador),
                 FirmaEvaluadorSstDataUrl = ConvertirArchivoADataUrl(firmaEvaluadorSst),
                 FirmaActualDataUrl = ConvertirArchivoADataUrl(firmaActual),
-                PuedeAdjuntarFirmaActual = !evaluadorActual.EsSuperAdministrador &&
-                                           etiquetaFirmaActual != null &&
-                                           !planAccionBloqueado,
+                PuedeEditarPlanAccion = puedeDiligenciarParte && !planAccionBloqueado,
+                PuedeAdjuntarFirmaActual = puedeDiligenciarParte &&
+                                           etiquetaFirmaActual != null,
                 EtiquetaFirmaActual = etiquetaFirmaActual,
                 PlanAccionBloqueado = planAccionBloqueado,
                 FechaProximaEvaluacion = evaluacion.FechaProximaEvaluacion

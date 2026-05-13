@@ -612,7 +612,16 @@ namespace EvaluacionDesempenoAB.Services
                 FileAttributeName = ReporteFirmadoColumn
             };
 
-            var initializeResponse = (InitializeFileBlocksDownloadResponse)_client.Execute(initializeRequest);
+            InitializeFileBlocksDownloadResponse initializeResponse;
+            try
+            {
+                initializeResponse = (InitializeFileBlocksDownloadResponse)_client.Execute(initializeRequest);
+            }
+            catch (Exception ex) when (IsFullImageNotAvailable(ex))
+            {
+                return Task.FromResult<ArchivoEvaluacion?>(null);
+            }
+
             if (initializeResponse.FileSizeInBytes <= 0)
             {
                 return Task.FromResult<ArchivoEvaluacion?>(null);
@@ -756,7 +765,16 @@ namespace EvaluacionDesempenoAB.Services
                 FileAttributeName = fileColumnLogicalName
             };
 
-            var initializeResponse = (InitializeFileBlocksDownloadResponse)_client.Execute(initializeRequest);
+            InitializeFileBlocksDownloadResponse initializeResponse;
+            try
+            {
+                initializeResponse = (InitializeFileBlocksDownloadResponse)_client.Execute(initializeRequest);
+            }
+            catch (Exception ex) when (IsFullImageNotAvailable(ex))
+            {
+                return Task.FromResult<ArchivoEvaluacion?>(null);
+            }
+
             if (initializeResponse.FileSizeInBytes <= 0)
             {
                 return Task.FromResult<ArchivoEvaluacion?>(null);

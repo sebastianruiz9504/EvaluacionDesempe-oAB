@@ -146,6 +146,7 @@ namespace EvaluacionDesempenoAB.ViewModels
         public string? FirmaEvaluadorDataUrl { get; set; }
         public string? FirmaEvaluadorSstDataUrl { get; set; }
         public string? FirmaActualDataUrl { get; set; }
+        public bool PuedeEditarPlanAccion { get; set; }
         public bool PuedeAdjuntarFirmaActual { get; set; }
         public string? EtiquetaFirmaActual { get; set; }
         public bool PlanAccionBloqueado { get; set; }

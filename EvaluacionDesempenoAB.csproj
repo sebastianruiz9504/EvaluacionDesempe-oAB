@@ -13,4 +13,10 @@
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.2.10" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="ScenarioTests\**" />
+    <Content Remove="ScenarioTests\**" />
+    <None Remove="ScenarioTests\**" />
+  </ItemGroup>
+
 </Project>

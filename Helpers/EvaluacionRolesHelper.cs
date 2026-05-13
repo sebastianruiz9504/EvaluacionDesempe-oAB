@@ -19,14 +19,8 @@ namespace EvaluacionDesempenoAB.Helpers
 
         public static TipoParteEvaluacion ResolveParte(
             UsuarioEvaluado usuarioObjetivo,
-            string? correoActual,
-            bool esSuperAdministrador = false)
+            string? correoActual)
         {
-            if (esSuperAdministrador)
-            {
-                return TipoParteEvaluacion.Normal | TipoParteEvaluacion.Sst;
-            }
-
             if (string.IsNullOrWhiteSpace(correoActual))
             {
                 return TipoParteEvaluacion.Ninguna;

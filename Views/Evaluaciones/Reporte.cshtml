@@ -2,14 +2,16 @@
 @model EvaluacionReporteViewModel
 
 @{
-    ViewData["Title"] = "Reporte de evaluación";
+    var modoPlanAccion = ViewBag.ModoPlanAccion is bool valorModoPlan && valorModoPlan;
+    ViewData["Title"] = modoPlanAccion ? "Plan de acción" : "Reporte de evaluación";
     var opcionesPlanPorCompetencia = Model.OpcionesPlanAccion
         .GroupBy(o => o.Competencia)
         .OrderBy(g => g.Key)
         .ToList();
-    var mostrarModalGuardarPlan = ViewBag.MostrarModalGuardarPlan is bool abrirModal && abrirModal;
     var errorGuardadoPlan = ViewBag.ErrorGuardadoPlan as string;
+    var mostrarModalFirma = ViewBag.MostrarModalFirma is bool abrirModalFirma && abrirModalFirma;
     var tieneFirmaActualGuardada = !string.IsNullOrWhiteSpace(Model.FirmaActualDataUrl);
+    var requiereFirmaInicial = Model.PuedeAdjuntarFirmaActual && !tieneFirmaActualGuardada;
     var etiquetaVistaPreviaFirma = Model.EtiquetaFirmaActual switch
     {
         "Evaluador SST" => "Firma del evaluador SST",
@@ -100,7 +102,7 @@
 </style>
 
 <div class="container mt-4">
-    <h2>Reporte de evaluación de desempeño</h2>
+    <h2>@(modoPlanAccion ? "Plan de acción" : "Reporte de evaluación de desempeño")</h2>
 
     <div class="card mt-3">
         <div class="card-body">
@@ -237,11 +239,24 @@
             El plan de acción ya fue firmado y quedó bloqueado para cambios.
         </div>
     }
+    else if (requiereFirmaInicial)
+    {
+        <div class="alert alert-info mt-2">
+            Para guardar el plan de acción debes adjuntar primero una firma válida en PNG o JPG.
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(errorGuardadoPlan))
+    {
+        <div class="alert alert-danger mt-2">
+            @errorGuardadoPlan
+        </div>
+    }
 
     <form asp-action="GuardarPlanAccion" method="post" enctype="multipart/form-data" class="mt-2">
         @Html.AntiForgeryToken()
         <input asp-for="EvaluacionId" type="hidden" />
-        <fieldset class="border-0 p-0" disabled="@(Model.PlanAccionBloqueado ? "disabled" : null)">
+        <fieldset class="border-0 p-0" disabled="@(!Model.PuedeEditarPlanAccion ? "disabled" : null)">
 
         <table class="table table-striped">
             <thead class="table-light">
@@ -286,11 +301,33 @@
         </table>
 
         <div class="mt-3 d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-outline-primary" id="agregar-accion" disabled>Añadir otra oportunidad</button>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFirma">
-                @(Model.PlanAccionBloqueado ? "Plan de acción firmado" : "Guardar plan de acción")
-            </button>
+            @if (Model.PuedeEditarPlanAccion)
+            {
+                <button type="button" class="btn btn-outline-primary" id="agregar-accion" disabled>Añadir otra oportunidad</button>
+                @if (requiereFirmaInicial)
+                {
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFirma">
+                        Guardar plan y subir firma
+                    </button>
+                }
+                else
+                {
+                    <button type="submit" class="btn btn-primary">Guardar plan de acción</button>
+                }
+            }
         </div>
+        </fieldset>
+
+        @if ((Model.PuedeAdjuntarFirmaActual || tieneFirmaActualGuardada) && !requiereFirmaInicial)
+        {
+            <div class="mt-3">
+                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalFirma">
+                    @(Model.PuedeAdjuntarFirmaActual
+                        ? (tieneFirmaActualGuardada ? "Actualizar firma" : "Subir firma")
+                        : "Ver firma")
+                </button>
+            </div>
+        }
 
         <div class="modal fade" id="modalFirma" tabindex="-1" aria-hidden="true" data-subir-firma-url="@Url.Action("SubirFirmaEvaluador", "Evaluaciones")">
             <div class="modal-dialog">
@@ -300,13 +337,6 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        @if (!string.IsNullOrWhiteSpace(errorGuardadoPlan))
-                        {
-                            <div class="alert alert-danger">
-                                @errorGuardadoPlan
-                            </div>
-                        }
-
                         @if (Model.PuedeAdjuntarFirmaActual)
                         {
                             <label for="firmaArchivo" class="form-label">Adjunta la firma de @Model.EtiquetaFirmaActual</label>
@@ -314,13 +344,19 @@
                                    name="firmaArchivo"
                                    type="file"
                                    class="form-control"
+                                   required="@(requiereFirmaInicial ? "required" : null)"
                                    accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
                             <div class="form-text">
-                                Puedes guardar la firma para revisar la vista previa antes de confirmar el plan de acción.
+                                @(requiereFirmaInicial
+                                    ? "Esta firma se guardará junto con el plan de acción."
+                                    : "Puedes actualizar la firma sin modificar el plan de acción.")
                             </div>
-                            <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="guardarFirmaModal" disabled>
-                                Guardar firma y actualizar vista previa
-                            </button>
+                            @if (!requiereFirmaInicial)
+                            {
+                                <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="guardarFirmaModal" disabled>
+                                    Guardar firma y actualizar vista previa
+                                </button>
+                            }
                             <div id="firmaGuardadoEstado" class="d-none mt-3" role="alert" aria-live="polite"></div>
 
                             <div class="firma-preview-card @(tieneFirmaActualGuardada ? string.Empty : "d-none")" id="firmaPreviewCard">
@@ -341,18 +377,20 @@
                         else
                         {
                             <div class="text-muted">
-                                Confirma el guardado del plan de acción.
+                                La firma ya está guardada o este usuario no tiene permisos para modificarla.
                             </div>
                         }
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Confirmar y guardar plan</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        @if (requiereFirmaInicial)
+                        {
+                            <button type="submit" class="btn btn-primary">Guardar firma y plan de acción</button>
+                        }
                     </div>
                 </div>
             </div>
         </div>
-        </fieldset>
         <div class="mt-3">
             <a asp-action="Index" class="btn btn-secondary">Volver al listado</a>
         </div>
@@ -389,10 +427,10 @@
             const rowTemplate = document.getElementById("plan-accion-row-template");
             let rowIndex = planBody ? planBody.children.length : 0;
             const hasPlanOptions = @Model.OpcionesPlanAccion.Any().ToString().ToLower();
-            const planBloqueado = @Model.PlanAccionBloqueado.ToString().ToLower();
-            const mostrarModalGuardarPlan = @mostrarModalGuardarPlan.ToString().ToLower();
+            const planEditable = @Model.PuedeEditarPlanAccion.ToString().ToLower();
+            const mostrarModalFirma = @mostrarModalFirma.ToString().ToLower();
             const modalGuardarPlanElement = document.getElementById("modalFirma");
-            const modalGuardarPlan = modalGuardarPlanElement && window.bootstrap
+            const modalFirma = modalGuardarPlanElement && window.bootstrap
                 ? window.bootstrap.Modal.getOrCreateInstance(modalGuardarPlanElement)
                 : null;
             const guardarPlanForm = modalGuardarPlanElement?.closest("form");
@@ -408,7 +446,7 @@
 
             const updateAddButtonState = () => {
                 if (!addButton || !planBody) return;
-                if (planBloqueado || !hasPlanOptions) {
+                if (!planEditable || !hasPlanOptions) {
                     addButton.disabled = true;
                     return;
                 }
@@ -537,6 +575,9 @@
                         setFirmaPreview(result.firmaDataUrl ?? "");
                         setFirmaStatus(`${result.message} Revisa la vista previa de abajo; si hace falta, puedes cargar otra imagen.`, false);
                         firmaArchivoInput.value = "";
+                        if (result.planAccionBloqueado === true) {
+                            window.setTimeout(() => window.location.reload(), 900);
+                        }
                     } catch (error) {
                         setFirmaStatus(error instanceof Error ? error.message : "No fue posible guardar la firma.", true);
                     } finally {
@@ -550,8 +591,8 @@
 
             setFirmaPreview(firmaActualInicial);
 
-            if (mostrarModalGuardarPlan && modalGuardarPlan) {
-                modalGuardarPlan.show();
+            if (mostrarModalFirma && modalFirma) {
+                modalFirma.show();
             }
 
             updateAddButtonState();

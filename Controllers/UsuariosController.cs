@@ -71,8 +71,7 @@ namespace EvaluacionDesempenoAB.Controllers
                || EvaluacionRolesHelper.TieneAcceso(
                    EvaluacionRolesHelper.ResolveParte(
                        usuarioObjetivo,
-                       GetCorreoActual(evaluadorActual),
-                       evaluadorActual.EsSuperAdministrador));
+                       GetCorreoActual(evaluadorActual)));
 
         private async Task<Evaluacion?> SelectPreferredEvaluacionAsync(IEnumerable<Evaluacion> candidates)
         {
@@ -226,8 +225,7 @@ namespace EvaluacionDesempenoAB.Controllers
             {
                 var parteActual = EvaluacionRolesHelper.ResolveParte(
                     usuario,
-                    GetCorreoActual(evaluador),
-                    evaluador.EsSuperAdministrador);
+                    GetCorreoActual(evaluador));
                 var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id);
                 var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
                 var evaluacionGuardadaEnVentana = ventanaActiva == null
@@ -466,8 +464,7 @@ namespace EvaluacionDesempenoAB.Controllers
             var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
             var parteActual = EvaluacionRolesHelper.ResolveParte(
                 usuario,
-                GetCorreoActual(evaluador),
-                evaluador.EsSuperAdministrador);
+                GetCorreoActual(evaluador));
             var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id);
             var evaluacionGuardadaEnVentana = ventanaActiva == null
                 ? null
