@@ -439,6 +439,8 @@ namespace EvaluacionDesempenoAB.Controllers
         [HttpGet]
         public async Task<IActionResult> EstadoActivacion(Guid usuarioId)
         {
+            SetNoCacheHeaders();
+
             if (usuarioId == Guid.Empty)
             {
                 return BadRequest("Usuario inválido.");

@@ -5,6 +5,7 @@ using EvaluacionDesempenoAB.Services;
 using EvaluacionDesempenoAB.ViewModels;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 var repo = new MockRepository();
@@ -68,8 +69,21 @@ var actualizarFirmaFalsa = await normalController.SubirFirmaEvaluador(evaluacion
 Assert(actualizarFirmaFalsa is BadRequestObjectResult, "La actualización de firma rechaza un .jpg falso.");
 
 var usuarioConFirmaPrevia = usuarios.Single(u => u.Cedula == "987654321");
-usuarioConFirmaPrevia.FechaActivacionEvaluacion = DateTime.Today;
 usuarioConFirmaPrevia.TipoFormulario = 433930002;
+
+var usuariosController = BuildUsuariosController(repo, evaluadorNormal);
+usuarioConFirmaPrevia.FechaActivacionEvaluacion = null;
+var estadoSinActivacion = await usuariosController.EstadoActivacion(usuarioConFirmaPrevia.Id);
+AssertJsonBool(estadoSinActivacion, "puedeIniciar", false, "El estado no habilita iniciar evaluación sin rango ni activación.");
+var nuevaSinActivacion = await normalController.Nueva(usuarioConFirmaPrevia.Id);
+Assert(nuevaSinActivacion is BadRequestObjectResult, "Nueva evaluación fuera de rango queda bloqueada antes de aprobar activación.");
+
+usuarioConFirmaPrevia.FechaActivacionEvaluacion = DateTime.Today;
+var estadoConActivacion = await usuariosController.EstadoActivacion(usuarioConFirmaPrevia.Id);
+AssertJsonBool(estadoConActivacion, "puedeIniciar", true, "El estado habilita iniciar evaluación cuando la activación fue aprobada.");
+var nuevaConActivacion = await normalController.Nueva(usuarioConFirmaPrevia.Id);
+AssertRedirect(nuevaConActivacion, "Formulario", "Nueva evaluación redirige al formulario con activación vigente.");
+
 var formularioNormalConFirmaPrevia = await GetFormularioAsync(normalController, usuarioConFirmaPrevia.Id, nivel.Id);
 CompletarFormulario(formularioNormalConFirmaPrevia, 80);
 var guardarNormalConFirmaPrevia = await normalController.Guardar(formularioNormalConFirmaPrevia, "guardar");
@@ -85,6 +99,27 @@ Console.WriteLine("OK - escenarios reales simulados en memoria completados.");
 static EvaluacionesController BuildController(IEvaluacionRepository repo, string email)
 {
     var controller = new EvaluacionesController(repo, NullLogger<EvaluacionesController>.Instance);
+    ApplyUser(controller, email);
+    return controller;
+}
+
+static UsuariosController BuildUsuariosController(IEvaluacionRepository repo, string email)
+{
+    var configuration = new ConfigurationBuilder()
+        .AddInMemoryCollection(new Dictionary<string, string?>())
+        .Build();
+    var controller = new UsuariosController(
+        repo,
+        configuration,
+        new FakeHttpClientFactory(),
+        NullLogger<UsuariosController>.Instance);
+
+    ApplyUser(controller, email);
+    return controller;
+}
+
+static void ApplyUser(Controller controller, string email)
+{
     var identity = new ClaimsIdentity(
         new[] { new Claim("preferred_username", email), new Claim(ClaimTypes.Email, email) },
         "ScenarioTest");
@@ -96,8 +131,6 @@ static EvaluacionesController BuildController(IEvaluacionRepository repo, string
             User = new ClaimsPrincipal(identity)
         }
     };
-
-    return controller;
 }
 
 static async Task<EvaluacionFormularioViewModel> GetFormularioAsync(EvaluacionesController controller, Guid usuarioId, Guid nivelId)
@@ -212,10 +245,27 @@ static RedirectToActionResult AssertRedirect(IActionResult result, string expect
     return redirect;
 }
 
+static void AssertJsonBool(IActionResult result, string propertyName, bool expected, string message)
+{
+    if (result is not JsonResult { Value: not null } json)
+    {
+        throw new InvalidOperationException($"{message} Resultado: {result.GetType().Name}.");
+    }
+
+    var property = json.Value.GetType().GetProperty(propertyName);
+    var value = property?.GetValue(json.Value);
+    Assert(value is bool boolValue && boolValue == expected, message);
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition)
     {
         throw new InvalidOperationException(message);
     }
+}
+
+sealed class FakeHttpClientFactory : IHttpClientFactory
+{
+    public HttpClient CreateClient(string name) => new();
 }

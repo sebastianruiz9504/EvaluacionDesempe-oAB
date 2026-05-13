@@ -126,6 +126,12 @@ else
             const evalInputId = document.getElementById('usuarioEvaluacionId');
             const estadoActivacionUrlBase = '@Url.Action("EstadoActivacion", "Usuarios")';
             const iniciarBtnDefaultText = iniciarBtn?.textContent?.trim() || 'Iniciar evaluación';
+            const activationPollingIntervalMs = 5000;
+            const maxActivationPollingAttempts = 120;
+            let activationPollingTimer = null;
+            let activationPollingUserId = null;
+            let activationPollingAttempts = 0;
+            let pendingActivationUserId = null;
 
             const setButtonsState = (canStart, canRequest, hasActiveEvaluation) => {
                 if (iniciarBtn) {
@@ -136,7 +142,10 @@ else
                 if (solicitarBtn) {
                     if (canRequest) {
                         solicitarBtn.classList.remove('d-none');
-                        solicitarBtn.disabled = false;
+                        solicitarBtn.disabled = pendingActivationUserId === solicitarBtn.dataset.userId;
+                        solicitarBtn.textContent = pendingActivationUserId === solicitarBtn.dataset.userId
+                            ? 'Esperando aprobación...'
+                            : 'Solicitar activación de evaluación';
                     } else {
                         solicitarBtn.classList.add('d-none');
                         solicitarBtn.disabled = true;
@@ -145,12 +154,29 @@ else
                 }
             };
 
-            const updateSelection = () => {
+            const getSelectedCheckbox = () => document.querySelector('.usuario-select:checked');
+
+            const stopActivationPolling = (clearPending = false) => {
+                if (activationPollingTimer) {
+                    window.clearTimeout(activationPollingTimer);
+                }
+
+                activationPollingTimer = null;
+                activationPollingUserId = null;
+                activationPollingAttempts = 0;
+
+                if (clearPending) {
+                    pendingActivationUserId = null;
+                }
+            };
+
+            const updateSelection = (refreshRemoteState = true) => {
                 const selected = document.querySelector('.usuario-select:checked');
                 if (!evalInputId) return;
 
                 if (!selected) {
                     evalInputId.value = '';
+                    stopActivationPolling();
                     setButtonsState(false, false, false);
                     return;
                 }
@@ -162,6 +188,12 @@ else
                 const tieneEvaluacionActiva = selected.dataset.tieneEvaluacionActiva === 'true' ||
                     !!selected.dataset.evaluacionActualId;
                 setButtonsState(puedeIniciar, puedeSolicitar, tieneEvaluacionActiva);
+
+                if (refreshRemoteState && !puedeIniciar && puedeSolicitar) {
+                    startActivationPolling(selected.dataset.id || '', selected, true);
+                } else if (puedeIniciar || activationPollingUserId !== selected.dataset.id) {
+                    stopActivationPolling(puedeIniciar);
+                }
             };
 
             const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -169,8 +201,10 @@ else
             const refreshActivationState = async (userId, selectedCheckbox) => {
                 if (!userId || !estadoActivacionUrlBase) return false;
 
-                const response = await fetch(`${estadoActivacionUrlBase}?usuarioId=${encodeURIComponent(userId)}`, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                const url = `${estadoActivacionUrlBase}?usuarioId=${encodeURIComponent(userId)}&_=${Date.now()}`;
+                const response = await fetch(url, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
                 });
 
                 if (!response.ok) throw new Error('No fue posible consultar el estado de activación.');
@@ -183,9 +217,55 @@ else
                     selectedCheckbox.dataset.tieneEvaluacionActiva = data.tieneEvaluacionActiva === true ? 'true' : 'false';
                     selectedCheckbox.dataset.evaluacionActualId = data.evaluacionActualId || '';
                 }
-                updateSelection();
+                updateSelection(false);
                 return data.puedeIniciar === true;
             };
+
+            function startActivationPolling(userId, selectedCheckbox, immediate = false) {
+                if (!userId || !selectedCheckbox) return;
+
+                if (activationPollingUserId && activationPollingUserId !== userId) {
+                    stopActivationPolling();
+                }
+
+                if (activationPollingTimer) {
+                    return;
+                }
+
+                activationPollingUserId = userId;
+
+                const poll = async () => {
+                    activationPollingTimer = null;
+
+                    const selected = getSelectedCheckbox();
+                    if (!selected || selected.dataset.id !== userId) {
+                        stopActivationPolling();
+                        return;
+                    }
+
+                    try {
+                        const activado = await refreshActivationState(userId, selected);
+                        if (activado) {
+                            stopActivationPolling(true);
+                            updateSelection(false);
+                            return;
+                        }
+                    } catch (error) {
+                        // La pantalla seguirá intentando mientras el usuario permanezca seleccionado.
+                    }
+
+                    activationPollingAttempts++;
+                    if (activationPollingAttempts >= maxActivationPollingAttempts) {
+                        stopActivationPolling(true);
+                        updateSelection(false);
+                        return;
+                    }
+
+                    activationPollingTimer = window.setTimeout(poll, activationPollingIntervalMs);
+                };
+
+                activationPollingTimer = window.setTimeout(poll, immediate ? 0 : activationPollingIntervalMs);
+            }
 
             checkboxes.forEach((checkbox) => {
                 checkbox.addEventListener('change', (event) => {
@@ -221,6 +301,7 @@ else
 
                         if (!response.ok) throw new Error('Solicitud fallida');
 
+                        pendingActivationUserId = userId;
                         solicitarBtn.textContent = 'Solicitud enviada';
 
                         const selectedCheckbox = document.querySelector(`.usuario-select[data-id="${userId}"]`);
@@ -232,13 +313,18 @@ else
                         }
 
                         if (activado) {
-                            solicitarBtn.classList.add('d-none');
-                            solicitarBtn.textContent = 'Solicitar activación de evaluación';
+                            stopActivationPolling(true);
+                            updateSelection(false);
                         } else {
-                            solicitarBtn.disabled = false;
-                            solicitarBtn.textContent = 'Solicitud enviada, actualiza en unos segundos';
+                            solicitarBtn.textContent = 'Esperando aprobación...';
+                            startActivationPolling(userId, selectedCheckbox, false);
                         }
                     } catch (error) {
+                        if (pendingActivationUserId === userId) {
+                            pendingActivationUserId = null;
+                        }
+
+                        stopActivationPolling();
                         solicitarBtn.disabled = false;
                         solicitarBtn.textContent = 'Reintentar solicitud';
                     }

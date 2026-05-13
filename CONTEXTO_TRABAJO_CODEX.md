@@ -70,6 +70,24 @@ Metodo clave:
    - Firma valida del evaluador normal.
    - Firma valida del evaluador SST.
 
+## Activacion manual de evaluacion
+
+Cuando un usuario no esta dentro de las ventanas naturales de evaluacion,
+la pantalla `Views/Usuarios/Index.cshtml` muestra `Solicitar activacion de evaluacion`.
+Esa accion llama el flujo de Power Automate configurado en
+`PowerAutomate:SolicitudActivacionEvaluacionUrl`.
+
+La aprobacion debe reflejarse en Dataverse llenando
+`crfb7_fechaactivacionevaluacion`, mapeado como
+`UsuarioEvaluado.FechaActivacionEvaluacion`. Con esa fecha vigente,
+`EvaluacionCicloHelper.ResolveVentanaActiva` habilita una ventana manual de
+25 dias desde la fecha de activacion.
+
+La UI consulta `Usuarios/EstadoActivacion` sin cache y sigue refrescando el
+estado mientras el usuario este seleccionado o la solicitud este pendiente.
+Cuando `puedeIniciar` pasa a `true`, se oculta el boton de solicitud y queda
+activo `Iniciar evaluacion`.
+
 ## Firmas
 
 Tipos permitidos para firma:
