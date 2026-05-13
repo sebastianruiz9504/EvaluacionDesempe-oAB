@@ -192,7 +192,7 @@ namespace EvaluacionDesempenoAB.Services
 
             if (metadata is FileAttributeMetadata)
             {
-                await UploadFileColumnAsync(UsuarioTable, usuarioId, FotoUsuarioColumn, fileName, contentType, content);
+                await UploadFileOrFullImageColumnAsync(UsuarioTable, usuarioId, FotoUsuarioColumn, fileName, contentType, content, metadata);
                 return;
             }
 
@@ -228,7 +228,7 @@ namespace EvaluacionDesempenoAB.Services
 
             if (metadata is FileAttributeMetadata)
             {
-                await UploadFileColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, fileName, contentType, content);
+                await UploadFileOrFullImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, fileName, contentType, content, metadata);
                 return;
             }
 
@@ -236,12 +236,13 @@ namespace EvaluacionDesempenoAB.Services
             {
                 if (imageMetadata.CanStoreFullImage == true)
                 {
-                    await UploadFileColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, fileName, contentType, content);
+                    await UploadFileOrFullImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, fileName, contentType, content, imageMetadata);
                     return;
                 }
 
-                await UploadImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, imageMetadata, content);
-                return;
+                throw new InvalidPluginExecutionException(
+                    $"{UsuarioTable}.{FirmaUsuarioColumn} debe estar configurada para almacenar imagen completa. " +
+                    "La miniatura de Dataverse puede recortar la firma.");
             }
 
             throw new InvalidPluginExecutionException($"{UsuarioTable}.{FirmaUsuarioColumn} no es una columna de archivo ni de imagen válida.");
@@ -261,17 +262,12 @@ namespace EvaluacionDesempenoAB.Services
                 var imageMetadata = (ImageAttributeMetadata)metadata;
                 if (imageMetadata.CanStoreFullImage == true)
                 {
-                    try
-                    {
-                        return await DownloadFileColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
-                    }
-                    catch (Exception ex) when (IsFullImageNotAvailable(ex))
-                    {
-                        return await DownloadImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
-                    }
+                    return await DownloadFileColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
                 }
 
-                return await DownloadImageColumnAsync(UsuarioTable, usuarioId, FirmaUsuarioColumn, "firma_evaluador");
+                throw new InvalidPluginExecutionException(
+                    $"{UsuarioTable}.{FirmaUsuarioColumn} no almacena imagen completa. " +
+                    "Se omite la miniatura para evitar recortar la firma.");
             }
 
             throw new InvalidPluginExecutionException($"{UsuarioTable}.{FirmaUsuarioColumn} no es una columna de archivo ni de imagen válida.");
@@ -694,15 +690,16 @@ namespace EvaluacionDesempenoAB.Services
                 ?? throw new InvalidPluginExecutionException($"No fue posible recuperar la metadata de {entityLogicalName}.{attributeLogicalName}.");
         }
 
-        private Task UploadFileColumnAsync(
+        private Task UploadFileOrFullImageColumnAsync(
             string entityLogicalName,
             Guid recordId,
             string fileColumnLogicalName,
             string fileName,
             string? contentType,
-            Stream content)
+            Stream content,
+            AttributeMetadata metadata)
         {
-            var maxSizeInKb = GetFileColumnMaxSizeInKb(entityLogicalName, fileColumnLogicalName);
+            var maxSizeInKb = GetMaxSizeInKb(metadata, entityLogicalName, fileColumnLogicalName);
             if (content.CanSeek && content.Length > maxSizeInKb * 1024L)
             {
                 throw new InvalidPluginExecutionException($"El archivo supera el tamaño máximo permitido para la columna {fileColumnLogicalName}.");

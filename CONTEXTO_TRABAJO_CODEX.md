@@ -152,6 +152,39 @@ Metodos afectados:
 - `DownloadFileColumnAsync`
 - `IsFullImageNotAvailable`
 
+## Error de carga de firma investigado
+
+Error visto al guardar plan de accion y subir firma:
+
+`crfb7_usuario.cr3d2_firma no es una columna de archivo valida.`
+
+Causa:
+
+`cr3d2_firma` puede ser una columna de imagen con imagen completa habilitada.
+Dataverse permite subir estas imagenes con los mismos mensajes de bloques que
+las columnas de archivo, pero el repositorio estaba validando el tamano con un
+helper que aceptaba solo `FileAttributeMetadata`.
+
+Correccion:
+
+`UploadFileOrFullImageColumnAsync` ahora usa `GetMaxSizeInKb` con la metadata
+real (`FileAttributeMetadata` o `ImageAttributeMetadata`) antes de subir por
+bloques. Asi se conserva la validacion de tamano sin rechazar columnas de
+imagen completas.
+
+Ademas, para firmas no se acepta el modo de miniatura de Dataverse:
+
+- Si `cr3d2_firma` es imagen, debe tener `CanStoreFullImage = true`.
+- La carga se bloquea si la columna solo guarda miniatura, porque Dataverse
+  recorta la miniatura a formato cuadrado.
+- La descarga de firma en columna de imagen usa bloques para traer la imagen
+  completa. Si no hay imagen completa disponible, se trata como firma faltante
+  y no se usa la miniatura recortada.
+
+Archivo:
+
+`Services/DataverseEvalautionRepository.cs`
+
 ## UI del plan de accion
 
 Vista:
