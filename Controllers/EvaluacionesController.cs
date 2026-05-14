@@ -1278,7 +1278,7 @@ namespace EvaluacionDesempenoAB.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ImportarUsuarios(IFormFile? archivo)
+        public async Task<IActionResult> ImportarUsuarios(IFormFile? archivo, string? returnUrl = null)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
@@ -1294,7 +1294,7 @@ namespace EvaluacionDesempenoAB.Controllers
             if (archivo == null || archivo.Length == 0)
             {
                 TempData["ErrorImportacionUsuarios"] = "Debes adjuntar un archivo Excel para importar.";
-                return RedirectToAction(nameof(Index));
+                return RedirectAfterImport(returnUrl);
             }
 
             var creados = 0;
@@ -1317,7 +1317,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     TempData["ErrorImportacionUsuarios"] =
                         "La plantilla no contiene todas las columnas requeridas: " +
                         string.Join(", ", missingColumns);
-                    return RedirectToAction(nameof(Index));
+                    return RedirectAfterImport(returnUrl);
                 }
 
                 var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
@@ -1386,7 +1386,7 @@ namespace EvaluacionDesempenoAB.Controllers
             {
                 _logger.LogError(ex, "No fue posible importar usuarios desde Excel.");
                 TempData["ErrorImportacionUsuarios"] = "No fue posible leer el archivo Excel. Revisa que sea una plantilla válida.";
-                return RedirectToAction(nameof(Index));
+                return RedirectAfterImport(returnUrl);
             }
 
             if (errores.Any())
@@ -1400,6 +1400,16 @@ namespace EvaluacionDesempenoAB.Controllers
             {
                 TempData["MensajeImportacionUsuarios"] =
                     $"Importación completada. Creados: {creados}. Actualizados: {actualizados}. Programados para activación futura: {programados}.";
+            }
+
+            return RedirectAfterImport(returnUrl);
+        }
+
+        private IActionResult RedirectAfterImport(string? returnUrl)
+        {
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return LocalRedirect(returnUrl);
             }
 
             return RedirectToAction(nameof(Index));

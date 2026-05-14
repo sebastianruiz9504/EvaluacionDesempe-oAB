@@ -52,6 +52,20 @@ for (var i = 1; i <= 5; i++)
     importedUsers.Add(usuario);
 }
 
+var adminController = BuildAdminController(repo, EvaluadorCorreo);
+var toggleTarget = importedUsers[4];
+var disableResult = await adminController.ActualizarHabilitado(toggleTarget.Id, false, null);
+Assert(disableResult is RedirectToActionResult, "Deshabilitar en Admin debe redirigir al Index.");
+toggleTarget = await repo.GetUsuarioByCedulaAsync(toggleTarget.Cedula)
+    ?? throw new InvalidOperationException("No se encontro el usuario despues de deshabilitar.");
+Assert(!toggleTarget.Habilitado, "Admin debe cambiar Habilitado a No.");
+
+var enableResult = await adminController.ActualizarHabilitado(toggleTarget.Id, true, null);
+Assert(enableResult is RedirectToActionResult, "Habilitar en Admin debe redirigir al Index.");
+toggleTarget = await repo.GetUsuarioByCedulaAsync(toggleTarget.Cedula)
+    ?? throw new InvalidOperationException("No se encontro el usuario despues de habilitar.");
+Assert(toggleTarget.Habilitado, "Admin debe cambiar Habilitado a Si.");
+
 var usuarioEvaluado = importedUsers[0];
 var niveles = await repo.GetNivelesActivosAsync();
 var nivel = niveles.FirstOrDefault(n => string.Equals(n.Codigo, "OPE", StringComparison.OrdinalIgnoreCase))
@@ -92,12 +106,31 @@ Assert(string.Equals(certificadoView.ViewName, "ReporteImpresion", StringCompari
 Console.WriteLine("OK - smoke Dataverse completo.");
 Console.WriteLine($"Plantilla descargada: {plantillaFile.FileContents.Length} bytes");
 Console.WriteLine($"Usuarios importados: {string.Join(", ", importedUsers.Select(u => u.Cedula))}");
+Console.WriteLine($"Toggle Admin validado: {toggleTarget.Cedula}");
 Console.WriteLine($"Usuario evaluado: {usuarioEvaluado.Cedula} / Evaluacion: {evaluacionId}");
 Console.WriteLine($"Certificado: {certificadoView.ViewName}");
 
 static EvaluacionesController BuildEvaluacionesController(IEvaluacionRepository repo, string email)
 {
     var controller = new EvaluacionesController(repo, NullLogger<EvaluacionesController>.Instance);
+    var httpContext = new DefaultHttpContext
+    {
+        User = new ClaimsPrincipal(new ClaimsIdentity(
+            new[] { new Claim("preferred_username", email), new Claim(ClaimTypes.Email, email) },
+            "DataverseSmoke"))
+    };
+
+    controller.ControllerContext = new ControllerContext
+    {
+        HttpContext = httpContext
+    };
+    controller.TempData = new TempDataDictionary(httpContext, new InMemoryTempDataProvider());
+    return controller;
+}
+
+static AdminController BuildAdminController(IEvaluacionRepository repo, string email)
+{
+    var controller = new AdminController(repo);
     var httpContext = new DefaultHttpContext
     {
         User = new ClaimsPrincipal(new ClaimsIdentity(

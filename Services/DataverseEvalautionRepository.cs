@@ -214,6 +214,16 @@ namespace EvaluacionDesempenoAB.Services
             await _client.UpdateAsync(entity);
         }
 
+        public async Task UpdateUsuarioHabilitadoAsync(Guid usuarioId, bool habilitado)
+        {
+            var entity = new Entity(UsuarioTable, usuarioId)
+            {
+                [HabilitadoColumn] = habilitado
+            };
+
+            await _client.UpdateAsync(entity);
+        }
+
         public async Task<Guid> UpsertUsuarioImportadoAsync(UsuarioEvaluado usuario)
         {
             if (usuario == null || string.IsNullOrWhiteSpace(usuario.Cedula))

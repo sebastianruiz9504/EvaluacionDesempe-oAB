@@ -5,6 +5,7 @@
     ViewData["Title"] = "Módulo admin";
     var cedulaFiltro = ViewData["CedulaFiltro"] as string;
     var hayUsuarios = Model.Any();
+    var adminReturnUrl = Url.Action("Index", "Admin", new { cedula = cedulaFiltro }) ?? "/Admin";
 }
 
 <h2 class="mt-4">Módulo admin</h2>
@@ -23,8 +24,36 @@
     </div>
 }
 
+@if (TempData["AdminHabilitadoSuccess"] is string habilitadoSuccess)
+{
+    <div class="alert alert-success mt-3">
+        @habilitadoSuccess
+    </div>
+}
+
+@if (TempData["AdminHabilitadoError"] is string habilitadoError)
+{
+    <div class="alert alert-danger mt-3">
+        @habilitadoError
+    </div>
+}
+
+@if (TempData["MensajeImportacionUsuarios"] is string importacionSuccess)
+{
+    <div class="alert alert-success mt-3">
+        @importacionSuccess
+    </div>
+}
+
+@if (TempData["ErrorImportacionUsuarios"] is string importacionError)
+{
+    <div class="alert alert-danger mt-3">
+        @importacionError
+    </div>
+}
+
 <div class="row g-3 mt-1 align-items-end">
-    <div class="col-12 col-lg-5">
+    <div class="col-12 col-xl-4">
         <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
             <div class="flex-grow-1">
                 <label class="form-label mb-1" for="cedulaFiltro">Filtrar por cédula</label>
@@ -44,7 +73,7 @@
         </form>
     </div>
 
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-xl-4">
         <form asp-controller="Evaluaciones" asp-action="Nueva" method="get" class="d-flex flex-wrap gap-2 align-items-end">
             <input type="hidden" id="usuarioEvaluacionId" name="usuarioId" />
             <button type="submit" class="btn btn-primary" id="iniciarEvaluacionBtn" @(hayUsuarios ? "" : "disabled")>
@@ -61,7 +90,7 @@
         </form>
     </div>
 
-    <div class="col-12 col-lg-3 d-flex justify-content-lg-end">
+    <div class="col-12 col-xl-4 d-flex justify-content-xl-end">
         <button type="button"
                 class="btn btn-success w-100"
                 data-bs-toggle="modal"
@@ -70,6 +99,38 @@
                 @(hayUsuarios ? "" : "disabled")>
             Editar novedades
         </button>
+    </div>
+</div>
+
+<div class="row g-2 mt-3 align-items-end">
+    <div class="col-12 col-xl-auto">
+        <a asp-controller="Evaluaciones"
+           asp-action="DescargarPlantillaUsuarios"
+           class="btn btn-outline-secondary">
+            Descargar plantilla usuarios
+        </a>
+    </div>
+    <div class="col-12 col-xl">
+        <form asp-controller="Evaluaciones"
+              asp-action="ImportarUsuarios"
+              method="post"
+              enctype="multipart/form-data"
+              class="d-flex flex-wrap gap-2 align-items-end">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnUrl" value="@adminReturnUrl" />
+            <div class="flex-grow-1">
+                <label class="form-label mb-1" for="archivoUsuariosAdmin">Importar usuarios desde Excel</label>
+                <input id="archivoUsuariosAdmin"
+                       type="file"
+                       name="archivo"
+                       accept=".xlsx"
+                       class="form-control"
+                       required />
+            </div>
+            <button type="submit" class="btn btn-outline-primary">
+                Subir usuarios
+            </button>
+        </form>
     </div>
 </div>
 
@@ -108,6 +169,7 @@ else
                     <th>Cargo</th>
                     <th>Gerencia</th>
                     <th>Correo</th>
+                    <th>Habilitado</th>
                     <th>Inicio de contrato</th>
                     <th>Finalización contrato</th>
                     <th>Finalización período de prueba</th>
@@ -146,6 +208,36 @@ else
                     <td>@u.Cargo</td>
                     <td>@u.Gerencia</td>
                     <td>@u.CorreoElectronico</td>
+                    <td class="align-middle">
+                        <div class="d-flex flex-column gap-2">
+                            @if (u.Habilitado)
+                            {
+                                <span class="badge text-bg-success align-self-start">Sí</span>
+                                <form asp-action="ActualizarHabilitado" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@u.Id" />
+                                    <input type="hidden" name="habilitado" value="false" />
+                                    <input type="hidden" name="cedula" value="@cedulaFiltro" />
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                        Deshabilitar
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary align-self-start">No</span>
+                                <form asp-action="ActualizarHabilitado" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@u.Id" />
+                                    <input type="hidden" name="habilitado" value="true" />
+                                    <input type="hidden" name="cedula" value="@cedulaFiltro" />
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        Habilitar
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    </td>
                     <td>@(u.FechaInicioContrato?.ToShortDateString() ?? "-")</td>
                     <td>@(u.FechaFinalizacionContrato?.ToShortDateString() ?? "-")</td>
                     <td>@(u.FechaFinalizacionPeriodoPrueba?.ToShortDateString() ?? "-")</td>

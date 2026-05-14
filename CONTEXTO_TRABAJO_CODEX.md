@@ -99,6 +99,15 @@ descarga de plantilla e importacion Excel de usuarios. La importacion cruza por
 `crfb7_cedula`; si existe actualiza columnas de la plantilla, si no existe crea
 la fila.
 
+Desde 2026-05-14 los mismos controles de usuarios tambien estan visibles en
+`Modulo admin`, arriba de la tabla:
+
+- `Descargar plantilla usuarios`
+- `Subir usuarios`
+
+En `Modulo admin` la tabla tiene columna `Habilitado` con boton por fila para
+`Habilitar` o `Deshabilitar`, guardando directamente `cr3d2_habilitado`.
+
 ## Firmas
 
 Tipos permitidos para firma:
@@ -302,6 +311,14 @@ El ultimo despliegue conocido exitoso fue:
 
 `0ec0d27880c04d8e880dbdf12a6d6c48`
 
+2026-05-14:
+
+- Deploy zip exitoso a `EvdesempenoAB`.
+- Deployment id Azure: `5fcc2ad8e7944b8dbfa5ab414ed4574d`.
+- Incluye importacion Excel en `Mis evaluaciones` y `Modulo admin`, columna
+  `Habilitado` con botones manuales en Admin, y regla unica por
+  `cr3d2_habilitado`.
+
 ## Advertencias y cuidado
 
 - No crear usuarios temporales en Dataverse de produccion sin plan de limpieza.
@@ -315,6 +332,7 @@ El ultimo despliegue conocido exitoso fue:
 ## Archivos tocados recientemente
 
 - `Controllers/EvaluacionesController.cs`
+- `Controllers/AdminController.cs`
 - `Controllers/UsuariosController.cs`
 - `Helpers/EvaluacionRolesHelper.cs`
 - `Services/DataverseEvalautionRepository.cs`
@@ -325,6 +343,7 @@ El ultimo despliegue conocido exitoso fue:
 - `ViewModels/UsuarioEvaluadoViewModel.cs`
 - `Views/Evaluaciones/Reporte.cshtml`
 - `Views/Evaluaciones/Index.cshtml`
+- `Views/Admin/Index.cshtml`
 - `Views/Usuarios/Index.cshtml`
 - `EvaluacionDesempenoAB.csproj`
 - `ScenarioTests/Program.cs`

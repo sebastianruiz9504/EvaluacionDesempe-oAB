@@ -72,6 +72,34 @@ namespace EvaluacionDesempenoAB.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ActualizarHabilitado(Guid id, bool habilitado, string? cedula)
+        {
+            if (!await EsSuperAdminAsync())
+                return Forbid();
+
+            if (id == Guid.Empty)
+            {
+                TempData["AdminHabilitadoError"] = "Selecciona un usuario válido.";
+                return RedirectToAction(nameof(Index), new { cedula });
+            }
+
+            try
+            {
+                await _repo.UpdateUsuarioHabilitadoAsync(id, habilitado);
+                TempData["AdminHabilitadoSuccess"] = habilitado
+                    ? "El usuario quedó habilitado para evaluación."
+                    : "El usuario quedó deshabilitado para evaluación.";
+            }
+            catch (Exception ex)
+            {
+                TempData["AdminHabilitadoError"] = $"No fue posible actualizar Habilitado: {ex.Message}";
+            }
+
+            return RedirectToAction(nameof(Index), new { cedula });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> SubirFoto(Guid id, IFormFile? archivo, string? cedula)
         {
             if (!await EsSuperAdminAsync())

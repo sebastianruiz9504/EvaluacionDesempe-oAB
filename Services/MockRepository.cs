@@ -258,6 +258,17 @@ namespace EvaluacionDesempenoAB.Services
             return Task.CompletedTask;
         }
 
+        public Task UpdateUsuarioHabilitadoAsync(Guid usuarioId, bool habilitado)
+        {
+            var u = _usuarios.FirstOrDefault(x => x.Id == usuarioId);
+            if (u != null)
+            {
+                u.Habilitado = habilitado;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public async Task UploadFotoUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)
         {
             using var memory = new MemoryStream();

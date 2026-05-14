@@ -30,6 +30,7 @@ namespace EvaluacionDesempenoAB.Services
 
         // Actualizar novedades del usuario
         Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades);
+        Task UpdateUsuarioHabilitadoAsync(Guid usuarioId, bool habilitado);
         Task UploadFotoUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content);
         Task<ArchivoEvaluacion?> DownloadFotoUsuarioAsync(Guid usuarioId);
         Task UploadFirmaUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content);
