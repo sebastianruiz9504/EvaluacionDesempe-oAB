@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Claims;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
@@ -30,6 +32,26 @@ namespace EvaluacionDesempenoAB.Controllers
             { 433930000, ("TACT", "Táctico") },
             { 433930003, ("ESTR", "Estratégico") },
             { 433930002, ("OPE", "Operativo") }
+        };
+
+        private static readonly string[] PlantillaImportacionUsuariosColumnas =
+        {
+            "Cedula",
+            "Nombre completo",
+            "Cargo",
+            "Nombre evaluador principal",
+            "Cargo evaluador principal",
+            "Correo evaluador principal",
+            "Nombre evaluador SST",
+            "Correo evaluador SST",
+            "Cargo evaluador SST",
+            "Fecha ingreso",
+            "Fecha finalización contrato",
+            "Fecha Finalizacion Periodo de Prueba",
+            "Fecha activacion programada",
+            "Gerencia",
+            "Proyecto",
+            "Tipo de formulario"
         };
 
         private sealed class EvaluacionCoberturaInfo
@@ -270,11 +292,17 @@ namespace EvaluacionDesempenoAB.Controllers
         private bool PuedeAccederAUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
             => evaluadorActual.EsSuperAdministrador || EvaluacionRolesHelper.TieneAcceso(GetParteEvaluador(evaluadorActual, usuarioObjetivo));
 
-        private bool PuedeDiligenciarUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
+        private bool TieneRolDiligenciarUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
             => EvaluacionRolesHelper.TieneAcceso(GetParteEvaluador(evaluadorActual, usuarioObjetivo));
+
+        private bool PuedeDiligenciarUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
+            => usuarioObjetivo.Habilitado && TieneRolDiligenciarUsuario(evaluadorActual, usuarioObjetivo);
 
         private static BadRequestObjectResult EvaluadorSinBloqueAsignado()
             => new("Solo el evaluador asignado o el evaluador SST asignado pueden diligenciar esta evaluación.");
+
+        private static BadRequestObjectResult UsuarioNoHabilitado()
+            => new("Este usuario no está habilitado para evaluación en Dataverse.");
 
         private static string GetEtiquetaAlcance(TipoParteEvaluacion parte, bool esSuperAdministrador)
             => EvaluacionRolesHelper.TieneAcceso(parte)
@@ -926,13 +954,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 .First();
         }
 
-        private async Task<Evaluacion?> GetEvaluacionInicialActivaAsync(Guid usuarioId, VentanaEvaluacionActiva ventanaActiva)
-        {
-            var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuarioId);
-            return await SelectPreferredEvaluacionAsync(
-                evaluaciones.Where(x => EvaluacionCicloHelper.PerteneceAVentanaInicial(x, ventanaActiva)));
-        }
-
         private async Task<Evaluacion?> GetSeguimientoExistenteAsync(Guid usuarioId, Guid evaluacionOrigenId)
         {
             var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuarioId);
@@ -942,6 +963,9 @@ namespace EvaluacionDesempenoAB.Controllers
 
         private static SemaphoreSlim GetInicioEvaluacionLock(string lockKey)
             => InicioEvaluacionLocks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
+
+        private static string BuildHabilitadoLockKey(Guid usuarioId)
+            => $"inicial:{usuarioId:D}:habilitado";
 
         private async Task<Evaluacion> CreatePlaceholderEvaluacionAsync(
             UsuarioEvaluado evaluadorActual,
@@ -1026,27 +1050,12 @@ namespace EvaluacionDesempenoAB.Controllers
                 return evaluacionInicialPendiente;
             }
 
-            var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuarioObjetivo);
-            if (ventanaActiva == null)
+            if (!usuarioObjetivo.Habilitado)
             {
                 return null;
             }
 
-            var evaluacionInicialActiva = await GetEvaluacionInicialActivaAsync(usuarioObjetivo.Id, ventanaActiva);
-            if (evaluacionInicialActiva != null)
-            {
-                var coberturaActiva = await GetCoberturaAsync(
-                    evaluacionInicialActiva,
-                    competencias,
-                    comportamientosPorNivel,
-                    coberturasPorEvaluacion);
-
-                return coberturaActiva.AmbasPartesCompletas
-                    ? null
-                    : evaluacionInicialActiva;
-            }
-
-            var inicioLock = GetInicioEvaluacionLock(EvaluacionCicloHelper.BuildLockKey(usuarioObjetivo.Id, ventanaActiva));
+            var inicioLock = GetInicioEvaluacionLock(BuildHabilitadoLockKey(usuarioObjetivo.Id));
             await inicioLock.WaitAsync();
             try
             {
@@ -1059,20 +1068,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 if (evaluacionInicialPendiente != null)
                 {
                     return evaluacionInicialPendiente;
-                }
-
-                evaluacionInicialActiva = await GetEvaluacionInicialActivaAsync(usuarioObjetivo.Id, ventanaActiva);
-                if (evaluacionInicialActiva != null)
-                {
-                    var coberturaActiva = await GetCoberturaAsync(
-                        evaluacionInicialActiva,
-                        competencias,
-                        comportamientosPorNivel,
-                        coberturasPorEvaluacion);
-
-                    return coberturaActiva.AmbasPartesCompletas
-                        ? null
-                        : evaluacionInicialActiva;
                 }
 
                 return await CreatePlaceholderEvaluacionAsync(
@@ -1229,6 +1224,321 @@ namespace EvaluacionDesempenoAB.Controllers
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> DescargarPlantillaUsuarios()
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            if (!evaluador.EsSuperAdministrador)
+            {
+                return Forbid();
+            }
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Usuarios");
+            for (var i = 0; i < PlantillaImportacionUsuariosColumnas.Length; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = PlantillaImportacionUsuariosColumnas[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#E9ECEF");
+            }
+
+            worksheet.SheetView.FreezeRows(1);
+            worksheet.Range(1, 1, 1, PlantillaImportacionUsuariosColumnas.Length).SetAutoFilter();
+            worksheet.Columns().AdjustToContents();
+
+            var opcionesWorksheet = workbook.Worksheets.Add("TiposFormulario");
+            opcionesWorksheet.Cell(1, 1).Value = "Valor";
+            opcionesWorksheet.Cell(1, 2).Value = "Nombre";
+            opcionesWorksheet.Range(1, 1, 1, 2).Style.Font.Bold = true;
+
+            var row = 2;
+            foreach (var opcion in TipoFormularioNiveles.OrderBy(x => x.Value.Nombre))
+            {
+                opcionesWorksheet.Cell(row, 1).Value = opcion.Key;
+                opcionesWorksheet.Cell(row, 2).Value = opcion.Value.Nombre;
+                row++;
+            }
+
+            opcionesWorksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+
+            return File(
+                stream.ToArray(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"plantilla-importacion-usuarios-{DateTime.Today:yyyyMMdd}.xlsx");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ImportarUsuarios(IFormFile? archivo)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            if (!evaluador.EsSuperAdministrador)
+            {
+                return Forbid();
+            }
+
+            if (archivo == null || archivo.Length == 0)
+            {
+                TempData["ErrorImportacionUsuarios"] = "Debes adjuntar un archivo Excel para importar.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var creados = 0;
+            var actualizados = 0;
+            var programados = 0;
+            var errores = new List<string>();
+
+            try
+            {
+                using var stream = archivo.OpenReadStream();
+                using var workbook = new XLWorkbook(stream);
+                var worksheet = workbook.Worksheets.First();
+                var headerMap = BuildHeaderMap(worksheet);
+                var missingColumns = PlantillaImportacionUsuariosColumnas
+                    .Where(column => !headerMap.ContainsKey(NormalizeImportKey(column)))
+                    .ToList();
+
+                if (missingColumns.Any())
+                {
+                    TempData["ErrorImportacionUsuarios"] =
+                        "La plantilla no contiene todas las columnas requeridas: " +
+                        string.Join(", ", missingColumns);
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+                for (var row = 2; row <= lastRow; row++)
+                {
+                    var cedula = GetImportText(worksheet, headerMap, row, "Cedula");
+                    if (string.IsNullOrWhiteSpace(cedula))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var existente = await _repo.GetUsuarioByCedulaAsync(cedula);
+                        var fechaActivacionProgramada = GetImportDate(worksheet, headerMap, row, "Fecha activacion programada");
+                        var habilitado = !fechaActivacionProgramada.HasValue ||
+                                         fechaActivacionProgramada.Value.Date <= DateTime.Today;
+
+                        var usuario = new UsuarioEvaluado
+                        {
+                            Id = existente?.Id ?? Guid.Empty,
+                            Cedula = cedula,
+                            NombreCompleto = GetImportText(worksheet, headerMap, row, "Nombre completo") ?? string.Empty,
+                            Cargo = GetImportText(worksheet, headerMap, row, "Cargo"),
+                            CorreoEvaluador = GetImportText(worksheet, headerMap, row, "Nombre evaluador principal"),
+                            CargoJefeInmediato = GetImportText(worksheet, headerMap, row, "Cargo evaluador principal"),
+                            EvaluadorNombre = GetImportText(worksheet, headerMap, row, "Correo evaluador principal"),
+                            NombreEvaluadorSst = GetImportText(worksheet, headerMap, row, "Nombre evaluador SST"),
+                            CorreoEvaluadorSst = GetImportText(worksheet, headerMap, row, "Correo evaluador SST"),
+                            CargoEvaluadorSst = GetImportText(worksheet, headerMap, row, "Cargo evaluador SST"),
+                            FechaIngreso = GetImportDate(worksheet, headerMap, row, "Fecha ingreso"),
+                            FechaFinalizacionContrato = GetImportDate(worksheet, headerMap, row, "Fecha finalización contrato"),
+                            FechaFinalizacionPeriodoPrueba = GetImportDate(worksheet, headerMap, row, "Fecha Finalizacion Periodo de Prueba"),
+                            FechaActivacionProgramada = fechaActivacionProgramada,
+                            Gerencia = GetImportText(worksheet, headerMap, row, "Gerencia"),
+                            Proyecto = GetImportText(worksheet, headerMap, row, "Proyecto"),
+                            TipoFormulario = ParseTipoFormulario(
+                                GetImportText(worksheet, headerMap, row, "Tipo de formulario"),
+                                row),
+                            Habilitado = habilitado
+                        };
+
+                        await _repo.UpsertUsuarioImportadoAsync(usuario);
+
+                        if (existente == null)
+                        {
+                            creados++;
+                        }
+                        else
+                        {
+                            actualizados++;
+                        }
+
+                        if (!habilitado && fechaActivacionProgramada.HasValue)
+                        {
+                            programados++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errores.Add($"Fila {row}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "No fue posible importar usuarios desde Excel.");
+                TempData["ErrorImportacionUsuarios"] = "No fue posible leer el archivo Excel. Revisa que sea una plantilla válida.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (errores.Any())
+            {
+                TempData["ErrorImportacionUsuarios"] =
+                    $"Importación parcial. Creados: {creados}. Actualizados: {actualizados}. Errores: " +
+                    string.Join(" | ", errores.Take(5)) +
+                    (errores.Count > 5 ? $" | y {errores.Count - 5} más." : string.Empty);
+            }
+            else
+            {
+                TempData["MensajeImportacionUsuarios"] =
+                    $"Importación completada. Creados: {creados}. Actualizados: {actualizados}. Programados para activación futura: {programados}.";
+            }
+
+            return RedirectToAction(nameof(Index));
+        }
+
+        private static Dictionary<string, int> BuildHeaderMap(IXLWorksheet worksheet)
+        {
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var lastColumn = worksheet.Row(1).LastCellUsed()?.Address.ColumnNumber ?? 0;
+
+            for (var column = 1; column <= lastColumn; column++)
+            {
+                var header = worksheet.Cell(1, column).GetString();
+                var key = NormalizeImportKey(header);
+                if (!string.IsNullOrWhiteSpace(key) && !map.ContainsKey(key))
+                {
+                    map[key] = column;
+                }
+            }
+
+            return map;
+        }
+
+        private static string? GetImportText(
+            IXLWorksheet worksheet,
+            IReadOnlyDictionary<string, int> headerMap,
+            int row,
+            string columnName)
+        {
+            if (!headerMap.TryGetValue(NormalizeImportKey(columnName), out var column))
+            {
+                return null;
+            }
+
+            var value = worksheet.Cell(row, column).GetString()?.Trim();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        private static DateTime? GetImportDate(
+            IXLWorksheet worksheet,
+            IReadOnlyDictionary<string, int> headerMap,
+            int row,
+            string columnName)
+        {
+            if (!headerMap.TryGetValue(NormalizeImportKey(columnName), out var column))
+            {
+                return null;
+            }
+
+            var cell = worksheet.Cell(row, column);
+            if (cell.IsEmpty())
+            {
+                return null;
+            }
+
+            if (cell.TryGetValue<DateTime>(out var date))
+            {
+                return date.Date;
+            }
+
+            var raw = cell.GetString()?.Trim();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            var culture = CultureInfo.GetCultureInfo("es-CO");
+            var formats = new[]
+            {
+                "yyyy-MM-dd",
+                "dd/MM/yyyy",
+                "d/M/yyyy",
+                "dd-MM-yyyy",
+                "d-M-yyyy",
+                "M/d/yyyy",
+                "MM/dd/yyyy"
+            };
+
+            if (DateTime.TryParseExact(raw, formats, culture, DateTimeStyles.None, out date) ||
+                DateTime.TryParse(raw, culture, DateTimeStyles.None, out date))
+            {
+                return date.Date;
+            }
+
+            throw new InvalidOperationException($"La columna '{columnName}' no tiene una fecha válida.");
+        }
+
+        private static int? ParseTipoFormulario(string? value, int row)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var trimmed = value.Trim();
+            if (int.TryParse(trimmed, out var numericValue) &&
+                TipoFormularioNiveles.ContainsKey(numericValue))
+            {
+                return numericValue;
+            }
+
+            var normalized = NormalizeImportKey(trimmed);
+            var match = TipoFormularioNiveles.FirstOrDefault(x =>
+                NormalizeImportKey(x.Value.Nombre) == normalized ||
+                NormalizeImportKey(x.Value.Codigo) == normalized);
+
+            if (!match.Equals(default(KeyValuePair<int, (string Codigo, string Nombre)>)))
+            {
+                return match.Key;
+            }
+
+            throw new InvalidOperationException($"Fila {row}: tipo de formulario inválido '{value}'.");
+        }
+
+        private static string NormalizeImportKey(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(normalized.Length);
+            foreach (var ch in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+                {
+                    builder.Append(char.ToLowerInvariant(ch));
+                }
+            }
+
+            return builder
+                .ToString()
+                .Normalize(NormalizationForm.FormC)
+                .Replace(" ", string.Empty)
+                .Replace("_", string.Empty)
+                .Replace("-", string.Empty);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Eliminar([FromBody] EliminarEvaluacionesRequest request)
@@ -1320,6 +1630,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            await _repo.HabilitarUsuariosProgramadosAsync(DateTime.Today);
             var usuario = await _repo.GetUsuarioByIdAsync(usuarioId);
             if (usuario == null)
             {
@@ -1331,9 +1642,14 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            if (!PuedeDiligenciarUsuario(evaluador, usuario))
+            if (!TieneRolDiligenciarUsuario(evaluador, usuario))
             {
                 return EvaluadorSinBloqueAsignado();
+            }
+
+            if (!usuario.Habilitado)
+            {
+                return UsuarioNoHabilitado();
             }
 
             var parteActual = GetParteEvaluador(evaluador, usuario);
@@ -1350,26 +1666,6 @@ namespace EvaluacionDesempenoAB.Controllers
             if (evaluacionPendiente != null)
             {
                 return RedirectToAction(nameof(Editar), new { id = evaluacionPendiente.Id });
-            }
-
-            var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
-            if (ventanaActiva == null)
-            {
-                return BadRequest("La evaluación solo se puede iniciar dentro del rango de fechas permitido o con una activación vigente.");
-            }
-
-            var evaluacionActiva = await GetEvaluacionInicialActivaAsync(usuarioId, ventanaActiva);
-            if (evaluacionActiva != null)
-            {
-                var coberturaActiva = await GetCoberturaAsync(
-                    evaluacionActiva,
-                    competencias,
-                    comportamientosPorNivel,
-                    coberturasPorEvaluacion);
-
-                return EstaParteCompleta(coberturaActiva, parteActual)
-                    ? BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.")
-                    : RedirectToAction(nameof(Editar), new { id = evaluacionActiva.Id });
             }
 
             var niveles = await _repo.GetNivelesActivosAsync();
@@ -1395,6 +1691,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            await _repo.HabilitarUsuariosProgramadosAsync(DateTime.Today);
             var usuario = await _repo.GetUsuarioByIdAsync(usuarioId);
             var nivel = await _repo.GetNivelByIdAsync(nivelId);
 
@@ -1408,9 +1705,14 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            if (!PuedeDiligenciarUsuario(evaluador, usuario))
+            if (!TieneRolDiligenciarUsuario(evaluador, usuario))
             {
                 return EvaluadorSinBloqueAsignado();
+            }
+
+            if (!usuario.Habilitado)
+            {
+                return UsuarioNoHabilitado();
             }
 
             if (evaluacionOrigenId.HasValue)
@@ -1434,29 +1736,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 return RedirectToAction(nameof(Editar), new { id = evaluacionPendiente.Id });
             }
 
-            var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
-            if (ventanaActiva == null)
-            {
-                return BadRequest("La evaluación solo se puede iniciar dentro del rango de fechas permitido o con una activación vigente.");
-            }
-
-            var evaluacionActiva = await GetEvaluacionInicialActivaAsync(usuarioId, ventanaActiva);
-            if (evaluacionActiva != null)
-            {
-                var coberturaActiva = await GetCoberturaAsync(
-                    evaluacionActiva,
-                    competencias,
-                    comportamientosPorNivel,
-                    coberturasPorEvaluacion);
-
-                if (EstaParteCompleta(coberturaActiva, parteActual))
-                {
-                    return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
-                }
-
-                return RedirectToAction(nameof(Editar), new { id = evaluacionActiva.Id });
-            }
-
             var vm = await BuildFormularioViewModelAsync(
                 evaluador,
                 usuario,
@@ -1478,6 +1757,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            await _repo.HabilitarUsuariosProgramadosAsync(DateTime.Today);
             var evaluacion = await _repo.GetEvaluacionByIdAsync(id);
             if (evaluacion == null)
             {
@@ -1496,9 +1776,14 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            if (!PuedeDiligenciarUsuario(evaluador, usuario))
+            if (!TieneRolDiligenciarUsuario(evaluador, usuario))
             {
                 return EvaluadorSinBloqueAsignado();
+            }
+
+            if (!usuario.Habilitado)
+            {
+                return UsuarioNoHabilitado();
             }
 
             var vm = await BuildFormularioViewModelAsync(evaluador, usuario, nivel, evaluacion);
@@ -1517,6 +1802,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            await _repo.HabilitarUsuariosProgramadosAsync(DateTime.Today);
             var usuario = await _repo.GetUsuarioByIdAsync(model.UsuarioId);
             var nivel = await _repo.GetNivelByIdAsync(model.NivelId);
             if (usuario == null || nivel == null)
@@ -1529,9 +1815,14 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            if (!PuedeDiligenciarUsuario(evaluador, usuario))
+            if (!TieneRolDiligenciarUsuario(evaluador, usuario))
             {
                 return EvaluadorSinBloqueAsignado();
+            }
+
+            if (!usuario.Habilitado)
+            {
+                return UsuarioNoHabilitado();
             }
 
             try
@@ -1575,13 +1866,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 }
                 else
                 {
-                    var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
-                    if (ventanaActiva == null)
-                    {
-                        return BadRequest("La evaluación solo se puede guardar dentro del rango de fechas permitido o sobre una evaluación ya creada.");
-                    }
-
-                    lockKey = EvaluacionCicloHelper.BuildLockKey(usuario.Id, ventanaActiva);
+                    lockKey = BuildHabilitadoLockKey(usuario.Id);
                 }
 
                 var saveLock = GetInicioEvaluacionLock(lockKey);
@@ -1606,32 +1891,6 @@ namespace EvaluacionDesempenoAB.Controllers
                             competencias,
                             comportamientosPorNivel,
                             coberturasPorEvaluacion);
-                    }
-
-                    if (evaluacionExistente == null)
-                    {
-                        var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
-                        if (ventanaActiva == null)
-                        {
-                            return BadRequest("La evaluación solo se puede guardar dentro del rango de fechas permitido.");
-                        }
-
-                        var evaluacionEnVentana = await GetEvaluacionInicialActivaAsync(model.UsuarioId, ventanaActiva);
-                        if (evaluacionEnVentana != null)
-                        {
-                            var coberturaVentana = await GetCoberturaAsync(
-                                evaluacionEnVentana,
-                                competencias,
-                                comportamientosPorNivel,
-                                coberturasPorEvaluacion);
-
-                            if (EstaParteCompleta(coberturaVentana, parteActual))
-                            {
-                                return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
-                            }
-
-                            evaluacionExistente = evaluacionEnVentana;
-                        }
                     }
 
                     var detallesExistentes = evaluacionExistente == null
@@ -1858,6 +2117,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            await _repo.HabilitarUsuariosProgramadosAsync(DateTime.Today);
             var vm = await BuildReporteViewModelAsync(id, evaluador);
             if (vm == null)
             {
@@ -2221,6 +2481,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            await _repo.HabilitarUsuariosProgramadosAsync(DateTime.Today);
             var evaluacion = await _repo.GetEvaluacionByIdAsync(model.EvaluacionId);
             if (evaluacion == null)
             {
@@ -2242,6 +2503,11 @@ namespace EvaluacionDesempenoAB.Controllers
             if (!EvaluacionRolesHelper.TieneAcceso(parteActual))
             {
                 return EvaluadorSinBloqueAsignado();
+            }
+
+            if (!usuario.Habilitado)
+            {
+                return UsuarioNoHabilitado();
             }
 
             var competencias = await _repo.GetCompetenciasAsync();
@@ -2535,7 +2801,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     ?? usuario.CorreoEvaluador
                     ?? usuario.EvaluadorNombre,
                 CargoJefeInmediatoOEvaluador = evaluadorPrincipal?.Cargo ?? usuario.CargoJefeInmediato,
-                NombreEvaluadorSst = evaluadorSst?.NombreCompleto ?? usuario.CorreoEvaluadorSst,
+                NombreEvaluadorSst = evaluadorSst?.NombreCompleto ?? usuario.NombreEvaluadorSst ?? usuario.CorreoEvaluadorSst,
                 CargoEvaluadorSst = evaluadorSst?.Cargo ?? usuario.CargoEvaluadorSst,
                 FechaIngreso = usuario.FechaIngreso,
                 FechaGeneracionReporte = DateTime.Today,

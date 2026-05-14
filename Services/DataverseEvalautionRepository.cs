@@ -34,6 +34,9 @@ namespace EvaluacionDesempenoAB.Services
         private const string FirmaUsuarioColumn = "cr3d2_firma";
         private const string ReporteFirmadoColumn = "cr3d2_reportefirmado";
         private const string ReporteFirmadoNombreColumn = "cr3d2_reportefirmado_name";
+        private const string HabilitadoColumn = "cr3d2_habilitado";
+        private const string NombreEvaluadorSstColumn = "cr3d2_nombreevaluadorsst";
+        private const string FechaActivacionProgramadaColumn = "cr3d2_fechaactivacionprogramada";
 
         private sealed class ChildRelationshipInfo
         {
@@ -101,6 +104,27 @@ namespace EvaluacionDesempenoAB.Services
             return e == null ? null : MapUsuario(e);
         }
 
+        public async Task<UsuarioEvaluado?> GetUsuarioByCedulaAsync(string cedula)
+        {
+            if (string.IsNullOrWhiteSpace(cedula))
+            {
+                return null;
+            }
+
+            var q = new QueryExpression(UsuarioTable)
+            {
+                ColumnSet = new ColumnSet(true),
+                TopCount = 1
+            };
+
+            q.Criteria.AddCondition("crfb7_cedula", ConditionOperator.Equal, cedula.Trim());
+
+            var result = await _client.RetrieveMultipleAsync(q);
+            var entity = result.Entities.FirstOrDefault();
+
+            return entity == null ? null : MapUsuario(entity);
+        }
+
         public async Task<List<UsuarioEvaluado>> GetUsuariosByIdsAsync(IEnumerable<Guid> ids)
         {
             var usuarios = new List<UsuarioEvaluado>();
@@ -150,10 +174,14 @@ namespace EvaluacionDesempenoAB.Services
                     e.GetAttributeValue<DateTime?>("crfb7_fechafinalizacionperiododeprueba"),
                 FechaActivacionEvaluacion =
                     e.GetAttributeValue<DateTime?>("crfb7_fechaactivacionevaluacion"),
+                FechaActivacionProgramada =
+                    e.GetAttributeValue<DateTime?>(FechaActivacionProgramadaColumn),
+                Habilitado = GetBoolOrOptionSet(e, HabilitadoColumn),
                 CorreoElectronico = e.GetAttributeValue<string>("crfb7_correoelectronico"),
                 EvaluadorNombre = e.GetAttributeValue<string>("crfb7_evaluadorid"),
                 CorreoEvaluador = e.GetAttributeValue<string>("crfb7_correoevaluador"),
                 CorreoEvaluadorSst = e.GetAttributeValue<string>("cr3d2_correoevaluadorsst"),
+                NombreEvaluadorSst = e.GetAttributeValue<string>(NombreEvaluadorSstColumn),
                 CargoJefeInmediato = e.GetAttributeValue<string>("cr3d2_cargodeljefeinmediato"),
                 CargoEvaluadorSst = e.GetAttributeValue<string>("cr3d2_cargosst"),
                 TipoFormulario = e.GetAttributeValue<OptionSetValue>("crfb7_tipoformulario")?.Value,
@@ -184,6 +212,92 @@ namespace EvaluacionDesempenoAB.Services
             };
 
             await _client.UpdateAsync(entity);
+        }
+
+        public async Task<Guid> UpsertUsuarioImportadoAsync(UsuarioEvaluado usuario)
+        {
+            if (usuario == null || string.IsNullOrWhiteSpace(usuario.Cedula))
+            {
+                throw new ArgumentException("El usuario importado debe tener cédula.", nameof(usuario));
+            }
+
+            var existente = usuario.Id != Guid.Empty
+                ? await GetUsuarioByIdAsync(usuario.Id)
+                : await GetUsuarioByCedulaAsync(usuario.Cedula);
+
+            var entity = existente == null
+                ? new Entity(UsuarioTable)
+                : new Entity(UsuarioTable, existente.Id);
+
+            SetUsuarioImportadoAttributes(entity, usuario);
+
+            if (existente == null)
+            {
+                return await _client.CreateAsync(entity);
+            }
+
+            await _client.UpdateAsync(entity);
+            return existente.Id;
+        }
+
+        private static void SetUsuarioImportadoAttributes(Entity entity, UsuarioEvaluado usuario)
+        {
+            SetStringOrNull(entity, "crfb7_cedula", usuario.Cedula);
+            SetStringOrNull(entity, "crfb7_nombredeusuario", usuario.NombreCompleto);
+            SetStringOrNull(entity, "crfb7_cargo", usuario.Cargo);
+            SetStringOrNull(entity, "crfb7_correoevaluador", usuario.CorreoEvaluador);
+            SetStringOrNull(entity, "cr3d2_cargodeljefeinmediato", usuario.CargoJefeInmediato);
+            SetStringOrNull(entity, "crfb7_evaluadorid", usuario.EvaluadorNombre);
+            SetStringOrNull(entity, NombreEvaluadorSstColumn, usuario.NombreEvaluadorSst);
+            SetStringOrNull(entity, "cr3d2_correoevaluadorsst", usuario.CorreoEvaluadorSst);
+            SetStringOrNull(entity, "cr3d2_cargosst", usuario.CargoEvaluadorSst);
+            SetDateOrNull(entity, "crfb7_fechaingreso", usuario.FechaIngreso);
+            SetDateOrNull(entity, "crfb7_fechafinalizacioncontrato", usuario.FechaFinalizacionContrato);
+            SetDateOrNull(entity, "crfb7_fechafinalizacionperiododeprueba", usuario.FechaFinalizacionPeriodoPrueba);
+            SetDateOrNull(entity, FechaActivacionProgramadaColumn, usuario.FechaActivacionProgramada);
+            SetStringOrNull(entity, "crfb7_gerencia", usuario.Gerencia);
+            SetStringOrNull(entity, "cr3d2_proyecto", usuario.Proyecto);
+            entity[HabilitadoColumn] = usuario.Habilitado;
+            entity["crfb7_tipoformulario"] = usuario.TipoFormulario.HasValue
+                ? new OptionSetValue(usuario.TipoFormulario.Value)
+                : null;
+        }
+
+        private static void SetStringOrNull(Entity entity, string attributeName, string? value)
+        {
+            entity[attributeName] = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        private static void SetDateOrNull(Entity entity, string attributeName, DateTime? value)
+        {
+            entity[attributeName] = value?.Date;
+        }
+
+        public async Task<int> HabilitarUsuariosProgramadosAsync(DateTime fechaReferencia)
+        {
+            var q = new QueryExpression(UsuarioTable)
+            {
+                ColumnSet = new ColumnSet("crfb7_usuarioid", HabilitadoColumn, FechaActivacionProgramadaColumn)
+            };
+
+            q.Criteria.AddCondition(HabilitadoColumn, ConditionOperator.Equal, false);
+            q.Criteria.AddCondition(FechaActivacionProgramadaColumn, ConditionOperator.OnOrBefore, fechaReferencia.Date);
+
+            var result = await _client.RetrieveMultipleAsync(q);
+            var count = 0;
+
+            foreach (var usuario in result.Entities)
+            {
+                var update = new Entity(UsuarioTable, usuario.Id)
+                {
+                    [HabilitadoColumn] = true
+                };
+
+                await _client.UpdateAsync(update);
+                count++;
+            }
+
+            return count;
         }
 
         public async Task UploadFotoUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)

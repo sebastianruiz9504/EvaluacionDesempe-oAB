@@ -18,6 +18,8 @@ namespace EvaluacionDesempenoAB.Models
         public DateTime? FechaFinalizacionContrato { get; set; }
         public DateTime? FechaFinalizacionPeriodoPrueba { get; set; }
         public DateTime? FechaActivacionEvaluacion { get; set; }
+        public DateTime? FechaActivacionProgramada { get; set; }
+        public bool Habilitado { get; set; }
 
         // Correo electrónico con el que se autentica el usuario/evaluador
         public string? CorreoElectronico { get; set; }
@@ -26,6 +28,7 @@ namespace EvaluacionDesempenoAB.Models
         public string? EvaluadorNombre { get; set; }
         public string? CorreoEvaluador { get; set; }
         public string? CorreoEvaluadorSst { get; set; }
+        public string? NombreEvaluadorSst { get; set; }
         public string? CargoJefeInmediato { get; set; }
         public string? CargoEvaluadorSst { get; set; }
         public int? TipoFormulario { get; set; }

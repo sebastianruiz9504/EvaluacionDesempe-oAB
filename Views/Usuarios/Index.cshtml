@@ -33,7 +33,7 @@
                 Iniciar evaluación
             </button>
             <button type="button" class="btn btn-outline-primary d-none" id="solicitarActivacionBtn" data-url="@Url.Action("SolicitarActivacion", "Usuarios")">
-                Solicitar activación de evaluación
+                Solicitar aprobación
             </button>
         </form>
     </div>
@@ -62,6 +62,7 @@ else
                     <th>Gerencia</th>
                     <th>Correo</th>
                     <th>Resultado final</th>
+                    <th>Habilitado</th>
                     <th>Inicio de contrato</th>
                     <th>Finalización contrato</th>
                     <th>Finalización período de prueba</th>
@@ -79,6 +80,8 @@ else
                                data-fecha-finalizacion-contrato="@(u.FechaFinalizacionContrato?.ToString("yyyy-MM-dd") ?? "")"
                                data-fecha-finalizacion-prueba="@(u.FechaFinalizacionPeriodoPrueba?.ToString("yyyy-MM-dd") ?? "")"
                                data-fecha-activacion-evaluacion="@(u.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd") ?? "")"
+                               data-fecha-activacion-programada="@(u.FechaActivacionProgramada?.ToString("yyyy-MM-dd") ?? "")"
+                               data-habilitado="@u.Habilitado.ToString().ToLower()"
                                data-puede-iniciar="@u.PuedeIniciarEvaluacion.ToString().ToLower()"
                                data-puede-solicitar="@u.PuedeSolicitarActivacion.ToString().ToLower()"
                                data-tiene-evaluacion-activa="@u.TieneEvaluacionActiva.ToString().ToLower()"
@@ -101,6 +104,16 @@ else
                         else
                         {
                             <span>-</span>
+                        }
+                    </td>
+                    <td>
+                        @if (u.Habilitado)
+                        {
+                            <span class="badge text-bg-success">Sí</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">No</span>
                         }
                     </td>
                     <td>@(u.FechaInicioContrato?.ToShortDateString() ?? "-")</td>
@@ -145,11 +158,11 @@ else
                         solicitarBtn.disabled = pendingActivationUserId === solicitarBtn.dataset.userId;
                         solicitarBtn.textContent = pendingActivationUserId === solicitarBtn.dataset.userId
                             ? 'Esperando aprobación...'
-                            : 'Solicitar activación de evaluación';
+                            : 'Solicitar aprobación';
                     } else {
                         solicitarBtn.classList.add('d-none');
                         solicitarBtn.disabled = true;
-                        solicitarBtn.textContent = 'Solicitar activación de evaluación';
+                        solicitarBtn.textContent = 'Solicitar aprobación';
                     }
                 }
             };
@@ -212,6 +225,8 @@ else
                 const data = await response.json();
                 if (selectedCheckbox) {
                     selectedCheckbox.dataset.fechaActivacionEvaluacion = data.fechaActivacionEvaluacion || '';
+                    selectedCheckbox.dataset.fechaActivacionProgramada = data.fechaActivacionProgramada || '';
+                    selectedCheckbox.dataset.habilitado = data.habilitado === true ? 'true' : 'false';
                     selectedCheckbox.dataset.puedeIniciar = data.puedeIniciar === true ? 'true' : 'false';
                     selectedCheckbox.dataset.puedeSolicitar = data.puedeSolicitar === true ? 'true' : 'false';
                     selectedCheckbox.dataset.tieneEvaluacionActiva = data.tieneEvaluacionActiva === true ? 'true' : 'false';

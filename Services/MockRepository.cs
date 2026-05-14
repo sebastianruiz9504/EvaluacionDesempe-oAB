@@ -70,6 +70,7 @@ namespace EvaluacionDesempenoAB.Services
                      FechaFinalizacionContrato = DateTime.Today.AddYears(1),
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-2).AddMonths(3),
                     FechaActivacionEvaluacion = DateTime.Today.AddDays(-5),
+                    Habilitado = true,
                     CorreoElectronico = "juan.perez@contoso.com",
                     // está bajo el Evaluador Demo
                     EvaluadorNombre = evaluadorCorreo,
@@ -91,6 +92,7 @@ namespace EvaluacionDesempenoAB.Services
                     FechaFinalizacionContrato = DateTime.Today.AddYears(1),
                     FechaFinalizacionPeriodoPrueba = DateTime.Today.AddYears(-1).AddMonths(2),
                     FechaActivacionEvaluacion = null,
+                    Habilitado = false,
                     CorreoElectronico = "maria.lopez@contoso.com",
                     CargoEvaluadorSst = "Líder SST",
                     EvaluadorNombre = evaluadorCorreo,
@@ -176,6 +178,13 @@ namespace EvaluacionDesempenoAB.Services
             return Task.FromResult(u);
         }
 
+        public Task<UsuarioEvaluado?> GetUsuarioByCedulaAsync(string cedula)
+        {
+            var u = _usuarios.FirstOrDefault(x =>
+                string.Equals(x.Cedula, cedula?.Trim(), StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult(u);
+        }
+
         public Task<List<UsuarioEvaluado>> GetUsuariosByIdsAsync(IEnumerable<Guid> ids)
         {
             var idSet = ids
@@ -187,6 +196,55 @@ namespace EvaluacionDesempenoAB.Services
                 .ToList();
 
             return Task.FromResult(usuarios);
+        }
+
+        public Task<Guid> UpsertUsuarioImportadoAsync(UsuarioEvaluado usuario)
+        {
+            var existente = _usuarios.FirstOrDefault(x =>
+                string.Equals(x.Cedula, usuario.Cedula, StringComparison.OrdinalIgnoreCase));
+
+            if (existente == null)
+            {
+                usuario.Id = usuario.Id == Guid.Empty ? Guid.NewGuid() : usuario.Id;
+                _usuarios.Add(usuario);
+                return Task.FromResult(usuario.Id);
+            }
+
+            existente.NombreCompleto = usuario.NombreCompleto;
+            existente.Cargo = usuario.Cargo;
+            existente.CorreoEvaluador = usuario.CorreoEvaluador;
+            existente.CargoJefeInmediato = usuario.CargoJefeInmediato;
+            existente.EvaluadorNombre = usuario.EvaluadorNombre;
+            existente.NombreEvaluadorSst = usuario.NombreEvaluadorSst;
+            existente.CorreoEvaluadorSst = usuario.CorreoEvaluadorSst;
+            existente.CargoEvaluadorSst = usuario.CargoEvaluadorSst;
+            existente.FechaIngreso = usuario.FechaIngreso;
+            existente.FechaFinalizacionContrato = usuario.FechaFinalizacionContrato;
+            existente.FechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba;
+            existente.FechaActivacionProgramada = usuario.FechaActivacionProgramada;
+            existente.Gerencia = usuario.Gerencia;
+            existente.Proyecto = usuario.Proyecto;
+            existente.TipoFormulario = usuario.TipoFormulario;
+            existente.Habilitado = usuario.Habilitado;
+
+            return Task.FromResult(existente.Id);
+        }
+
+        public Task<int> HabilitarUsuariosProgramadosAsync(DateTime fechaReferencia)
+        {
+            var count = 0;
+            foreach (var usuario in _usuarios)
+            {
+                if (!usuario.Habilitado &&
+                    usuario.FechaActivacionProgramada.HasValue &&
+                    usuario.FechaActivacionProgramada.Value.Date <= fechaReferencia.Date)
+                {
+                    usuario.Habilitado = true;
+                    count++;
+                }
+            }
+
+            return Task.FromResult(count);
         }
 
         public Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades)

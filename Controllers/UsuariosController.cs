@@ -73,6 +73,13 @@ namespace EvaluacionDesempenoAB.Controllers
                        usuarioObjetivo,
                        GetCorreoActual(evaluadorActual)));
 
+        private bool PuedeEvaluarUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
+            => usuarioObjetivo.Habilitado &&
+               EvaluacionRolesHelper.TieneAcceso(
+                   EvaluacionRolesHelper.ResolveParte(
+                       usuarioObjetivo,
+                       GetCorreoActual(evaluadorActual)));
+
         private async Task<Evaluacion?> SelectPreferredEvaluacionAsync(IEnumerable<Evaluacion> candidates)
         {
             var candidatos = candidates
@@ -208,6 +215,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            await _repo.HabilitarUsuariosProgramadosAsync(DateTime.Today);
             var usuarios = await _repo.GetUsuariosByEvaluadorAsync(GetCorreoActual(evaluador));
             if (!string.IsNullOrWhiteSpace(cedula))
             {
@@ -227,11 +235,6 @@ namespace EvaluacionDesempenoAB.Controllers
                     usuario,
                     GetCorreoActual(evaluador));
                 var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id);
-                var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
-                var evaluacionGuardadaEnVentana = ventanaActiva == null
-                    ? null
-                    : await SelectPreferredEvaluacionAsync(
-                        evaluaciones.Where(x => EvaluacionCicloHelper.PerteneceAVentanaInicial(x, ventanaActiva)));
                 Evaluacion? evaluacionActual = null;
                 EvaluacionCoberturaInfo? coberturaActual = null;
                 Evaluacion? evaluacionPendienteParaParte = null;
@@ -270,8 +273,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 }
 
                 var tieneEvaluacionActiva = evaluacionPendienteParaParte != null;
-                var puedeCrearNueva = ventanaActiva != null && evaluacionGuardadaEnVentana == null;
-                var puedeIniciarOContinuar = tieneEvaluacionActiva || puedeCrearNueva;
+                var puedeIniciarOContinuar = PuedeEvaluarUsuario(evaluador, usuario);
 
                 vm.Add(new UsuarioPortalEvaluadorViewModel
                 {
@@ -285,11 +287,13 @@ namespace EvaluacionDesempenoAB.Controllers
                     FechaFinalizacionContrato = usuario.FechaFinalizacionContrato,
                     FechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba,
                     FechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion,
+                    FechaActivacionProgramada = usuario.FechaActivacionProgramada,
+                    Habilitado = usuario.Habilitado,
                     EvaluacionActualId = evaluacionPendienteParaParte?.Id,
                     EvaluacionNormalCompleta = coberturaActual?.EvaluacionNormalCompleta ?? false,
                     EvaluacionSstCompleta = coberturaActual?.EvaluacionSstCompleta ?? false,
                     PuedeIniciarEvaluacion = puedeIniciarOContinuar,
-                    PuedeSolicitarActivacion = !puedeIniciarOContinuar,
+                    PuedeSolicitarActivacion = !usuario.Habilitado,
                     TieneEvaluacionActiva = tieneEvaluacionActiva,
                     ResultadoFinal = coberturaActual?.AmbasPartesCompletas == true
                         ? evaluacionActual?.Total ?? coberturaActual.TotalCalculado
@@ -408,7 +412,8 @@ namespace EvaluacionDesempenoAB.Controllers
                 evaluadorNombre = Safe(evaluador.NombreCompleto),
                 evaluadorCorreo = Safe(GetCorreoActual(evaluador)),
                 fechaFinalizacionContrato = usuario.FechaFinalizacionContrato?.ToString("yyyy-MM-dd") ?? string.Empty,
-                fechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba?.ToString("yyyy-MM-dd") ?? string.Empty
+                fechaFinalizacionPeriodoPrueba = usuario.FechaFinalizacionPeriodoPrueba?.ToString("yyyy-MM-dd") ?? string.Empty,
+                habilitado = usuario.Habilitado
             };
 
             var client = _httpClientFactory.CreateClient();
@@ -452,6 +457,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            await _repo.HabilitarUsuariosProgramadosAsync(DateTime.Today);
             var usuario = await _repo.GetUsuarioByIdAsync(usuarioId);
             if (usuario == null)
             {
@@ -463,15 +469,10 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
-            var ventanaActiva = EvaluacionCicloHelper.ResolveVentanaActiva(usuario);
             var parteActual = EvaluacionRolesHelper.ResolveParte(
                 usuario,
                 GetCorreoActual(evaluador));
             var evaluaciones = await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id);
-            var evaluacionGuardadaEnVentana = ventanaActiva == null
-                ? null
-                : await SelectPreferredEvaluacionAsync(
-                    evaluaciones.Where(x => EvaluacionCicloHelper.PerteneceAVentanaInicial(x, ventanaActiva)));
             var competencias = await _repo.GetCompetenciasAsync();
             var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
             var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
@@ -495,16 +496,17 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             var tieneEvaluacionActiva = evaluacionPendienteParaParte != null;
-            var puedeCrearNueva = ventanaActiva != null && evaluacionGuardadaEnVentana == null;
-            var puedeIniciar = tieneEvaluacionActiva || puedeCrearNueva;
+            var puedeIniciar = usuario.Habilitado && EvaluacionRolesHelper.TieneAcceso(parteActual);
 
             return Json(new
             {
                 puedeIniciar,
-                puedeSolicitar = !puedeIniciar,
+                puedeSolicitar = !usuario.Habilitado,
                 tieneEvaluacionActiva,
                 evaluacionActualId = evaluacionPendienteParaParte?.Id,
-                fechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd")
+                fechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd"),
+                fechaActivacionProgramada = usuario.FechaActivacionProgramada?.ToString("yyyy-MM-dd"),
+                habilitado = usuario.Habilitado
             });
         }
 

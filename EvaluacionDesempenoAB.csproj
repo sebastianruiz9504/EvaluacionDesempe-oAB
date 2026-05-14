@@ -17,6 +17,9 @@
     <Compile Remove="ScenarioTests\**" />
     <Content Remove="ScenarioTests\**" />
     <None Remove="ScenarioTests\**" />
+    <Compile Remove="Tools\**" />
+    <Content Remove="Tools\**" />
+    <None Remove="Tools\**" />
   </ItemGroup>
 
 </Project>

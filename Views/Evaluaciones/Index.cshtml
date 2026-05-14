@@ -11,6 +11,8 @@
     var tiposFormularioCertificado = ViewBag.TiposFormularioCertificado as List<TipoFormularioOpcionViewModel> ?? new();
     var errorCarga = ViewBag.ErrorCargaEvaluaciones as string;
     var advertenciaCarga = ViewBag.AdvertenciaCargaEvaluaciones as string;
+    var mensajeImportacion = TempData["MensajeImportacionUsuarios"] as string;
+    var errorImportacion = TempData["ErrorImportacionUsuarios"] as string;
 }
 
 <h2 class="mt-4">Mis evaluaciones</h2>
@@ -26,6 +28,20 @@
 {
     <div class="alert alert-info mt-3" role="alert">
         @advertenciaCarga
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(mensajeImportacion))
+{
+    <div class="alert alert-success mt-3" role="alert">
+        @mensajeImportacion
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorImportacion))
+{
+    <div class="alert alert-danger mt-3" role="alert">
+        @errorImportacion
     </div>
 }
 
@@ -131,6 +147,30 @@
                 }
                 @if (esSuperAdmin)
                 {
+                    <div class="col-12 col-xxl-auto">
+                        <div class="small text-muted text-uppercase fw-semibold mb-2">Usuarios</div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <a asp-action="DescargarPlantillaUsuarios"
+                               class="btn btn-sm btn-outline-secondary">
+                                Descargar plantilla
+                            </a>
+                            <form asp-action="ImportarUsuarios"
+                                  method="post"
+                                  enctype="multipart/form-data"
+                                  class="d-flex flex-wrap align-items-center gap-2">
+                                @Html.AntiForgeryToken()
+                                <input type="file"
+                                       name="archivo"
+                                       accept=".xlsx"
+                                       class="form-control form-control-sm"
+                                       style="max-width: 260px;"
+                                       required />
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    Importar usuarios
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                     <div class="col-12 col-xxl-auto">
                         <div class="small text-muted text-uppercase fw-semibold mb-2">Certificados</div>
                         <form method="get"

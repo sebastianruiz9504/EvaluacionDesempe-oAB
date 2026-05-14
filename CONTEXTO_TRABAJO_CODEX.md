@@ -70,23 +70,34 @@ Metodo clave:
    - Firma valida del evaluador normal.
    - Firma valida del evaluador SST.
 
-## Activacion manual de evaluacion
+## Habilitacion de evaluacion
 
-Cuando un usuario no esta dentro de las ventanas naturales de evaluacion,
-la pantalla `Views/Usuarios/Index.cshtml` muestra `Solicitar activacion de evaluacion`.
-Esa accion llama el flujo de Power Automate configurado en
-`PowerAutomate:SolicitudActivacionEvaluacionUrl`.
+La regla unica para que un evaluador pueda iniciar o continuar una evaluacion es
+la columna booleana de Dataverse `cr3d2_habilitado` en `crfb7_usuario`, mapeada
+como `UsuarioEvaluado.Habilitado`.
 
-La aprobacion debe reflejarse en Dataverse llenando
-`crfb7_fechaactivacionevaluacion`, mapeado como
-`UsuarioEvaluado.FechaActivacionEvaluacion`. Con esa fecha vigente,
-`EvaluacionCicloHelper.ResolveVentanaActiva` habilita una ventana manual de
-25 dias desde la fecha de activacion.
+Ya no se debe habilitar por ventanas naturales de 20/25 dias sobre fecha de
+finalizacion de contrato o periodo de prueba. Esas fechas pueden mostrarse o
+importarse, pero no deciden si se puede evaluar.
 
-La UI consulta `Usuarios/EstadoActivacion` sin cache y sigue refrescando el
-estado mientras el usuario este seleccionado o la solicitud este pendiente.
-Cuando `puedeIniciar` pasa a `true`, se oculta el boton de solicitud y queda
-activo `Iniciar evaluacion`.
+Cuando un usuario no esta habilitado, la pantalla `Views/Usuarios/Index.cshtml`
+muestra `Solicitar aprobación`. Esa accion llama el flujo configurado en
+`PowerAutomate:SolicitudActivacionEvaluacionUrl`. El flujo activo se llama
+`App- Desempeño - Solicitud Aprobación Habilitado`, solicita aprobacion a
+`jully.pinto@aguasdebogota.com.co` y, si se aprueba, cambia
+`cr3d2_habilitado` a `true`.
+
+Tambien existe `cr3d2_fechaactivacionprogramada`, mapeada como
+`UsuarioEvaluado.FechaActivacionProgramada`. La importacion deja en `No` los
+usuarios con fecha futura y en `Si` los que no tienen fecha futura. La app tiene
+una salvaguarda que habilita filas vencidas al consultar o iniciar evaluaciones.
+Se creo el flujo `App- Desempeño - Activación programada habilitado`, pero su
+activacion puede requerir licencia Power Automate Premium para Dataverse.
+
+Superadministradores (`crfb7_superadministrador`) ven en `Mis evaluaciones` la
+descarga de plantilla e importacion Excel de usuarios. La importacion cruza por
+`crfb7_cedula`; si existe actualiza columnas de la plantilla, si no existe crea
+la fila.
 
 ## Firmas
 
@@ -247,6 +258,17 @@ Pruebas de escenario:
 dotnet run --project ScenarioTests\ScenarioTests.csproj
 ```
 
+Smoke Dataverse real para plantilla/importacion/evaluacion/certificado:
+
+```powershell
+dotnet run --project Tools\DataverseSmoke\DataverseSmoke.csproj
+```
+
+Ese smoke usa `digital@aguasdebogota.com.co` como evaluador/superadmin, descarga
+la plantilla desde el controller, importa 5 usuarios `CODEXSMOKE20260514xx`,
+evalua `CODEXSMOKE2026051401` como evaluador normal + SST, sube firma y valida
+que `ImprimirResultados` emita `ReporteImpresion`.
+
 Publicar:
 
 ```powershell
@@ -296,11 +318,21 @@ El ultimo despliegue conocido exitoso fue:
 - `Controllers/UsuariosController.cs`
 - `Helpers/EvaluacionRolesHelper.cs`
 - `Services/DataverseEvalautionRepository.cs`
+- `Services/IEvaluacionRepository.cs`
+- `Services/MockRepository.cs`
+- `Models/Usuario Evaluado.cs`
 - `ViewModels/EvaluacionViewModels.cs`
+- `ViewModels/UsuarioEvaluadoViewModel.cs`
 - `Views/Evaluaciones/Reporte.cshtml`
+- `Views/Evaluaciones/Index.cshtml`
+- `Views/Usuarios/Index.cshtml`
 - `EvaluacionDesempenoAB.csproj`
 - `ScenarioTests/Program.cs`
 - `ScenarioTests/ScenarioTests.csproj`
+- `Tools/DataverseAdmin/Program.cs`
+- `Tools/DataverseAdmin/DataverseAdmin.csproj`
+- `Tools/DataverseSmoke/Program.cs`
+- `Tools/DataverseSmoke/DataverseSmoke.csproj`
 
 ## Recomendacion para chats nuevos
 

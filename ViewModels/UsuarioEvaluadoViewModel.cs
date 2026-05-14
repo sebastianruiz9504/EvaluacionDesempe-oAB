@@ -22,6 +22,8 @@ namespace EvaluacionDesempenoAB.ViewModels
         public DateTime? FechaFinalizacionContrato { get; set; }
         public DateTime? FechaFinalizacionPeriodoPrueba { get; set; }
         public DateTime? FechaActivacionEvaluacion { get; set; }
+        public DateTime? FechaActivacionProgramada { get; set; }
+        public bool Habilitado { get; set; }
         public bool EvaluacionNormalCompleta { get; set; }
         public bool EvaluacionSstCompleta { get; set; }
         public decimal? ResultadoFinal { get; set; }

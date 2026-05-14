@@ -72,17 +72,19 @@ var usuarioConFirmaPrevia = usuarios.Single(u => u.Cedula == "987654321");
 usuarioConFirmaPrevia.TipoFormulario = 433930002;
 
 var usuariosController = BuildUsuariosController(repo, evaluadorNormal);
-usuarioConFirmaPrevia.FechaActivacionEvaluacion = null;
-var estadoSinActivacion = await usuariosController.EstadoActivacion(usuarioConFirmaPrevia.Id);
-AssertJsonBool(estadoSinActivacion, "puedeIniciar", false, "El estado no habilita iniciar evaluación sin rango ni activación.");
-var nuevaSinActivacion = await normalController.Nueva(usuarioConFirmaPrevia.Id);
-Assert(nuevaSinActivacion is BadRequestObjectResult, "Nueva evaluación fuera de rango queda bloqueada antes de aprobar activación.");
-
 usuarioConFirmaPrevia.FechaActivacionEvaluacion = DateTime.Today;
-var estadoConActivacion = await usuariosController.EstadoActivacion(usuarioConFirmaPrevia.Id);
-AssertJsonBool(estadoConActivacion, "puedeIniciar", true, "El estado habilita iniciar evaluación cuando la activación fue aprobada.");
-var nuevaConActivacion = await normalController.Nueva(usuarioConFirmaPrevia.Id);
-AssertRedirect(nuevaConActivacion, "Formulario", "Nueva evaluación redirige al formulario con activación vigente.");
+usuarioConFirmaPrevia.Habilitado = false;
+var estadoSinHabilitar = await usuariosController.EstadoActivacion(usuarioConFirmaPrevia.Id);
+AssertJsonBool(estadoSinHabilitar, "puedeIniciar", false, "El estado no habilita iniciar evaluación aunque exista fecha si Habilitado está en No.");
+var nuevaSinHabilitar = await normalController.Nueva(usuarioConFirmaPrevia.Id);
+Assert(nuevaSinHabilitar is BadRequestObjectResult, "Nueva evaluación queda bloqueada cuando Habilitado está en No.");
+
+usuarioConFirmaPrevia.FechaActivacionProgramada = DateTime.Today;
+var estadoHabilitado = await usuariosController.EstadoActivacion(usuarioConFirmaPrevia.Id);
+Assert(usuarioConFirmaPrevia.Habilitado, "La fecha de activación programada vencida cambia Habilitado a Sí.");
+AssertJsonBool(estadoHabilitado, "puedeIniciar", true, "El estado habilita iniciar evaluación cuando Habilitado está en Sí.");
+var nuevaHabilitada = await normalController.Nueva(usuarioConFirmaPrevia.Id);
+AssertRedirect(nuevaHabilitada, "Formulario", "Nueva evaluación redirige al formulario cuando Habilitado está en Sí.");
 
 var formularioNormalConFirmaPrevia = await GetFormularioAsync(normalController, usuarioConFirmaPrevia.Id, nivel.Id);
 CompletarFormulario(formularioNormalConFirmaPrevia, 80);

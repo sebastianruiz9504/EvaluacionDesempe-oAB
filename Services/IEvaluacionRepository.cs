@@ -23,7 +23,10 @@ namespace EvaluacionDesempenoAB.Services
 
         // Traer un usuario por Id
         Task<UsuarioEvaluado?> GetUsuarioByIdAsync(Guid id);
+        Task<UsuarioEvaluado?> GetUsuarioByCedulaAsync(string cedula);
         Task<List<UsuarioEvaluado>> GetUsuariosByIdsAsync(IEnumerable<Guid> ids);
+        Task<Guid> UpsertUsuarioImportadoAsync(UsuarioEvaluado usuario);
+        Task<int> HabilitarUsuariosProgramadosAsync(DateTime fechaReferencia);
 
         // Actualizar novedades del usuario
         Task UpdateUsuarioNovedadesAsync(Guid usuarioId, string? novedades);
