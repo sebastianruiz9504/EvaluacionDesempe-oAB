@@ -1,6 +1,6 @@
 # Contexto de trabajo para Codex
 
-Ultima actualizacion: 2026-05-13
+Ultima actualizacion: 2026-05-14
 
 Este documento resume el contexto funcional y tecnico reciente del proyecto
 `EvaluacionDesempenoAB`. La idea es que un nuevo chat pueda leer este archivo
@@ -139,15 +139,30 @@ Accion:
 
 `ImprimirResultados(Guid id)`
 
+Accion auxiliar para UI:
+
+`EstadoCertificado(Guid id)`
+
 Reglas actuales:
 
 - Bloquea si falta normal o SST.
 - Bloquea si falta firma valida normal o SST.
 - Retorna `ReporteImpresion` solo cuando todo esta completo.
+- En `Mis evaluaciones`, antes de emitir se consulta `EstadoCertificado`.
+- En `Mis evaluaciones` tambien existe el boton grande `Subir o actualizar
+  firma`, como primera accion individual. Usa el mismo popup de firma, pero en
+  modo guardar firma, sin emitir certificado.
+- Si al evaluador actual le falta firma, se abre un popup para subir PNG/JPG.
+- Si el evaluador actual ya tiene firma pero falta la del otro evaluador, se
+  abre un popup informativo de firma pendiente.
 
 Vista:
 
 `Views/Evaluaciones/ReporteImpresion.cshtml`
+
+Boton de emision:
+
+`Views/Evaluaciones/Index.cshtml`
 
 ## Error 500 investigado
 
@@ -246,6 +261,12 @@ Escenarios cubiertos:
 - JPG valido se acepta aunque el `Content-Type` venga raro.
 - PNG valido se acepta.
 - Certificado se bloquea si falta firma SST.
+- Estado de certificado devuelve `currentMissingSignature` para abrir popup de
+  firma propia.
+- El endpoint usado por el popup permite subir firma PNG/JPG del evaluador
+  actual y revalidar el certificado.
+- Estado de certificado devuelve `otherMissingSignature` si falta la firma del
+  otro evaluador.
 - Certificado final se genera cuando ambas firmas existen.
 - Firma JPG puede actualizarse despues de plan firmado.
 - Si el evaluador ya tiene firma previa, puede guardar plan sin subirla de nuevo.
@@ -318,6 +339,16 @@ El ultimo despliegue conocido exitoso fue:
 - Incluye importacion Excel en `Mis evaluaciones` y `Modulo admin`, columna
   `Habilitado` con botones manuales en Admin, y regla unica por
   `cr3d2_habilitado`.
+
+2026-05-14, ajuste certificado:
+
+- Deploy zip exitoso a `EvdesempenoAB`.
+- Deployment id Azure: `fda82cc858534e44b093a037fd401c0f`.
+- Incluye popup de carga de firma al emitir certificado cuando falta la firma
+  del evaluador actual, y popup informativo cuando falta la firma del otro
+  evaluador.
+- Deployment id Azure posterior: `90ee8e7268f443fbbbd91c2a7c4d7b97`.
+- Incluye boton grande `Subir o actualizar firma` en `Mis evaluaciones`.
 
 ## Advertencias y cuidado
 

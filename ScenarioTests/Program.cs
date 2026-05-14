@@ -48,6 +48,12 @@ CompletarFormulario(formularioSst, 80);
 var guardarSst = await sstController.Guardar(formularioSst, "guardar");
 AssertRedirect(guardarSst, "PlanAccion", "Guardar SST redirige a plan de acción.");
 
+var estadoCertificadoSinFirmaSstNormal = await normalController.EstadoCertificado(evaluacionId);
+AssertJsonString(estadoCertificadoSinFirmaSstNormal, "status", "otherMissingSignature", "El evaluador normal ve aviso cuando falta la firma del evaluador SST.");
+
+var estadoCertificadoSinFirmaSst = await sstController.EstadoCertificado(evaluacionId);
+AssertJsonString(estadoCertificadoSinFirmaSst, "status", "currentMissingSignature", "El evaluador SST recibe solicitud de subir su propia firma.");
+
 var certificadoSinFirmaSst = await normalController.ImprimirResultados(evaluacionId);
 Assert(certificadoSinFirmaSst is BadRequestObjectResult, "El certificado se bloquea si falta la firma SST.");
 
@@ -55,15 +61,24 @@ var planSstSinFirma = BuildPlanModel(evaluacionId, sstController);
 var guardarPlanSstSinFirma = await sstController.GuardarPlanAccion(planSstSinFirma, null);
 Assert(guardarPlanSstSinFirma is ViewResult, "Guardar plan SST sin firma inicial queda bloqueado en la vista.");
 
+var subirFirmaSstDesdeCertificado = await sstController.SubirFirmaEvaluador(evaluacionId, BuildPngFormFile("firma-sst-popup.png"));
+Assert(subirFirmaSstDesdeCertificado is JsonResult, "El popup de certificado permite subir firma PNG del evaluador actual.");
+
+var estadoCertificadoListoDesdePopup = await normalController.EstadoCertificado(evaluacionId);
+AssertJsonString(estadoCertificadoListoDesdePopup, "status", "ready", "El certificado queda listo despues de subir la firma desde el popup.");
+
 var planSstConFirma = BuildPlanModel(evaluacionId, sstController);
 var guardarPlanSst = await sstController.GuardarPlanAccion(planSstConFirma, BuildPngFormFile("firma-sst.png"));
 AssertRedirect(guardarPlanSst, "PlanAccion", "Guardar plan SST con PNG válido funciona.");
+
+var estadoCertificadoListo = await normalController.EstadoCertificado(evaluacionId);
+AssertJsonString(estadoCertificadoListo, "status", "ready", "El estado del certificado queda listo cuando ambas firmas existen.");
 
 var certificadoFinal = await normalController.ImprimirResultados(evaluacionId);
 Assert(certificadoFinal is ViewResult view && string.Equals(view.ViewName, "ReporteImpresion", StringComparison.Ordinal), "El certificado se genera cuando ambas firmas existen.");
 
 var actualizarFirmaTrasBloqueo = await normalController.SubirFirmaEvaluador(evaluacionId, BuildJpgFormFile("firma-normal-actualizada.jpg"));
-Assert(actualizarFirmaTrasBloqueo is JsonResult, "La firma JPG puede actualizarse aunque el plan ya esté firmado.");
+Assert(actualizarFirmaTrasBloqueo is JsonResult, "El botón Subir o actualizar firma puede guardar una firma JPG aunque el plan ya esté firmado.");
 
 var actualizarFirmaFalsa = await normalController.SubirFirmaEvaluador(evaluacionId, BuildFakeJpgFormFile("firma-falsa-actualizada.jpg"));
 Assert(actualizarFirmaFalsa is BadRequestObjectResult, "La actualización de firma rechaza un .jpg falso.");
@@ -257,6 +272,18 @@ static void AssertJsonBool(IActionResult result, string propertyName, bool expec
     var property = json.Value.GetType().GetProperty(propertyName);
     var value = property?.GetValue(json.Value);
     Assert(value is bool boolValue && boolValue == expected, message);
+}
+
+static void AssertJsonString(IActionResult result, string propertyName, string expected, string message)
+{
+    if (result is not JsonResult { Value: not null } json)
+    {
+        throw new InvalidOperationException($"{message} Resultado: {result.GetType().Name}.");
+    }
+
+    var property = json.Value.GetType().GetProperty(propertyName);
+    var value = property?.GetValue(json.Value)?.ToString();
+    Assert(string.Equals(value, expected, StringComparison.Ordinal), $"{message} Valor: {value ?? "(nulo)"}.");
 }
 
 static void Assert(bool condition, string message)

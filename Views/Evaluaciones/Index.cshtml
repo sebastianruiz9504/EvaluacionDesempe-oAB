@@ -76,10 +76,12 @@
     <div class="card mt-3 shadow-sm border-0"
          data-evaluaciones-acciones
          data-base-imprimir="@Url.Action("ImprimirResultados", "Evaluaciones")"
+         data-base-estado-certificado="@Url.Action("EstadoCertificado", "Evaluaciones")"
          data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
          data-base-exportar="@Url.Action("ExportarExcel", "Evaluaciones")"
          data-base-eliminar="@(puedeEliminarEvaluaciones ? Url.Action("Eliminar", "Evaluaciones") : string.Empty)"
-         data-base-subir-reporte="@Url.Action("SubirReporteFirmado", "Evaluaciones")">
+         data-base-subir-reporte="@Url.Action("SubirReporteFirmado", "Evaluaciones")"
+         data-base-subir-firma="@Url.Action("SubirFirmaEvaluador", "Evaluaciones")">
         <div class="card-body">
             <div class="row g-3 align-items-end">
                 @if (hayEvaluaciones)
@@ -104,6 +106,12 @@
                     <div class="col-12 col-xxl-auto">
                         <div class="small text-muted text-uppercase fw-semibold mb-2">Acciones individuales</div>
                         <div class="d-flex flex-wrap gap-2">
+                            <button id="accionFirmaEvaluador"
+                                    type="button"
+                                    class="btn btn-primary"
+                                    disabled>
+                                Subir o actualizar firma
+                            </button>
                             <a id="accionImprimir"
                                class="btn btn-sm btn-outline-success disabled"
                                href="#"
@@ -337,6 +345,9 @@ else
 <form id="subirReporteFirmadoToken" method="post" class="d-none">
     @Html.AntiForgeryToken()
 </form>
+<form id="subirFirmaCertificadoToken" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
 <form id="exportarExcelToken" method="post" class="d-none">
     @Html.AntiForgeryToken()
 </form>
@@ -347,6 +358,53 @@ else
        type="file"
        class="d-none"
        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" />
+
+<div class="modal fade" id="modalFirmaCertificado" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Subir firma</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="textoFirmaCertificado" class="text-muted mb-3">
+                    Adjunta tu firma para emitir el certificado.
+                </p>
+                <label for="firmaCertificadoArchivo" class="form-label">Firma en PNG o JPG</label>
+                <input id="firmaCertificadoArchivo"
+                       type="file"
+                       class="form-control"
+                       accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+                <div id="estadoFirmaCertificado" class="form-text mt-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button id="guardarFirmaCertificado" type="button" class="btn btn-primary">
+                    Guardar firma y emitir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalFirmaFaltanteOtro" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Firma pendiente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="firmaFaltanteOtroMensaje" class="mb-0">
+                    Aún falta la firma del otro evaluador.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade" id="modalExportandoResultados" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -378,6 +436,7 @@ else
             const selectorTodasEvaluaciones = document.getElementById("seleccionarTodasEvaluaciones");
             const resumenSeleccion = document.getElementById("resumenSeleccion");
             const ayudaAccionesEvaluaciones = document.getElementById("ayudaAccionesEvaluaciones");
+            const accionFirmaEvaluador = document.getElementById("accionFirmaEvaluador");
             const accionImprimir = document.getElementById("accionImprimir");
             const accionCarpeta = document.getElementById("accionCarpeta");
             const accionExportar = document.getElementById("accionExportar");
@@ -387,19 +446,37 @@ else
             const barraProgresoExportacion = document.getElementById("barraProgresoExportacion");
             const textoEstadoExportacion = document.getElementById("textoEstadoExportacion");
             const baseImprimir = acciones?.dataset.baseImprimir ?? "";
+            const baseEstadoCertificado = acciones?.dataset.baseEstadoCertificado ?? "";
             const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
             const baseExportar = acciones?.dataset.baseExportar ?? "";
             const baseEliminar = acciones?.dataset.baseEliminar ?? "";
             const baseSubirReporte = acciones?.dataset.baseSubirReporte ?? "";
+            const baseSubirFirma = acciones?.dataset.baseSubirFirma ?? "";
+            const firmaCertificadoArchivo = document.getElementById("firmaCertificadoArchivo");
+            const guardarFirmaCertificado = document.getElementById("guardarFirmaCertificado");
+            const textoFirmaCertificado = document.getElementById("textoFirmaCertificado");
+            const estadoFirmaCertificado = document.getElementById("estadoFirmaCertificado");
+            const firmaFaltanteOtroMensaje = document.getElementById("firmaFaltanteOtroMensaje");
             const tokenExportarInput = document.querySelector('#exportarExcelToken input[name="__RequestVerificationToken"]');
             const tokenEliminarInput = document.querySelector('#eliminarEvaluacionesToken input[name="__RequestVerificationToken"]');
+            const tokenFirmaInput = document.querySelector('#subirFirmaCertificadoToken input[name="__RequestVerificationToken"]');
             const modalExportarElement = document.getElementById("modalExportandoResultados");
             const modalExportar = modalExportarElement && window.bootstrap?.Modal
                 ? new window.bootstrap.Modal(modalExportarElement, { backdrop: "static", keyboard: false })
                 : null;
+            const modalFirmaCertificadoElement = document.getElementById("modalFirmaCertificado");
+            const modalFirmaCertificado = modalFirmaCertificadoElement && window.bootstrap?.Modal
+                ? window.bootstrap.Modal.getOrCreateInstance(modalFirmaCertificadoElement)
+                : null;
+            const modalFirmaFaltanteOtroElement = document.getElementById("modalFirmaFaltanteOtro");
+            const modalFirmaFaltanteOtro = modalFirmaFaltanteOtroElement && window.bootstrap?.Modal
+                ? window.bootstrap.Modal.getOrCreateInstance(modalFirmaFaltanteOtroElement)
+                : null;
             let exportandoEnCurso = false;
             let progresoExportacion = 0;
             let intervaloProgresoExportacion = null;
+            let evaluacionFirmaCertificadoId = "";
+            let modoFirmaCertificado = "emitir";
 
             if (!tabla || !acciones) {
                 return;
@@ -433,6 +510,12 @@ else
             const setUploadDisabled = (disabled) => {
                 if (accionSubirReporte instanceof HTMLButtonElement) {
                     accionSubirReporte.disabled = disabled;
+                }
+            };
+
+            const setSignatureDisabled = (disabled) => {
+                if (accionFirmaEvaluador instanceof HTMLButtonElement) {
+                    accionFirmaEvaluador.disabled = disabled;
                 }
             };
 
@@ -501,6 +584,7 @@ else
                 if (!row) {
                     setDisabled(accionImprimir, true);
                     setDisabled(accionCarpeta, true);
+                    setSignatureDisabled(true);
                     setUploadDisabled(true);
                     return;
                 }
@@ -514,7 +598,189 @@ else
 
                 setDisabled(accionImprimir, !puedeImprimir);
                 setDisabled(accionCarpeta, false);
+                setSignatureDisabled(false);
                 setUploadDisabled(false);
+            };
+
+            const getSelectedEvaluacionId = () => {
+                const filasSeleccionadas = getFilasSeleccionadas();
+                return filasSeleccionadas.length === 1
+                    ? filasSeleccionadas[0].dataset.evaluacionId ?? ""
+                    : "";
+            };
+
+            const mostrarEstadoFirma = (mensaje, esError = false) => {
+                if (!estadoFirmaCertificado) {
+                    return;
+                }
+
+                estadoFirmaCertificado.textContent = mensaje;
+                estadoFirmaCertificado.className = esError
+                    ? "form-text mt-2 text-danger"
+                    : "form-text mt-2 text-success";
+            };
+
+            const fetchJson = async (url, options = {}) => {
+                const response = await fetch(url, options);
+                const contentType = response.headers.get("content-type") ?? "";
+                const data = contentType.includes("application/json")
+                    ? await response.json()
+                    : { message: await response.text() };
+
+                if (!response.ok) {
+                    const message = data?.message || "No fue posible completar la solicitud.";
+                    throw new Error(message);
+                }
+
+                return data;
+            };
+
+            const getEstadoCertificado = (evaluacionId) => {
+                const separador = baseEstadoCertificado.includes("?") ? "&" : "?";
+                return fetchJson(`${baseEstadoCertificado}${separador}id=${encodeURIComponent(evaluacionId)}`, {
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                });
+            };
+
+            const abrirModalFirmaCertificado = (data, modo = "emitir") => {
+                modoFirmaCertificado = modo;
+                evaluacionFirmaCertificadoId = data?.evaluacionId || getSelectedEvaluacionId();
+
+                if (textoFirmaCertificado) {
+                    const etiqueta = data?.etiqueta ? ` de ${data.etiqueta}` : "";
+                    textoFirmaCertificado.textContent = modoFirmaCertificado === "actualizar"
+                        ? "Adjunta o actualiza tu firma. Se aceptan imágenes PNG o JPG."
+                        : `Adjunta tu firma${etiqueta} para emitir el certificado.`;
+                }
+
+                if (guardarFirmaCertificado instanceof HTMLButtonElement) {
+                    guardarFirmaCertificado.textContent = modoFirmaCertificado === "actualizar"
+                        ? "Guardar firma"
+                        : "Guardar firma y emitir";
+                }
+
+                if (firmaCertificadoArchivo instanceof HTMLInputElement) {
+                    firmaCertificadoArchivo.value = "";
+                }
+
+                mostrarEstadoFirma("Selecciona una imagen PNG o JPG.", false);
+                modalFirmaCertificado?.show();
+            };
+
+            const abrirModalActualizacionFirma = () => {
+                const evaluacionId = getSelectedEvaluacionId();
+                if (!evaluacionId) {
+                    return;
+                }
+
+                abrirModalFirmaCertificado({ evaluacionId }, "actualizar");
+            };
+
+            const mostrarFirmaFaltanteOtro = (mensaje) => {
+                if (firmaFaltanteOtroMensaje) {
+                    firmaFaltanteOtroMensaje.textContent = mensaje || "Aún falta la firma del otro evaluador.";
+                }
+
+                if (modalFirmaFaltanteOtro) {
+                    modalFirmaFaltanteOtro.show();
+                } else {
+                    window.alert(firmaFaltanteOtroMensaje?.textContent ?? "Aún falta la firma del otro evaluador.");
+                }
+            };
+
+            const continuarSegunEstadoCertificado = (evaluacionId, data) => {
+                if (data?.status === "ready") {
+                    window.location.href = data.url || `${baseImprimir}?id=${encodeURIComponent(evaluacionId)}`;
+                    return;
+                }
+
+                if (data?.status === "currentMissingSignature") {
+                    abrirModalFirmaCertificado(data);
+                    return;
+                }
+
+                if (data?.status === "otherMissingSignature") {
+                    mostrarFirmaFaltanteOtro(data?.message);
+                    return;
+                }
+
+                window.alert(data?.message || "No fue posible emitir el certificado.");
+            };
+
+            const emitirCertificadoSeleccionado = async () => {
+                const evaluacionId = getSelectedEvaluacionId();
+                if (!evaluacionId || !baseEstadoCertificado) {
+                    return;
+                }
+
+                try {
+                    const data = await getEstadoCertificado(evaluacionId);
+                    continuarSegunEstadoCertificado(evaluacionId, data);
+                } catch (error) {
+                    const mensaje = error instanceof Error && error.message
+                        ? error.message
+                        : "No fue posible validar el certificado.";
+                    window.alert(mensaje);
+                }
+            };
+
+            const subirFirmaCertificado = async () => {
+                if (!(firmaCertificadoArchivo instanceof HTMLInputElement) ||
+                    !(guardarFirmaCertificado instanceof HTMLButtonElement) ||
+                    !(tokenFirmaInput instanceof HTMLInputElement) ||
+                    !baseSubirFirma ||
+                    !evaluacionFirmaCertificadoId) {
+                    return;
+                }
+
+                const file = firmaCertificadoArchivo.files?.[0];
+                if (!(file instanceof File)) {
+                    mostrarEstadoFirma("Selecciona una firma en PNG o JPG.", true);
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("id", evaluacionFirmaCertificadoId);
+                formData.append("archivo", file);
+
+                const textoOriginal = guardarFirmaCertificado.textContent;
+                guardarFirmaCertificado.disabled = true;
+                guardarFirmaCertificado.textContent = "Guardando...";
+                mostrarEstadoFirma("Validando y guardando la firma...", false);
+
+                try {
+                    await fetchJson(baseSubirFirma, {
+                        method: "POST",
+                        headers: {
+                            "RequestVerificationToken": tokenFirmaInput.value,
+                            "X-Requested-With": "XMLHttpRequest"
+                        },
+                        body: formData
+                    });
+
+                    mostrarEstadoFirma("Firma guardada correctamente.", false);
+                    if (modoFirmaCertificado === "actualizar") {
+                        window.setTimeout(() => {
+                            modalFirmaCertificado?.hide();
+                        }, 700);
+                    } else {
+                        const data = await getEstadoCertificado(evaluacionFirmaCertificadoId);
+                        modalFirmaCertificado?.hide();
+                        continuarSegunEstadoCertificado(evaluacionFirmaCertificadoId, data);
+                    }
+                } catch (error) {
+                    const mensaje = error instanceof Error && error.message
+                        ? error.message
+                        : "No fue posible guardar la firma.";
+                    mostrarEstadoFirma(mensaje, true);
+                } finally {
+                    guardarFirmaCertificado.disabled = false;
+                    guardarFirmaCertificado.textContent = textoOriginal ?? (modoFirmaCertificado === "actualizar"
+                        ? "Guardar firma"
+                        : "Guardar firma y emitir");
+                }
             };
 
             const exportarSeleccion = () => {
@@ -793,6 +1059,16 @@ else
                 });
             }
 
+            accionImprimir?.addEventListener("click", (event) => {
+                event.preventDefault();
+
+                if (accionImprimir.getAttribute("aria-disabled") === "true") {
+                    return;
+                }
+
+                emitirCertificadoSeleccionado();
+            });
+
             [accionImprimir, accionCarpeta].forEach((accion) => {
                 accion?.addEventListener("click", (event) => {
                     if (accion.getAttribute("aria-disabled") === "true") {
@@ -807,6 +1083,16 @@ else
 
             if (accionEliminar instanceof HTMLButtonElement) {
                 accionEliminar.addEventListener("click", eliminarSeleccion);
+            }
+
+            if (accionFirmaEvaluador instanceof HTMLButtonElement) {
+                accionFirmaEvaluador.addEventListener("click", () => {
+                    if (accionFirmaEvaluador.disabled) {
+                        return;
+                    }
+
+                    abrirModalActualizacionFirma();
+                });
             }
 
             if (accionSubirReporte instanceof HTMLButtonElement && archivoReporteFirmadoInput instanceof HTMLInputElement) {
@@ -830,6 +1116,10 @@ else
 
                     subirReporte(file);
                 });
+            }
+
+            if (guardarFirmaCertificado instanceof HTMLButtonElement) {
+                guardarFirmaCertificado.addEventListener("click", subirFirmaCertificado);
             }
 
             if (filtroTablaEvaluaciones instanceof HTMLInputElement) {

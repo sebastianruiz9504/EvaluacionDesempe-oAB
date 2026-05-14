@@ -562,6 +562,32 @@ namespace EvaluacionDesempenoAB.Controllers
             => !string.IsNullOrWhiteSpace(vm.FirmaEvaluadorDataUrl) &&
                !string.IsNullOrWhiteSpace(vm.FirmaEvaluadorSstDataUrl);
 
+        private static string BuildMensajeFirmasFaltantes(EvaluacionReporteViewModel vm)
+        {
+            var firmasFaltantes = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(vm.FirmaEvaluadorDataUrl))
+            {
+                firmasFaltantes.Add("evaluador principal");
+            }
+
+            if (string.IsNullOrWhiteSpace(vm.FirmaEvaluadorSstDataUrl))
+            {
+                firmasFaltantes.Add("evaluador SST");
+            }
+
+            if (!firmasFaltantes.Any())
+            {
+                return string.Empty;
+            }
+
+            var detalle = firmasFaltantes.Count == 1
+                ? $"del {firmasFaltantes[0]}"
+                : $"del {firmasFaltantes[0]} y del {firmasFaltantes[1]}";
+
+            return $"Aún falta la firma {detalle}.";
+        }
+
         private static bool EstaParteCompleta(EvaluacionCoberturaInfo cobertura, TipoParteEvaluacion parte)
         {
             if (parte == (TipoParteEvaluacion.Normal | TipoParteEvaluacion.Sst))
@@ -2164,6 +2190,69 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             return View("ReporteImpresion", vm);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> EstadoCertificado(Guid id)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            var vm = await BuildReporteViewModelAsync(id, evaluador);
+            if (vm == null)
+            {
+                return NotFound(new
+                {
+                    ok = false,
+                    status = "notFound",
+                    message = "No se encontró la evaluación."
+                });
+            }
+
+            if (!vm.EvaluacionNormalCompleta || !vm.EvaluacionSstCompleta)
+            {
+                return Json(new
+                {
+                    ok = false,
+                    status = "incompleteEvaluation",
+                    message = "El certificado solo se puede emitir cuando ambas partes hayan completado la evaluación."
+                });
+            }
+
+            if (TieneFirmasCompletasParaCertificado(vm))
+            {
+                var imprimirUrl = Url?.Action(nameof(ImprimirResultados), new { id })
+                                  ?? $"{nameof(ImprimirResultados)}?id={id}";
+
+                return Json(new
+                {
+                    ok = true,
+                    status = "ready",
+                    url = imprimirUrl
+                });
+            }
+
+            if (vm.PuedeAdjuntarFirmaActual && string.IsNullOrWhiteSpace(vm.FirmaActualDataUrl))
+            {
+                return Json(new
+                {
+                    ok = false,
+                    status = "currentMissingSignature",
+                    evaluacionId = id,
+                    etiqueta = vm.EtiquetaFirmaActual ?? "evaluador",
+                    message = "Debes subir tu firma para emitir el certificado."
+                });
+            }
+
+            return Json(new
+            {
+                ok = false,
+                status = "otherMissingSignature",
+                message = BuildMensajeFirmasFaltantes(vm)
+            });
         }
 
         [HttpGet]
