@@ -235,9 +235,15 @@ namespace EvaluacionDesempenoAB.Services
             var count = 0;
             foreach (var usuario in _usuarios)
             {
+                var fechaActivacion = usuario.FechaActivacionProgramada?.Date;
                 if (!usuario.Habilitado &&
-                    usuario.FechaActivacionProgramada.HasValue &&
-                    usuario.FechaActivacionProgramada.Value.Date <= fechaReferencia.Date)
+                    fechaActivacion.HasValue &&
+                    fechaActivacion.Value <= fechaReferencia.Date &&
+                    !_evaluaciones.Any(e =>
+                        e.UsuarioId == usuario.Id &&
+                        !e.EvaluacionOrigenId.HasValue &&
+                        string.Equals(e.TipoEvaluacion, "Inicial", StringComparison.OrdinalIgnoreCase) &&
+                        e.FechaEvaluacion.Date >= fechaActivacion.Value))
                 {
                     usuario.Habilitado = true;
                     count++;

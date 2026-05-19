@@ -72,9 +72,15 @@ Metodo clave:
 
 ## Habilitacion de evaluacion
 
-La regla unica para que un evaluador pueda iniciar o continuar una evaluacion es
-la columna booleana de Dataverse `cr3d2_habilitado` en `crfb7_usuario`, mapeada
-como `UsuarioEvaluado.Habilitado`.
+La regla para iniciar un nuevo ciclo de evaluacion es la columna booleana de
+Dataverse `cr3d2_habilitado` en `crfb7_usuario`, mapeada como
+`UsuarioEvaluado.Habilitado`.
+
+Cuando un evaluador guarda su parte con el boton `Guardar evaluacion`, la app
+deja `cr3d2_habilitado` en `No` para impedir otra evaluacion inicial del mismo
+usuario. Si la evaluacion inicial ya quedo abierta y todavia falta la otra parte
+(normal o SST), ese otro evaluador puede continuar la misma evaluacion aunque
+`cr3d2_habilitado` ya este en `No`.
 
 Ya no se debe habilitar por ventanas naturales de 20/25 dias sobre fecha de
 finalizacion de contrato o periodo de prueba. Esas fechas pueden mostrarse o
@@ -91,6 +97,8 @@ Tambien existe `cr3d2_fechaactivacionprogramada`, mapeada como
 `UsuarioEvaluado.FechaActivacionProgramada`. La importacion deja en `No` los
 usuarios con fecha futura y en `Si` los que no tienen fecha futura. La app tiene
 una salvaguarda que habilita filas vencidas al consultar o iniciar evaluaciones.
+Esa salvaguarda no debe reactivar una fecha programada ya consumida si existe
+una evaluacion inicial creada desde esa fecha de activacion.
 Se creo el flujo `App- Desempeño - Activación programada habilitado`, pero su
 activacion puede requerir licencia Power Automate Premium para Dataverse.
 

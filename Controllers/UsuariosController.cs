@@ -73,13 +73,6 @@ namespace EvaluacionDesempenoAB.Controllers
                        usuarioObjetivo,
                        GetCorreoActual(evaluadorActual)));
 
-        private bool PuedeEvaluarUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
-            => usuarioObjetivo.Habilitado &&
-               EvaluacionRolesHelper.TieneAcceso(
-                   EvaluacionRolesHelper.ResolveParte(
-                       usuarioObjetivo,
-                       GetCorreoActual(evaluadorActual)));
-
         private async Task<Evaluacion?> SelectPreferredEvaluacionAsync(IEnumerable<Evaluacion> candidates)
         {
             var candidatos = candidates
@@ -239,6 +232,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 EvaluacionCoberturaInfo? coberturaActual = null;
                 Evaluacion? evaluacionPendienteParaParte = null;
                 var encontroEvaluacionPendiente = false;
+                var tieneEvaluacionInicialIncompleta = false;
 
                 foreach (var evaluacion in evaluaciones.OrderByDescending(e => e.FechaEvaluacion))
                 {
@@ -270,10 +264,17 @@ namespace EvaluacionDesempenoAB.Controllers
                             encontroEvaluacionPendiente = true;
                         }
                     }
+
+                    if (EsEvaluacionInicial(evaluacion) && !cobertura.AmbasPartesCompletas)
+                    {
+                        tieneEvaluacionInicialIncompleta = true;
+                    }
                 }
 
                 var tieneEvaluacionActiva = evaluacionPendienteParaParte != null;
-                var puedeIniciarOContinuar = PuedeEvaluarUsuario(evaluador, usuario);
+                var tieneAccesoParte = EvaluacionRolesHelper.TieneAcceso(parteActual);
+                var puedeIniciarOContinuar = tieneAccesoParte &&
+                                             (usuario.Habilitado || tieneEvaluacionActiva);
 
                 vm.Add(new UsuarioPortalEvaluadorViewModel
                 {
@@ -293,7 +294,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     EvaluacionNormalCompleta = coberturaActual?.EvaluacionNormalCompleta ?? false,
                     EvaluacionSstCompleta = coberturaActual?.EvaluacionSstCompleta ?? false,
                     PuedeIniciarEvaluacion = puedeIniciarOContinuar,
-                    PuedeSolicitarActivacion = !usuario.Habilitado,
+                    PuedeSolicitarActivacion = !usuario.Habilitado && !tieneEvaluacionInicialIncompleta,
                     TieneEvaluacionActiva = tieneEvaluacionActiva,
                     ResultadoFinal = coberturaActual?.AmbasPartesCompletas == true
                         ? evaluacionActual?.Total ?? coberturaActual.TotalCalculado
@@ -477,6 +478,7 @@ namespace EvaluacionDesempenoAB.Controllers
             var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
             var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
             Evaluacion? evaluacionPendienteParaParte = null;
+            var tieneEvaluacionInicialIncompleta = false;
 
             foreach (var evaluacion in evaluaciones
                          .Where(EsEvaluacionInicial)
@@ -488,6 +490,11 @@ namespace EvaluacionDesempenoAB.Controllers
                     comportamientosPorNivel,
                     coberturasPorEvaluacion);
 
+                if (!cobertura.AmbasPartesCompletas)
+                {
+                    tieneEvaluacionInicialIncompleta = true;
+                }
+
                 if (!EstaParteCompleta(cobertura, parteActual))
                 {
                     evaluacionPendienteParaParte = evaluacion;
@@ -496,12 +503,13 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             var tieneEvaluacionActiva = evaluacionPendienteParaParte != null;
-            var puedeIniciar = usuario.Habilitado && EvaluacionRolesHelper.TieneAcceso(parteActual);
+            var tieneAccesoParte = EvaluacionRolesHelper.TieneAcceso(parteActual);
+            var puedeIniciar = tieneAccesoParte && (usuario.Habilitado || tieneEvaluacionActiva);
 
             return Json(new
             {
                 puedeIniciar,
-                puedeSolicitar = !usuario.Habilitado,
+                puedeSolicitar = !usuario.Habilitado && !tieneEvaluacionInicialIncompleta,
                 tieneEvaluacionActiva,
                 evaluacionActualId = evaluacionPendienteParaParte?.Id,
                 fechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd"),

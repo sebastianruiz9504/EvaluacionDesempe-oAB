@@ -17,6 +17,7 @@ var evaluadorNormal = "evaluador.demo@contoso.com";
 var evaluadorSst = "evaluador.sst@contoso.com";
 
 var normalController = BuildController(repo, evaluadorNormal);
+var sstController = BuildController(repo, evaluadorSst);
 var formularioNormal = await GetFormularioAsync(normalController, usuarioEvaluado.Id, nivel.Id);
 Assert(formularioNormal.Competencias.Any(), "El evaluador normal ve competencias.");
 Assert(formularioNormal.Competencias.All(c => !c.Nombre.Contains("SST", StringComparison.OrdinalIgnoreCase)), "El evaluador normal no ve CULTURA SST.");
@@ -26,6 +27,21 @@ var guardarNormal = await normalController.Guardar(formularioNormal, "guardar");
 var redirectPlanNormal = AssertRedirect(guardarNormal, "PlanAccion", "Guardar normal redirige a plan de acción.");
 var evaluacionId = (Guid)(redirectPlanNormal.RouteValues?["id"] ?? Guid.Empty);
 Assert(evaluacionId != Guid.Empty, "La evaluación guardada debe devolver un id.");
+Assert(!usuarioEvaluado.Habilitado, "Guardar la evaluación normal deja Habilitado en No para evitar otra evaluación inicial.");
+
+var estadoNormalTrasGuardar = await BuildUsuariosController(repo, evaluadorNormal).EstadoActivacion(usuarioEvaluado.Id);
+AssertJsonBool(estadoNormalTrasGuardar, "puedeIniciar", false, "El evaluador normal no puede iniciar otra evaluación después de guardar su parte.");
+AssertJsonBool(estadoNormalTrasGuardar, "puedeSolicitar", false, "No se solicita nueva activación mientras falte la otra parte de la evaluación.");
+
+var estadoSstTrasGuardar = await BuildUsuariosController(repo, evaluadorSst).EstadoActivacion(usuarioEvaluado.Id);
+AssertJsonBool(estadoSstTrasGuardar, "puedeIniciar", true, "El evaluador SST sí puede continuar la evaluación aunque Habilitado haya quedado en No.");
+AssertJsonBool(estadoSstTrasGuardar, "puedeSolicitar", false, "El evaluador SST no necesita solicitar activación para continuar una evaluación pendiente.");
+
+var nuevaSstPendiente = await sstController.Nueva(usuarioEvaluado.Id);
+AssertRedirect(nuevaSstPendiente, "Editar", "Nueva redirige al SST a la evaluación pendiente aunque Habilitado esté en No.");
+
+var nuevaNormalTrasGuardar = await normalController.Nueva(usuarioEvaluado.Id);
+Assert(nuevaNormalTrasGuardar is BadRequestObjectResult, "El evaluador normal no puede crear otra evaluación para el mismo usuario tras guardar su parte.");
 
 var planNormalSinFirma = BuildPlanModel(evaluacionId, normalController);
 var guardarPlanSinFirma = await normalController.GuardarPlanAccion(planNormalSinFirma, null);
@@ -39,7 +55,6 @@ var planNormalConFirma = BuildPlanModel(evaluacionId, normalController);
 var guardarPlanConFirma = await normalController.GuardarPlanAccion(planNormalConFirma, BuildJpgFormFile("firma-normal.jpg", "application/octet-stream"));
 AssertRedirect(guardarPlanConFirma, "PlanAccion", "Guardar plan normal con JPG válido funciona aunque el content-type venga raro.");
 
-var sstController = BuildController(repo, evaluadorSst);
 var formularioSst = await GetEditarAsync(sstController, evaluacionId);
 Assert(formularioSst.Competencias.Any(), "El evaluador SST ve competencias.");
 Assert(formularioSst.Competencias.All(c => c.Nombre.Contains("SST", StringComparison.OrdinalIgnoreCase)), "El evaluador SST solo ve CULTURA SST.");

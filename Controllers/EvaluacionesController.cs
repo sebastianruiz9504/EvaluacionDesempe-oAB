@@ -295,14 +295,14 @@ namespace EvaluacionDesempenoAB.Controllers
         private bool TieneRolDiligenciarUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
             => EvaluacionRolesHelper.TieneAcceso(GetParteEvaluador(evaluadorActual, usuarioObjetivo));
 
-        private bool PuedeDiligenciarUsuario(UsuarioEvaluado evaluadorActual, UsuarioEvaluado usuarioObjetivo)
-            => usuarioObjetivo.Habilitado && TieneRolDiligenciarUsuario(evaluadorActual, usuarioObjetivo);
-
         private static BadRequestObjectResult EvaluadorSinBloqueAsignado()
             => new("Solo el evaluador asignado o el evaluador SST asignado pueden diligenciar esta evaluación.");
 
         private static BadRequestObjectResult UsuarioNoHabilitado()
             => new("Este usuario no está habilitado para evaluación en Dataverse.");
+
+        private static BadRequestObjectResult EvaluacionYaGuardadaParaParte()
+            => new("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
 
         private static string GetEtiquetaAlcance(TipoParteEvaluacion parte, bool esSuperAdministrador)
             => EvaluacionRolesHelper.TieneAcceso(parte)
@@ -1683,11 +1683,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 return EvaluadorSinBloqueAsignado();
             }
 
-            if (!usuario.Habilitado)
-            {
-                return UsuarioNoHabilitado();
-            }
-
             var parteActual = GetParteEvaluador(evaluador, usuario);
             var competencias = await _repo.GetCompetenciasAsync();
             var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
@@ -1702,6 +1697,11 @@ namespace EvaluacionDesempenoAB.Controllers
             if (evaluacionPendiente != null)
             {
                 return RedirectToAction(nameof(Editar), new { id = evaluacionPendiente.Id });
+            }
+
+            if (!usuario.Habilitado)
+            {
+                return UsuarioNoHabilitado();
             }
 
             var niveles = await _repo.GetNivelesActivosAsync();
@@ -1746,11 +1746,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 return EvaluadorSinBloqueAsignado();
             }
 
-            if (!usuario.Habilitado)
-            {
-                return UsuarioNoHabilitado();
-            }
-
             if (evaluacionOrigenId.HasValue)
             {
                 return BadRequest("La opción de reevaluar está deshabilitada.");
@@ -1770,6 +1765,11 @@ namespace EvaluacionDesempenoAB.Controllers
             if (evaluacionPendiente != null)
             {
                 return RedirectToAction(nameof(Editar), new { id = evaluacionPendiente.Id });
+            }
+
+            if (!usuario.Habilitado)
+            {
+                return UsuarioNoHabilitado();
             }
 
             var vm = await BuildFormularioViewModelAsync(
@@ -1817,11 +1817,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 return EvaluadorSinBloqueAsignado();
             }
 
-            if (!usuario.Habilitado)
-            {
-                return UsuarioNoHabilitado();
-            }
-
             var vm = await BuildFormularioViewModelAsync(evaluador, usuario, nivel, evaluacion);
             return View("Formulario", vm);
         }
@@ -1854,11 +1849,6 @@ namespace EvaluacionDesempenoAB.Controllers
             if (!TieneRolDiligenciarUsuario(evaluador, usuario))
             {
                 return EvaluadorSinBloqueAsignado();
-            }
-
-            if (!usuario.Habilitado)
-            {
-                return UsuarioNoHabilitado();
             }
 
             try
@@ -1929,6 +1919,11 @@ namespace EvaluacionDesempenoAB.Controllers
                             coberturasPorEvaluacion);
                     }
 
+                    if (evaluacionExistente == null && !usuario.Habilitado)
+                    {
+                        return UsuarioNoHabilitado();
+                    }
+
                     var detallesExistentes = evaluacionExistente == null
                         ? new List<EvaluacionDetalle>()
                         : await _repo.GetDetallesByEvaluacionAsync(evaluacionExistente.Id);
@@ -1941,7 +1936,7 @@ namespace EvaluacionDesempenoAB.Controllers
                         var coberturaAntesDeGuardar = BuildCobertura(detallesExistentes, competencias, comportamientos);
                         if (EstaParteCompleta(coberturaAntesDeGuardar, parteActual))
                         {
-                            return BadRequest("Tu parte de esta evaluación ya fue guardada y no puede modificarse.");
+                            return EvaluacionYaGuardadaParaParte();
                         }
                     }
 
@@ -1998,6 +1993,12 @@ namespace EvaluacionDesempenoAB.Controllers
                     else
                     {
                         await _repo.UpdateEvaluacionAsync(evaluacion, detallesFinales, planesExistentes);
+                    }
+
+                    if (usuario.Habilitado)
+                    {
+                        await _repo.UpdateUsuarioHabilitadoAsync(usuario.Id, false);
+                        usuario.Habilitado = false;
                     }
                 }
                 finally
@@ -2602,11 +2603,6 @@ namespace EvaluacionDesempenoAB.Controllers
             if (!EvaluacionRolesHelper.TieneAcceso(parteActual))
             {
                 return EvaluadorSinBloqueAsignado();
-            }
-
-            if (!usuario.Habilitado)
-            {
-                return UsuarioNoHabilitado();
             }
 
             var competencias = await _repo.GetCompetenciasAsync();

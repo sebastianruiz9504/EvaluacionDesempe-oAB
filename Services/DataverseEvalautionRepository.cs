@@ -298,6 +298,13 @@ namespace EvaluacionDesempenoAB.Services
 
             foreach (var usuario in result.Entities)
             {
+                var fechaActivacion = usuario.GetAttributeValue<DateTime?>(FechaActivacionProgramadaColumn)?.Date;
+                if (fechaActivacion.HasValue &&
+                    await TieneEvaluacionInicialDesdeAsync(usuario.Id, fechaActivacion.Value))
+                {
+                    continue;
+                }
+
                 var update = new Entity(UsuarioTable, usuario.Id)
                 {
                     [HabilitadoColumn] = true
@@ -308,6 +315,22 @@ namespace EvaluacionDesempenoAB.Services
             }
 
             return count;
+        }
+
+        private async Task<bool> TieneEvaluacionInicialDesdeAsync(Guid usuarioId, DateTime fechaActivacion)
+        {
+            var q = new QueryExpression(EvaluacionTable)
+            {
+                ColumnSet = new ColumnSet(false),
+                TopCount = 1
+            };
+
+            q.Criteria.AddCondition("crfb7_usuario", ConditionOperator.Equal, usuarioId);
+            q.Criteria.AddCondition("crfb7_tipo", ConditionOperator.Equal, "Inicial");
+            q.Criteria.AddCondition("createdon", ConditionOperator.OnOrAfter, fechaActivacion.Date);
+
+            var result = await _client.RetrieveMultipleAsync(q);
+            return result.Entities.Any();
         }
 
         public async Task UploadFotoUsuarioAsync(Guid usuarioId, string fileName, string? contentType, Stream content)
