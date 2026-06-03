@@ -74,6 +74,21 @@ namespace EvaluacionDesempenoAB.Controllers
             public List<Guid> Ids { get; init; } = new();
         }
 
+        private sealed class CertificadoMasivoItem
+        {
+            public Guid EvaluacionId { get; init; }
+            public string Cedula { get; init; } = string.Empty;
+            public string Nombre { get; init; } = string.Empty;
+            public string FileName { get; set; } = string.Empty;
+            public string Url { get; init; } = string.Empty;
+        }
+
+        private sealed class CertificadoMasivoOmitido
+        {
+            public string Referencia { get; init; } = string.Empty;
+            public string Motivo { get; init; } = string.Empty;
+        }
+
         private const int OportunidadMejoraPuntajeMinimo = 70;
         private const int OportunidadMejoraPuntajeMaximo = 85;
         private const string DeleteAuthorizedEmail = "jully.pinto@aguasdebogota.com.co";
@@ -185,6 +200,36 @@ namespace EvaluacionDesempenoAB.Controllers
 
         private static bool EsFirmaImagenValida(IFormFile archivo)
             => !string.IsNullOrWhiteSpace(GetTipoContenidoFirma(archivo));
+
+        private async Task<(ArchivoEvaluacion? FirmaGuardada, string? Error)> GuardarFirmaEvaluadorActualAsync(
+            UsuarioEvaluado evaluador,
+            IFormFile? archivo,
+            string contexto)
+        {
+            if (archivo == null || archivo.Length == 0)
+            {
+                return (null, "Debes adjuntar una firma.");
+            }
+
+            var tipoContenidoFirma = GetTipoContenidoFirma(archivo);
+            if (string.IsNullOrWhiteSpace(tipoContenidoFirma))
+            {
+                return (null, "La firma debe ser una imagen válida en formato PNG o JPG.");
+            }
+
+            try
+            {
+                await using var stream = archivo.OpenReadStream();
+                await _repo.UploadFirmaUsuarioAsync(evaluador.Id, archivo.FileName, tipoContenidoFirma, stream);
+            }
+            catch (Exception ex)
+            {
+                return (null, ex.Message);
+            }
+
+            var firmaGuardada = await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, contexto);
+            return (firmaGuardada, null);
+        }
 
         private static string? GetTipoContenidoFirma(IFormFile archivo)
         {
@@ -586,6 +631,238 @@ namespace EvaluacionDesempenoAB.Controllers
                 : $"del {firmasFaltantes[0]} y del {firmasFaltantes[1]}";
 
             return $"Aún falta la firma {detalle}.";
+        }
+
+        private static string NormalizeCedulaKey(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(value.Length);
+            foreach (var ch in value.Trim())
+            {
+                if (char.IsLetterOrDigit(ch))
+                {
+                    builder.Append(char.ToUpperInvariant(ch));
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private static string SanitizeFileNamePart(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "sin-dato";
+            }
+
+            var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+            var normalized = value.Trim();
+            var builder = new StringBuilder(normalized.Length);
+            var previousWasSpace = false;
+
+            foreach (var ch in normalized)
+            {
+                if (invalid.Contains(ch) || char.IsControl(ch))
+                {
+                    if (!previousWasSpace)
+                    {
+                        builder.Append(' ');
+                        previousWasSpace = true;
+                    }
+
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(ch))
+                {
+                    if (!previousWasSpace)
+                    {
+                        builder.Append(' ');
+                        previousWasSpace = true;
+                    }
+
+                    continue;
+                }
+
+                builder.Append(ch);
+                previousWasSpace = false;
+            }
+
+            var result = builder.ToString().Trim(' ', '.', '-');
+            return string.IsNullOrWhiteSpace(result) ? "sin-dato" : result;
+        }
+
+        private static string BuildNombreArchivoCertificado(EvaluacionReporteViewModel vm)
+        {
+            var partes = new[]
+            {
+                SanitizeFileNamePart(vm.CedulaUsuario),
+                SanitizeFileNamePart(vm.Cargo),
+                SanitizeFileNamePart(vm.Proyecto),
+                SanitizeFileNamePart(vm.NombreUsuario)
+            };
+
+            return $"{string.Join("-", partes)}.pdf";
+        }
+
+        private static void EnsureUniqueFileNames(List<CertificadoMasivoItem> items)
+        {
+            var used = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in items)
+            {
+                var baseName = Path.GetFileNameWithoutExtension(item.FileName);
+                var extension = Path.GetExtension(item.FileName);
+                var currentName = item.FileName;
+
+                if (!used.TryGetValue(currentName, out var count))
+                {
+                    used[currentName] = 1;
+                    continue;
+                }
+
+                count++;
+                used[currentName] = count;
+                currentName = $"{baseName}-{count}{extension}";
+
+                while (used.ContainsKey(currentName))
+                {
+                    count++;
+                    currentName = $"{baseName}-{count}{extension}";
+                }
+
+                item.FileName = currentName;
+                used[currentName] = 1;
+            }
+        }
+
+        private string BuildUrlCertificadoMasivo(Guid evaluacionId)
+        {
+            var url = Url?.Action(nameof(ImprimirResultados), new
+            {
+                id = evaluacionId,
+                descargaMasiva = true
+            });
+
+            return string.IsNullOrWhiteSpace(url)
+                ? $"{nameof(ImprimirResultados)}?id={evaluacionId}&descargaMasiva=true"
+                : url;
+        }
+
+        private async Task<(CertificadoMasivoItem? Item, CertificadoMasivoOmitido? Omitido)> TryBuildCertificadoMasivoItemAsync(
+            Evaluacion evaluacion,
+            UsuarioEvaluado evaluador,
+            string referencia)
+        {
+            var vm = await BuildReporteViewModelAsync(evaluacion.Id, evaluador);
+            if (vm == null)
+            {
+                return (null, new CertificadoMasivoOmitido
+                {
+                    Referencia = referencia,
+                    Motivo = "No fue posible cargar la evaluación o no tienes acceso."
+                });
+            }
+
+            var referenciaFinal = string.IsNullOrWhiteSpace(vm.CedulaUsuario)
+                ? referencia
+                : vm.CedulaUsuario;
+
+            if (!vm.EvaluacionNormalCompleta || !vm.EvaluacionSstCompleta)
+            {
+                return (null, new CertificadoMasivoOmitido
+                {
+                    Referencia = referenciaFinal,
+                    Motivo = "La evaluación no tiene completas las partes normal y SST."
+                });
+            }
+
+            if (!TieneFirmasCompletasParaCertificado(vm))
+            {
+                return (null, new CertificadoMasivoOmitido
+                {
+                    Referencia = referenciaFinal,
+                    Motivo = BuildMensajeFirmasFaltantes(vm)
+                });
+            }
+
+            return (new CertificadoMasivoItem
+            {
+                EvaluacionId = evaluacion.Id,
+                Cedula = vm.CedulaUsuario,
+                Nombre = vm.NombreUsuario,
+                FileName = BuildNombreArchivoCertificado(vm),
+                Url = BuildUrlCertificadoMasivo(evaluacion.Id)
+            }, null);
+        }
+
+        private JsonResult BuildCertificadosMasivosJson(
+            List<CertificadoMasivoItem> certificados,
+            List<CertificadoMasivoOmitido> omitidos)
+        {
+            EnsureUniqueFileNames(certificados);
+
+            var mensaje = certificados.Count == 1
+                ? "Se preparó 1 certificado para descarga."
+                : $"Se prepararon {certificados.Count} certificados para descarga.";
+
+            if (omitidos.Count > 0)
+            {
+                mensaje += $" Se omitieron {omitidos.Count} registros.";
+            }
+
+            return Json(new
+            {
+                ok = true,
+                total = certificados.Count,
+                certificados,
+                omitidos,
+                message = mensaje
+            });
+        }
+
+        private static string GetCedulaCellText(IXLCell cell)
+        {
+            var value = cell.GetFormattedString()?.Trim();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+
+            value = cell.GetString()?.Trim();
+            return value ?? string.Empty;
+        }
+
+        private static List<string> ReadCedulasCertificadosMasivos(IFormFile archivo)
+        {
+            using var stream = archivo.OpenReadStream();
+            using var workbook = new XLWorkbook(stream);
+            var worksheet = workbook.Worksheets.FirstOrDefault()
+                            ?? throw new InvalidOperationException("La plantilla no tiene hojas.");
+
+            var header = NormalizeImportKey(worksheet.Cell(1, 1).GetString());
+            if (!string.Equals(header, NormalizeImportKey("Cedula"), StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("La primera columna debe llamarse 'Cedula'.");
+            }
+
+            var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+            var cedulas = new List<string>();
+
+            for (var row = 2; row <= lastRow; row++)
+            {
+                var cedula = GetCedulaCellText(worksheet.Cell(row, 1));
+                if (!string.IsNullOrWhiteSpace(cedula))
+                {
+                    cedulas.Add(cedula.Trim());
+                }
+            }
+
+            return cedulas;
         }
 
         private static bool EstaParteCompleta(EvaluacionCoberturaInfo cobertura, TipoParteEvaluacion parte)
@@ -1300,6 +1577,216 @@ namespace EvaluacionDesempenoAB.Controllers
                 stream.ToArray(),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 $"plantilla-importacion-usuarios-{DateTime.Today:yyyyMMdd}.xlsx");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> DescargarPlantillaCertificadosMasivos()
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Cedulas");
+            var cell = worksheet.Cell(1, 1);
+            cell.Value = "Cedula";
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#DCE6F1");
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            worksheet.SheetView.FreezeRows(1);
+            worksheet.Range(1, 1, 1, 1).SetAutoFilter();
+            worksheet.Column(1).Width = 22;
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+
+            return File(
+                stream.ToArray(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"plantilla-certificados-masivos-{DateTime.Today:yyyyMMdd}.xlsx");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PrepararCertificadosMasivosPorFecha(DateTime? fechaInicio, DateTime? fechaFin)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            if (!fechaInicio.HasValue || !fechaFin.HasValue)
+            {
+                return BadRequest(new { ok = false, message = "Selecciona fecha inicial y fecha final." });
+            }
+
+            var inicio = fechaInicio.Value.Date;
+            var fin = fechaFin.Value.Date;
+            if (fin < inicio)
+            {
+                return BadRequest(new { ok = false, message = "La fecha final no puede ser anterior a la fecha inicial." });
+            }
+
+            var evaluaciones = (await GetEvaluacionesVisiblesAsync(evaluador))
+                .Where(e => e.Id != Guid.Empty &&
+                            e.FechaEvaluacion.Date >= inicio &&
+                            e.FechaEvaluacion.Date <= fin)
+                .OrderByDescending(e => e.FechaEvaluacion)
+                .ToList();
+
+            if (!evaluaciones.Any())
+            {
+                return NotFound(new { ok = false, message = "No se encontraron evaluaciones en el rango seleccionado." });
+            }
+
+            var certificados = new List<CertificadoMasivoItem>();
+            var omitidos = new List<CertificadoMasivoOmitido>();
+
+            foreach (var evaluacion in evaluaciones)
+            {
+                var resultado = await TryBuildCertificadoMasivoItemAsync(
+                    evaluacion,
+                    evaluador,
+                    evaluacion.Id.ToString());
+
+                if (resultado.Item != null)
+                {
+                    certificados.Add(resultado.Item);
+                }
+                else if (resultado.Omitido != null)
+                {
+                    omitidos.Add(resultado.Omitido);
+                }
+            }
+
+            if (!certificados.Any())
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    message = "No hay certificados listos para descargar en el rango seleccionado.",
+                    omitidos
+                });
+            }
+
+            return BuildCertificadosMasivosJson(certificados, omitidos);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PrepararCertificadosMasivosPorCedulas(IFormFile? archivo)
+        {
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            if (archivo == null || archivo.Length == 0)
+            {
+                return BadRequest(new { ok = false, message = "Debes adjuntar la plantilla con la columna Cedula." });
+            }
+
+            List<string> cedulas;
+            try
+            {
+                cedulas = ReadCedulasCertificadosMasivos(archivo);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    message = ex.Message
+                });
+            }
+
+            if (!cedulas.Any())
+            {
+                return BadRequest(new { ok = false, message = "La plantilla no contiene cédulas para buscar." });
+            }
+
+            var evaluaciones = (await GetEvaluacionesVisiblesAsync(evaluador))
+                .Where(e => e.Id != Guid.Empty && e.UsuarioId != Guid.Empty)
+                .ToList();
+            var usuarios = (await _repo.GetUsuariosByIdsAsync(evaluaciones.Select(e => e.UsuarioId)))
+                .GroupBy(x => x.Id)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var evaluacionesPorCedula = evaluaciones
+                .Where(e => usuarios.TryGetValue(e.UsuarioId, out var usuario) &&
+                            !string.IsNullOrWhiteSpace(NormalizeCedulaKey(usuario.Cedula)))
+                .GroupBy(e => NormalizeCedulaKey(usuarios[e.UsuarioId].Cedula))
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(e => e.FechaEvaluacion).ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            var certificados = new List<CertificadoMasivoItem>();
+            var omitidos = new List<CertificadoMasivoOmitido>();
+
+            foreach (var cedula in cedulas)
+            {
+                var cedulaKey = NormalizeCedulaKey(cedula);
+                if (string.IsNullOrWhiteSpace(cedulaKey) ||
+                    !evaluacionesPorCedula.TryGetValue(cedulaKey, out var candidatas) ||
+                    candidatas.Count == 0)
+                {
+                    omitidos.Add(new CertificadoMasivoOmitido
+                    {
+                        Referencia = cedula,
+                        Motivo = "No se encontró una evaluación visible para esta cédula."
+                    });
+                    continue;
+                }
+
+                CertificadoMasivoOmitido? ultimoMotivo = null;
+                CertificadoMasivoItem? certificado = null;
+
+                foreach (var evaluacion in candidatas)
+                {
+                    var resultado = await TryBuildCertificadoMasivoItemAsync(
+                        evaluacion,
+                        evaluador,
+                        cedula);
+
+                    if (resultado.Item != null)
+                    {
+                        certificado = resultado.Item;
+                        break;
+                    }
+
+                    ultimoMotivo = resultado.Omitido;
+                }
+
+                if (certificado != null)
+                {
+                    certificados.Add(certificado);
+                }
+                else if (ultimoMotivo != null)
+                {
+                    omitidos.Add(new CertificadoMasivoOmitido
+                    {
+                        Referencia = cedula,
+                        Motivo = ultimoMotivo.Motivo
+                    });
+                }
+            }
+
+            if (!certificados.Any())
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    message = "No hay certificados listos para descargar con las cédulas cargadas.",
+                    omitidos
+                });
+            }
+
+            return BuildCertificadosMasivosJson(certificados, omitidos);
         }
 
         [HttpPost]
@@ -2166,7 +2653,7 @@ namespace EvaluacionDesempenoAB.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ImprimirResultados(Guid id)
+        public async Task<IActionResult> ImprimirResultados(Guid id, bool descargaMasiva = false)
         {
             var evaluador = await GetEvaluadorActualAsync();
             if (evaluador == null)
@@ -2189,6 +2676,9 @@ namespace EvaluacionDesempenoAB.Controllers
             {
                 return BadRequest("El certificado solo se puede exportar cuando existan firmas válidas en PNG o JPG para el evaluador y el evaluador SST.");
             }
+
+            ViewBag.DescargaMasiva = descargaMasiva;
+            ViewBag.NombreArchivoCertificado = BuildNombreArchivoCertificado(vm);
 
             return View("ReporteImpresion", vm);
         }
@@ -2257,6 +2747,111 @@ namespace EvaluacionDesempenoAB.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> EstadoFirmaInicioEvaluacion(Guid usuarioId)
+        {
+            if (usuarioId == Guid.Empty)
+            {
+                return BadRequest(new { ok = false, message = "Usuario inválido." });
+            }
+
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            var usuario = await _repo.GetUsuarioByIdAsync(usuarioId);
+            if (usuario == null)
+            {
+                return NotFound(new { ok = false, message = "No se encontró el usuario evaluado." });
+            }
+
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
+
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            if (!EvaluacionRolesHelper.TieneAcceso(parteActual))
+            {
+                return EvaluadorSinBloqueAsignado();
+            }
+
+            var firmaGuardada = await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "inicio de evaluacion");
+            if (TieneFirmaValida(firmaGuardada))
+            {
+                return Json(new
+                {
+                    ok = true,
+                    status = "ready"
+                });
+            }
+
+            return Json(new
+            {
+                ok = false,
+                status = "missingSignature",
+                usuarioId,
+                etiqueta = GetEtiquetaFirmaParaParte(parteActual) ?? "evaluador",
+                message = "Debes subir tu firma antes de iniciar la evaluación."
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubirFirmaInicioEvaluacion(Guid usuarioId, IFormFile? archivo)
+        {
+            if (usuarioId == Guid.Empty)
+            {
+                return BadRequest(new { ok = false, message = "Usuario inválido." });
+            }
+
+            var evaluador = await GetEvaluadorActualAsync();
+            if (evaluador == null)
+            {
+                return Forbid();
+            }
+
+            var usuario = await _repo.GetUsuarioByIdAsync(usuarioId);
+            if (usuario == null)
+            {
+                return NotFound(new { ok = false, message = "No se encontró el usuario evaluado." });
+            }
+
+            if (!PuedeAccederAUsuario(evaluador, usuario))
+            {
+                return Forbid();
+            }
+
+            var parteActual = GetParteEvaluador(evaluador, usuario);
+            if (!EvaluacionRolesHelper.TieneAcceso(parteActual))
+            {
+                return EvaluadorSinBloqueAsignado();
+            }
+
+            var resultado = await GuardarFirmaEvaluadorActualAsync(
+                evaluador,
+                archivo,
+                "firma de inicio de evaluacion");
+
+            if (!string.IsNullOrWhiteSpace(resultado.Error))
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    message = resultado.Error
+                });
+            }
+
+            return Json(new
+            {
+                ok = true,
+                firmaDataUrl = ConvertirArchivoADataUrl(resultado.FirmaGuardada),
+                message = "La firma se guardó correctamente."
+            });
+        }
+
+        [HttpGet]
         public async Task<IActionResult> CertificadoEnBlanco(int? tipoFormulario)
         {
             var evaluador = await GetEvaluadorActualAsync();
@@ -2300,12 +2895,6 @@ namespace EvaluacionDesempenoAB.Controllers
                 return BadRequest(new { ok = false, message = "Debes adjuntar una firma." });
             }
 
-            var tipoContenidoFirma = GetTipoContenidoFirma(archivo);
-            if (string.IsNullOrWhiteSpace(tipoContenidoFirma))
-            {
-                return BadRequest(new { ok = false, message = "La firma debe ser una imagen válida en formato PNG o JPG." });
-            }
-
             var evaluacion = await _repo.GetEvaluacionByIdAsync(id);
             if (evaluacion == null)
             {
@@ -2325,22 +2914,21 @@ namespace EvaluacionDesempenoAB.Controllers
             }
 
             var planesExistentes = await _repo.GetPlanesByEvaluacionAsync(id);
+            var resultado = await GuardarFirmaEvaluadorActualAsync(
+                evaluador,
+                archivo,
+                "firma recien cargada");
 
-            try
-            {
-                await using var stream = archivo.OpenReadStream();
-                await _repo.UploadFirmaUsuarioAsync(evaluador.Id, archivo.FileName, tipoContenidoFirma, stream);
-            }
-            catch (Exception ex)
+            if (!string.IsNullOrWhiteSpace(resultado.Error))
             {
                 return BadRequest(new
                 {
                     ok = false,
-                    message = ex.Message
+                    message = resultado.Error
                 });
             }
 
-            var firmaGuardada = await DownloadFirmaUsuarioOrNullAsync(evaluador.Id, "firma recien cargada");
+            var firmaGuardada = resultado.FirmaGuardada;
             var quedaBloqueado = TieneFirmaValida(firmaGuardada) && planesExistentes.Any(p => !string.IsNullOrWhiteSpace(p.DescripcionAccion));
 
             return Json(new

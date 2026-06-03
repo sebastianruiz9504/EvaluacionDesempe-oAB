@@ -1,6 +1,6 @@
 # Contexto de trabajo para Codex
 
-Ultima actualizacion: 2026-05-14
+Ultima actualizacion: 2026-06-01
 
 Este documento resume el contexto funcional y tecnico reciente del proyecto
 `EvaluacionDesempenoAB`. La idea es que un nuevo chat pueda leer este archivo
@@ -69,6 +69,11 @@ Metodo clave:
    - Evaluacion SST completa.
    - Firma valida del evaluador normal.
    - Firma valida del evaluador SST.
+9. Antes de iniciar o continuar una evaluacion desde `Usuarios a mi cargo`, la
+   UI consulta `EstadoFirmaInicioEvaluacion`. Si el evaluador actual no tiene
+   firma valida, se abre un popup para subir PNG/JPG usando
+   `SubirFirmaInicioEvaluacion`, con la misma validacion binaria de firmas del
+   resto del sistema.
 
 ## Habilitacion de evaluacion
 
@@ -93,12 +98,18 @@ muestra `Solicitar aprobación`. Esa accion llama el flujo configurado en
 `jully.pinto@aguasdebogota.com.co` y, si se aprueba, cambia
 `cr3d2_habilitado` a `true`.
 
+Desde 2026-06-01 la habilitacion automatica/solicitada es de un solo uso para
+la evaluacion inicial. Si el usuario ya tiene una evaluacion inicial registrada,
+la pantalla deja de mostrar `Solicitar aprobación`, el endpoint
+`SolicitarActivacion` bloquea una nueva solicitud y la salvaguarda de fechas
+programadas no vuelve a poner `Habilitado` en `Si`.
+
 Tambien existe `cr3d2_fechaactivacionprogramada`, mapeada como
 `UsuarioEvaluado.FechaActivacionProgramada`. La importacion deja en `No` los
 usuarios con fecha futura y en `Si` los que no tienen fecha futura. La app tiene
 una salvaguarda que habilita filas vencidas al consultar o iniciar evaluaciones.
 Esa salvaguarda no debe reactivar una fecha programada ya consumida si existe
-una evaluacion inicial creada desde esa fecha de activacion.
+cualquier evaluacion inicial para ese usuario.
 Se creo el flujo `App- Desempeño - Activación programada habilitado`, pero su
 activacion puede requerir licencia Power Automate Premium para Dataverse.
 
@@ -163,6 +174,14 @@ Reglas actuales:
 - Si al evaluador actual le falta firma, se abre un popup para subir PNG/JPG.
 - Si el evaluador actual ya tiene firma pero falta la del otro evaluador, se
   abre un popup informativo de firma pendiente.
+- Desde 2026-06-01 el label del certificado dice `Firma del evaluado (Si aplica)`.
+- `Mis evaluaciones` incluye `Exportar certificados masivos`. El popup permite
+  preparar certificados por rango de fechas o con una plantilla Excel que solo
+  tiene la columna `Cedula`. El backend devuelve los certificados listos para
+  el evaluador actual y la UI genera los PDF con la misma vista
+  `ReporteImpresion`, los nombra `Cedula-cargo-proyecto-nombre.pdf` y descarga
+  un ZIP mostrando progreso. Los registros incompletos, sin firmas o no
+  visibles se omiten y se reportan al usuario.
 
 Vista:
 

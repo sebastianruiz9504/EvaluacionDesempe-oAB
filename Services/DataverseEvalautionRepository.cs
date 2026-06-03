@@ -300,7 +300,7 @@ namespace EvaluacionDesempenoAB.Services
             {
                 var fechaActivacion = usuario.GetAttributeValue<DateTime?>(FechaActivacionProgramadaColumn)?.Date;
                 if (fechaActivacion.HasValue &&
-                    await TieneEvaluacionInicialDesdeAsync(usuario.Id, fechaActivacion.Value))
+                    await TieneEvaluacionInicialAsync(usuario.Id))
                 {
                     continue;
                 }
@@ -317,7 +317,7 @@ namespace EvaluacionDesempenoAB.Services
             return count;
         }
 
-        private async Task<bool> TieneEvaluacionInicialDesdeAsync(Guid usuarioId, DateTime fechaActivacion)
+        private async Task<bool> TieneEvaluacionInicialAsync(Guid usuarioId)
         {
             var q = new QueryExpression(EvaluacionTable)
             {
@@ -327,7 +327,6 @@ namespace EvaluacionDesempenoAB.Services
 
             q.Criteria.AddCondition("crfb7_usuario", ConditionOperator.Equal, usuarioId);
             q.Criteria.AddCondition("crfb7_tipo", ConditionOperator.Equal, "Inicial");
-            q.Criteria.AddCondition("createdon", ConditionOperator.OnOrAfter, fechaActivacion.Date);
 
             var result = await _client.RetrieveMultipleAsync(q);
             return result.Entities.Any();

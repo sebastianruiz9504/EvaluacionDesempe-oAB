@@ -4,6 +4,7 @@
 @{
     Layout = null;
     var esCertificadoEnBlanco = ViewBag.EsCertificadoEnBlanco is bool valor && valor;
+    var descargaMasiva = ViewBag.DescargaMasiva is bool valorDescargaMasiva && valorDescargaMasiva;
     var planAccion = esCertificadoEnBlanco
         ? new List<PlanAccionItemVm>()
         : Model.PlanAccion
@@ -12,9 +13,9 @@
     var tituloFormato = esCertificadoEnBlanco && !string.IsNullOrWhiteSpace(Model.TipoFormularioNombre)
         ? $"Formato evaluación de desempeño - {Model.TipoFormularioNombre}"
         : "Formato evaluación de desempeño";
-    var nombreArchivo = esCertificadoEnBlanco
+    var nombreArchivo = ViewBag.NombreArchivoCertificado as string ?? (esCertificadoEnBlanco
         ? "certificado-en-blanco.pdf"
-        : $"reporte-evaluacion-{Model.CedulaUsuario}.pdf";
+        : $"reporte-evaluacion-{Model.CedulaUsuario}.pdf");
 }
 
 @functions {
@@ -564,7 +565,7 @@
                     <div class="firma-contenedor firma-evaluado">
                         <div class="firma-espacio"></div>
                         <div class="firma-linea"></div>
-                        <div class="firma-label">Firma del evaluado</div>
+                        <div class="firma-label">Firma del evaluado (Si aplica)</div>
                         <div class="firma-nombre">@ValorOBlanco(esCertificadoEnBlanco, Model.NombreUsuario)</div>
                     </div>
                 </td>
@@ -573,42 +574,45 @@
     </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
-        integrity="sha512-YcsIPGdhPK4P0H8JipdAEGZs4B/UXK5wLkMl1bDqLqngt/5qw+5mFZf2W8yI4KpGpkYp4a9p3KX8bfxiTltj/Q=="
-        crossorigin="anonymous"
-        referrerpolicy="no-referrer"></script>
-<script>
-    const esperarImagenes = async (container) => {
-        const images = Array.from(container.querySelectorAll("img"));
-        const pendientes = images
-            .filter((img) => !img.complete)
-            .map((img) => new Promise((resolve) => {
-                img.addEventListener("load", resolve, { once: true });
-                img.addEventListener("error", resolve, { once: true });
-            }));
+@if (!descargaMasiva)
+{
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+            integrity="sha512-YcsIPGdhPK4P0H8JipdAEGZs4B/UXK5wLkMl1bDqLqngt/5qw+5mFZf2W8yI4KpGpkYp4a9p3KX8bfxiTltj/Q=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"></script>
+    <script>
+        const esperarImagenes = async (container) => {
+            const images = Array.from(container.querySelectorAll("img"));
+            const pendientes = images
+                .filter((img) => !img.complete)
+                .map((img) => new Promise((resolve) => {
+                    img.addEventListener("load", resolve, { once: true });
+                    img.addEventListener("error", resolve, { once: true });
+                }));
 
-        if (pendientes.length > 0) {
-            await Promise.all(pendientes);
-        }
-    };
-
-    window.addEventListener("load", async () => {
-        const reporte = document.getElementById("reporte-imprimible");
-        if (!reporte || typeof html2pdf === "undefined") {
-            return;
-        }
-
-        await esperarImagenes(reporte);
-
-        const opciones = {
-            margin: 0.3,
-            filename: "@nombreArchivo",
-            html2canvas: { scale: 2 },
-            jsPDF: { unit: "in", format: "letter", orientation: "portrait" }
+            if (pendientes.length > 0) {
+                await Promise.all(pendientes);
+            }
         };
 
-        html2pdf().set(opciones).from(reporte).save();
-    });
-</script>
+        window.addEventListener("load", async () => {
+            const reporte = document.getElementById("reporte-imprimible");
+            if (!reporte || typeof html2pdf === "undefined") {
+                return;
+            }
+
+            await esperarImagenes(reporte);
+
+            const opciones = {
+                margin: 0.3,
+                filename: "@nombreArchivo",
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: "in", format: "letter", orientation: "portrait" }
+            };
+
+            html2pdf().set(opciones).from(reporte).save();
+        });
+    </script>
+}
 </body>
 </html>

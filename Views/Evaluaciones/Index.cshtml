@@ -79,6 +79,9 @@
          data-base-estado-certificado="@Url.Action("EstadoCertificado", "Evaluaciones")"
          data-base-carpeta="@Url.Action("CarpetaUsuario", "Evaluaciones")"
          data-base-exportar="@Url.Action("ExportarExcel", "Evaluaciones")"
+         data-base-plantilla-certificados="@Url.Action("DescargarPlantillaCertificadosMasivos", "Evaluaciones")"
+         data-base-certificados-fechas="@Url.Action("PrepararCertificadosMasivosPorFecha", "Evaluaciones")"
+         data-base-certificados-cedulas="@Url.Action("PrepararCertificadosMasivosPorCedulas", "Evaluaciones")"
          data-base-eliminar="@(puedeEliminarEvaluaciones ? Url.Action("Eliminar", "Evaluaciones") : string.Empty)"
          data-base-subir-reporte="@Url.Action("SubirReporteFirmado", "Evaluaciones")"
          data-base-subir-firma="@Url.Action("SubirFirmaEvaluador", "Evaluaciones")">
@@ -140,6 +143,11 @@
                                     class="btn btn-sm btn-outline-dark"
                                     disabled>
                                 Exportar resultados
+                            </button>
+                            <button id="accionExportarCertificadosMasivos"
+                                    type="button"
+                                    class="btn btn-sm btn-outline-success">
+                                Exportar certificados masivos
                             </button>
                             @if (puedeEliminarEvaluaciones)
                             {
@@ -351,6 +359,9 @@ else
 <form id="exportarExcelToken" method="post" class="d-none">
     @Html.AntiForgeryToken()
 </form>
+<form id="exportarCertificadosMasivosToken" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
 <form id="eliminarEvaluacionesToken" method="post" class="d-none">
     @Html.AntiForgeryToken()
 </form>
@@ -426,6 +437,99 @@ else
     </div>
 </div>
 
+<div class="modal fade" id="modalCertificadosMasivos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Exportar certificados masivos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="certificadosMasivosTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active"
+                                id="certificados-fechas-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#certificados-fechas"
+                                type="button"
+                                role="tab">
+                            Por fechas
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link"
+                                id="certificados-cedulas-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#certificados-cedulas"
+                                type="button"
+                                role="tab">
+                            Por plantilla
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content pt-3">
+                    <div class="tab-pane fade show active" id="certificados-fechas" role="tabpanel" aria-labelledby="certificados-fechas-tab">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label for="certificadosFechaInicio" class="form-label">Fecha inicial</label>
+                                <input id="certificadosFechaInicio" type="date" class="form-control" />
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="certificadosFechaFin" class="form-label">Fecha final</label>
+                                <input id="certificadosFechaFin" type="date" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-3">
+                            <button id="descargarCertificadosFechas" type="button" class="btn btn-primary">
+                                Descargar por fechas
+                            </button>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="certificados-cedulas" role="tabpanel" aria-labelledby="certificados-cedulas-tab">
+                        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                            <a id="descargarPlantillaCertificados" class="btn btn-outline-secondary" href="#">
+                                Descargar plantilla
+                            </a>
+                            <span class="text-muted small">La plantilla debe conservar solo la columna Cedula.</span>
+                        </div>
+                        <label for="certificadosArchivoCedulas" class="form-label">Plantilla de cédulas</label>
+                        <input id="certificadosArchivoCedulas"
+                               type="file"
+                               class="form-control"
+                               accept=".xlsx" />
+                        <div class="d-flex justify-content-end mt-3">
+                            <button id="descargarCertificadosCedulas" type="button" class="btn btn-primary">
+                                Descargar por plantilla
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="estadoCertificadosMasivos" class="form-text mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalDescargandoCertificados" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Descargando certificados</h5>
+            </div>
+            <div class="modal-body">
+                <p id="textoEstadoDescargaCertificados" class="mb-2 text-muted">Preparando certificados...</p>
+                <div class="progress" role="progressbar" aria-label="Progreso de descarga de certificados" aria-valuemin="0" aria-valuemax="100">
+                    <div id="barraProgresoDescargaCertificados"
+                         class="progress-bar progress-bar-striped progress-bar-animated"
+                         style="width: 0%;">
+                        0%
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts
 {
     <script>
@@ -440,15 +544,21 @@ else
             const accionImprimir = document.getElementById("accionImprimir");
             const accionCarpeta = document.getElementById("accionCarpeta");
             const accionExportar = document.getElementById("accionExportar");
+            const accionExportarCertificadosMasivos = document.getElementById("accionExportarCertificadosMasivos");
             const accionEliminar = document.getElementById("accionEliminar");
             const accionSubirReporte = document.getElementById("accionSubirReporte");
             const archivoReporteFirmadoInput = document.getElementById("archivoReporteFirmadoInput");
             const barraProgresoExportacion = document.getElementById("barraProgresoExportacion");
             const textoEstadoExportacion = document.getElementById("textoEstadoExportacion");
+            const barraProgresoDescargaCertificados = document.getElementById("barraProgresoDescargaCertificados");
+            const textoEstadoDescargaCertificados = document.getElementById("textoEstadoDescargaCertificados");
             const baseImprimir = acciones?.dataset.baseImprimir ?? "";
             const baseEstadoCertificado = acciones?.dataset.baseEstadoCertificado ?? "";
             const baseCarpeta = acciones?.dataset.baseCarpeta ?? "";
             const baseExportar = acciones?.dataset.baseExportar ?? "";
+            const basePlantillaCertificados = acciones?.dataset.basePlantillaCertificados ?? "";
+            const baseCertificadosFechas = acciones?.dataset.baseCertificadosFechas ?? "";
+            const baseCertificadosCedulas = acciones?.dataset.baseCertificadosCedulas ?? "";
             const baseEliminar = acciones?.dataset.baseEliminar ?? "";
             const baseSubirReporte = acciones?.dataset.baseSubirReporte ?? "";
             const baseSubirFirma = acciones?.dataset.baseSubirFirma ?? "";
@@ -457,7 +567,15 @@ else
             const textoFirmaCertificado = document.getElementById("textoFirmaCertificado");
             const estadoFirmaCertificado = document.getElementById("estadoFirmaCertificado");
             const firmaFaltanteOtroMensaje = document.getElementById("firmaFaltanteOtroMensaje");
+            const certificadosFechaInicio = document.getElementById("certificadosFechaInicio");
+            const certificadosFechaFin = document.getElementById("certificadosFechaFin");
+            const certificadosArchivoCedulas = document.getElementById("certificadosArchivoCedulas");
+            const descargarPlantillaCertificados = document.getElementById("descargarPlantillaCertificados");
+            const descargarCertificadosFechas = document.getElementById("descargarCertificadosFechas");
+            const descargarCertificadosCedulas = document.getElementById("descargarCertificadosCedulas");
+            const estadoCertificadosMasivos = document.getElementById("estadoCertificadosMasivos");
             const tokenExportarInput = document.querySelector('#exportarExcelToken input[name="__RequestVerificationToken"]');
+            const tokenCertificadosMasivosInput = document.querySelector('#exportarCertificadosMasivosToken input[name="__RequestVerificationToken"]');
             const tokenEliminarInput = document.querySelector('#eliminarEvaluacionesToken input[name="__RequestVerificationToken"]');
             const tokenFirmaInput = document.querySelector('#subirFirmaCertificadoToken input[name="__RequestVerificationToken"]');
             const modalExportarElement = document.getElementById("modalExportandoResultados");
@@ -472,7 +590,16 @@ else
             const modalFirmaFaltanteOtro = modalFirmaFaltanteOtroElement && window.bootstrap?.Modal
                 ? window.bootstrap.Modal.getOrCreateInstance(modalFirmaFaltanteOtroElement)
                 : null;
+            const modalCertificadosMasivosElement = document.getElementById("modalCertificadosMasivos");
+            const modalCertificadosMasivos = modalCertificadosMasivosElement && window.bootstrap?.Modal
+                ? window.bootstrap.Modal.getOrCreateInstance(modalCertificadosMasivosElement)
+                : null;
+            const modalDescargandoCertificadosElement = document.getElementById("modalDescargandoCertificados");
+            const modalDescargandoCertificados = modalDescargandoCertificadosElement && window.bootstrap?.Modal
+                ? new window.bootstrap.Modal(modalDescargandoCertificadosElement, { backdrop: "static", keyboard: false })
+                : null;
             let exportandoEnCurso = false;
+            let descargandoCertificadosEnCurso = false;
             let progresoExportacion = 0;
             let intervaloProgresoExportacion = null;
             let evaluacionFirmaCertificadoId = "";
@@ -633,6 +760,347 @@ else
                 }
 
                 return data;
+            };
+
+            const descargarArchivo = (blob, fileName) => {
+                const enlace = document.createElement("a");
+                const fileUrl = window.URL.createObjectURL(blob);
+                enlace.href = fileUrl;
+                enlace.download = fileName;
+                document.body.appendChild(enlace);
+                enlace.click();
+                enlace.remove();
+                window.URL.revokeObjectURL(fileUrl);
+            };
+
+            const mostrarEstadoCertificadosMasivos = (mensaje, esError = false) => {
+                if (!estadoCertificadosMasivos) {
+                    return;
+                }
+
+                estadoCertificadosMasivos.textContent = mensaje;
+                estadoCertificadosMasivos.className = esError
+                    ? "form-text mt-3 text-danger"
+                    : "form-text mt-3 text-success";
+            };
+
+            const actualizarProgresoCertificados = (porcentaje, mensaje) => {
+                const progreso = Math.max(0, Math.min(100, Math.round(porcentaje)));
+                if (barraProgresoDescargaCertificados instanceof HTMLDivElement) {
+                    barraProgresoDescargaCertificados.style.width = `${progreso}%`;
+                    barraProgresoDescargaCertificados.textContent = `${progreso}%`;
+                }
+
+                if (textoEstadoDescargaCertificados) {
+                    textoEstadoDescargaCertificados.textContent = mensaje;
+                }
+            };
+
+            const cargarScriptUnaVez = (src) => new Promise((resolve, reject) => {
+                const existente = document.querySelector(`script[src="${src}"]`);
+                if (existente) {
+                    existente.addEventListener("load", resolve, { once: true });
+                    existente.addEventListener("error", reject, { once: true });
+                    if (existente.dataset.loaded === "true") {
+                        resolve();
+                    }
+                    return;
+                }
+
+                const script = document.createElement("script");
+                script.src = src;
+                script.async = true;
+                script.onload = () => {
+                    script.dataset.loaded = "true";
+                    resolve();
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+
+            const asegurarLibreriasCertificados = async () => {
+                if (typeof window.html2pdf === "undefined") {
+                    await cargarScriptUnaVez("https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js");
+                }
+
+                if (typeof window.JSZip === "undefined") {
+                    await cargarScriptUnaVez("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+                }
+
+                if (typeof window.html2pdf === "undefined" || typeof window.JSZip === "undefined") {
+                    throw new Error("No fue posible cargar las librerías de generación de certificados.");
+                }
+            };
+
+            const esperarImagenesDocumento = async (doc) => {
+                const images = Array.from(doc.querySelectorAll("img"));
+                const pendientes = images
+                    .filter((img) => !img.complete)
+                    .map((img) => new Promise((resolve) => {
+                        img.addEventListener("load", resolve, { once: true });
+                        img.addEventListener("error", resolve, { once: true });
+                    }));
+
+                if (pendientes.length > 0) {
+                    await Promise.all(pendientes);
+                }
+            };
+
+            const generarPdfCertificado = (certificado) => new Promise((resolve, reject) => {
+                const iframe = document.createElement("iframe");
+                iframe.style.position = "fixed";
+                iframe.style.left = "-10000px";
+                iframe.style.top = "0";
+                iframe.style.width = "900px";
+                iframe.style.height = "1200px";
+                iframe.style.opacity = "0";
+                iframe.setAttribute("aria-hidden", "true");
+
+                const limpiar = () => {
+                    iframe.remove();
+                };
+
+                iframe.onload = async () => {
+                    try {
+                        const doc = iframe.contentDocument;
+                        if (!doc) {
+                            throw new Error("No fue posible cargar el certificado.");
+                        }
+
+                        await esperarImagenesDocumento(doc);
+                        await new Promise((resolveTimeout) => window.setTimeout(resolveTimeout, 250));
+
+                        const reporte = doc.getElementById("reporte-imprimible");
+                        if (!reporte) {
+                            throw new Error("No se encontró el contenido imprimible del certificado.");
+                        }
+
+                        const blob = await window.html2pdf()
+                            .set({
+                                margin: 0.3,
+                                filename: certificado.fileName || "certificado.pdf",
+                                html2canvas: { scale: 2, useCORS: true },
+                                jsPDF: { unit: "in", format: "letter", orientation: "portrait" }
+                            })
+                            .from(reporte)
+                            .outputPdf("blob");
+
+                        limpiar();
+                        resolve(blob);
+                    } catch (error) {
+                        limpiar();
+                        reject(error);
+                    }
+                };
+
+                iframe.onerror = () => {
+                    limpiar();
+                    reject(new Error("No fue posible cargar el certificado."));
+                };
+
+                document.body.appendChild(iframe);
+                iframe.src = certificado.url;
+            });
+
+            const getNombreUnicoZip = (fileName, usados) => {
+                const nombre = fileName || "certificado.pdf";
+                if (!usados.has(nombre.toLowerCase())) {
+                    usados.add(nombre.toLowerCase());
+                    return nombre;
+                }
+
+                const punto = nombre.lastIndexOf(".");
+                const base = punto > 0 ? nombre.slice(0, punto) : nombre;
+                const extension = punto > 0 ? nombre.slice(punto) : ".pdf";
+                let contador = 2;
+                let candidato = `${base}-${contador}${extension}`;
+
+                while (usados.has(candidato.toLowerCase())) {
+                    contador++;
+                    candidato = `${base}-${contador}${extension}`;
+                }
+
+                usados.add(candidato.toLowerCase());
+                return candidato;
+            };
+
+            const descargarZipCertificados = async (certificados, omitidos = []) => {
+                if (descargandoCertificadosEnCurso) {
+                    return;
+                }
+
+                descargandoCertificadosEnCurso = true;
+                modalCertificadosMasivos?.hide();
+                modalDescargandoCertificados?.show();
+                actualizarProgresoCertificados(2, "Preparando descarga de certificados...");
+
+                try {
+                    await asegurarLibreriasCertificados();
+                    const zip = new window.JSZip();
+                    const usados = new Set();
+                    const total = certificados.length;
+
+                    for (let index = 0; index < total; index++) {
+                        const certificado = certificados[index];
+                        const porcentajeBase = 5 + Math.floor((index / total) * 80);
+                        actualizarProgresoCertificados(
+                            porcentajeBase,
+                            `Generando certificado ${index + 1} de ${total}...`);
+
+                        const blob = await generarPdfCertificado(certificado);
+                        zip.file(getNombreUnicoZip(certificado.fileName, usados), blob);
+
+                        actualizarProgresoCertificados(
+                            5 + Math.floor(((index + 1) / total) * 80),
+                            `Certificado ${index + 1} de ${total} agregado al ZIP.`);
+                    }
+
+                    actualizarProgresoCertificados(90, "Comprimiendo certificados...");
+                    const zipBlob = await zip.generateAsync(
+                        { type: "blob" },
+                        (metadata) => {
+                            actualizarProgresoCertificados(
+                                90 + Math.floor((metadata.percent || 0) / 10),
+                                "Comprimiendo certificados...");
+                        });
+
+                    actualizarProgresoCertificados(100, "Descarga lista.");
+                    const fileName = `certificados-masivos-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "_")}.zip`;
+                    descargarArchivo(zipBlob, fileName);
+
+                    if (omitidos.length > 0) {
+                        const resumenOmitidos = omitidos
+                            .slice(0, 8)
+                            .map((item) => `${item.referencia}: ${item.motivo}`)
+                            .join("\n");
+                        const sufijo = omitidos.length > 8
+                            ? `\n... y ${omitidos.length - 8} registros más.`
+                            : "";
+
+                        window.alert(`ZIP generado. Registros omitidos:\n${resumenOmitidos}${sufijo}`);
+                    }
+                } catch (error) {
+                    window.alert(error instanceof Error
+                        ? error.message
+                        : "No fue posible generar el ZIP de certificados.");
+                    throw error;
+                } finally {
+                    descargandoCertificadosEnCurso = false;
+                    window.setTimeout(() => {
+                        modalDescargandoCertificados?.hide();
+                    }, 700);
+                }
+            };
+
+            const procesarRespuestaCertificados = async (data) => {
+                const certificados = Array.isArray(data?.certificados) ? data.certificados : [];
+                const omitidos = Array.isArray(data?.omitidos) ? data.omitidos : [];
+
+                if (!certificados.length) {
+                    throw new Error(data?.message || "No hay certificados listos para descargar.");
+                }
+
+                mostrarEstadoCertificadosMasivos(data?.message || "Certificados preparados.", false);
+                await descargarZipCertificados(certificados, omitidos);
+            };
+
+            const prepararCertificadosPorFechas = async () => {
+                if (!(certificadosFechaInicio instanceof HTMLInputElement) ||
+                    !(certificadosFechaFin instanceof HTMLInputElement) ||
+                    !(tokenCertificadosMasivosInput instanceof HTMLInputElement) ||
+                    !baseCertificadosFechas) {
+                    return;
+                }
+
+                if (!certificadosFechaInicio.value || !certificadosFechaFin.value) {
+                    mostrarEstadoCertificadosMasivos("Selecciona fecha inicial y fecha final.", true);
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("fechaInicio", certificadosFechaInicio.value);
+                formData.append("fechaFin", certificadosFechaFin.value);
+
+                const textoOriginal = descargarCertificadosFechas instanceof HTMLButtonElement
+                    ? descargarCertificadosFechas.textContent
+                    : "Descargar por fechas";
+
+                if (descargarCertificadosFechas instanceof HTMLButtonElement) {
+                    descargarCertificadosFechas.disabled = true;
+                    descargarCertificadosFechas.textContent = "Preparando...";
+                }
+
+                try {
+                    mostrarEstadoCertificadosMasivos("Buscando certificados en el rango seleccionado...", false);
+                    const data = await fetchJson(baseCertificadosFechas, {
+                        method: "POST",
+                        headers: {
+                            "RequestVerificationToken": tokenCertificadosMasivosInput.value,
+                            "X-Requested-With": "XMLHttpRequest"
+                        },
+                        body: formData
+                    });
+
+                    await procesarRespuestaCertificados(data);
+                } catch (error) {
+                    mostrarEstadoCertificadosMasivos(
+                        error instanceof Error ? error.message : "No fue posible preparar los certificados.",
+                        true);
+                } finally {
+                    if (descargarCertificadosFechas instanceof HTMLButtonElement) {
+                        descargarCertificadosFechas.disabled = false;
+                        descargarCertificadosFechas.textContent = textoOriginal ?? "Descargar por fechas";
+                    }
+                }
+            };
+
+            const prepararCertificadosPorCedulas = async () => {
+                if (!(certificadosArchivoCedulas instanceof HTMLInputElement) ||
+                    !(tokenCertificadosMasivosInput instanceof HTMLInputElement) ||
+                    !baseCertificadosCedulas) {
+                    return;
+                }
+
+                const file = certificadosArchivoCedulas.files?.[0];
+                if (!(file instanceof File)) {
+                    mostrarEstadoCertificadosMasivos("Adjunta la plantilla de Excel con la columna Cedula.", true);
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("archivo", file);
+
+                const textoOriginal = descargarCertificadosCedulas instanceof HTMLButtonElement
+                    ? descargarCertificadosCedulas.textContent
+                    : "Descargar por plantilla";
+
+                if (descargarCertificadosCedulas instanceof HTMLButtonElement) {
+                    descargarCertificadosCedulas.disabled = true;
+                    descargarCertificadosCedulas.textContent = "Preparando...";
+                }
+
+                try {
+                    mostrarEstadoCertificadosMasivos("Leyendo plantilla y buscando cédulas...", false);
+                    const data = await fetchJson(baseCertificadosCedulas, {
+                        method: "POST",
+                        headers: {
+                            "RequestVerificationToken": tokenCertificadosMasivosInput.value,
+                            "X-Requested-With": "XMLHttpRequest"
+                        },
+                        body: formData
+                    });
+
+                    await procesarRespuestaCertificados(data);
+                } catch (error) {
+                    mostrarEstadoCertificadosMasivos(
+                        error instanceof Error ? error.message : "No fue posible preparar los certificados.",
+                        true);
+                } finally {
+                    if (descargarCertificadosCedulas instanceof HTMLButtonElement) {
+                        descargarCertificadosCedulas.disabled = false;
+                        descargarCertificadosCedulas.textContent = textoOriginal ?? "Descargar por plantilla";
+                    }
+                }
             };
 
             const getEstadoCertificado = (evaluacionId) => {
@@ -1079,6 +1547,37 @@ else
 
             if (accionExportar instanceof HTMLButtonElement) {
                 accionExportar.addEventListener("click", exportarSeleccion);
+            }
+
+            if (accionExportarCertificadosMasivos instanceof HTMLButtonElement) {
+                accionExportarCertificadosMasivos.addEventListener("click", () => {
+                    if (descargandoCertificadosEnCurso) {
+                        return;
+                    }
+
+                    if (descargarPlantillaCertificados instanceof HTMLAnchorElement && basePlantillaCertificados) {
+                        descargarPlantillaCertificados.href = basePlantillaCertificados;
+                    }
+
+                    if (certificadosArchivoCedulas instanceof HTMLInputElement) {
+                        certificadosArchivoCedulas.value = "";
+                    }
+
+                    mostrarEstadoCertificadosMasivos("Selecciona un método de descarga.", false);
+                    modalCertificadosMasivos?.show();
+                });
+            }
+
+            if (descargarPlantillaCertificados instanceof HTMLAnchorElement && basePlantillaCertificados) {
+                descargarPlantillaCertificados.href = basePlantillaCertificados;
+            }
+
+            if (descargarCertificadosFechas instanceof HTMLButtonElement) {
+                descargarCertificadosFechas.addEventListener("click", prepararCertificadosPorFechas);
+            }
+
+            if (descargarCertificadosCedulas instanceof HTMLButtonElement) {
+                descargarCertificadosCedulas.addEventListener("click", prepararCertificadosPorCedulas);
             }
 
             if (accionEliminar instanceof HTMLButtonElement) {

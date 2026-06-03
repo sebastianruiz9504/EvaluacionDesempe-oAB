@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DataverseAdmin")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+611044a5d4d3875ec71ad088a808285f27e497f8")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+44d42c62e64b27c3ab64e7690105131ab6648dd2")]
 [assembly: System.Reflection.AssemblyProductAttribute("DataverseAdmin")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DataverseAdmin")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -27,7 +27,13 @@
     </div>
 
     <div class="col-12 col-lg-6">
-        <form asp-controller="Evaluaciones" asp-action="Nueva" method="get" class="d-flex flex-wrap gap-2 align-items-end justify-content-lg-end">
+        <form id="iniciarEvaluacionForm"
+              asp-controller="Evaluaciones"
+              asp-action="Nueva"
+              method="get"
+              class="d-flex flex-wrap gap-2 align-items-end justify-content-lg-end"
+              data-estado-firma-url="@Url.Action("EstadoFirmaInicioEvaluacion", "Evaluaciones")"
+              data-subir-firma-url="@Url.Action("SubirFirmaInicioEvaluacion", "Evaluaciones")">
             <input type="hidden" id="usuarioEvaluacionId" name="usuarioId" />
             <button type="submit" class="btn btn-primary" id="iniciarEvaluacionBtn" @(hayUsuarios ? "" : "disabled")>
                 Iniciar evaluación
@@ -129,15 +135,58 @@ else
 <form id="solicitudActivacionToken" method="post" class="d-none">
     @Html.AntiForgeryToken()
 </form>
+<form id="firmaInicioEvaluacionToken" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+
+<div class="modal fade" id="modalFirmaInicioEvaluacion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Subir firma</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="textoFirmaInicioEvaluacion" class="text-muted mb-3">
+                    Debes subir tu firma antes de iniciar la evaluación.
+                </p>
+                <label for="firmaInicioEvaluacionArchivo" class="form-label">Firma en PNG o JPG</label>
+                <input id="firmaInicioEvaluacionArchivo"
+                       type="file"
+                       class="form-control"
+                       accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+                <div id="estadoFirmaInicioEvaluacion" class="form-text mt-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button id="guardarFirmaInicioEvaluacion" type="button" class="btn btn-primary">
+                    Guardar firma e iniciar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <script>
         (() => {
             const checkboxes = document.querySelectorAll('.usuario-select');
+            const iniciarForm = document.getElementById('iniciarEvaluacionForm');
             const iniciarBtn = document.getElementById('iniciarEvaluacionBtn');
             const solicitarBtn = document.getElementById('solicitarActivacionBtn');
             const evalInputId = document.getElementById('usuarioEvaluacionId');
             const estadoActivacionUrlBase = '@Url.Action("EstadoActivacion", "Usuarios")';
+            const estadoFirmaInicioUrlBase = iniciarForm?.dataset.estadoFirmaUrl || '';
+            const subirFirmaInicioUrl = iniciarForm?.dataset.subirFirmaUrl || '';
+            const firmaInicioArchivo = document.getElementById('firmaInicioEvaluacionArchivo');
+            const guardarFirmaInicioBtn = document.getElementById('guardarFirmaInicioEvaluacion');
+            const estadoFirmaInicio = document.getElementById('estadoFirmaInicioEvaluacion');
+            const textoFirmaInicio = document.getElementById('textoFirmaInicioEvaluacion');
+            const tokenFirmaInicioInput = document.querySelector('#firmaInicioEvaluacionToken input[name="__RequestVerificationToken"]');
+            const modalFirmaInicioElement = document.getElementById('modalFirmaInicioEvaluacion');
+            const modalFirmaInicio = modalFirmaInicioElement && window.bootstrap?.Modal
+                ? window.bootstrap.Modal.getOrCreateInstance(modalFirmaInicioElement)
+                : null;
             const iniciarBtnDefaultText = iniciarBtn?.textContent?.trim() || 'Iniciar evaluación';
             const activationPollingIntervalMs = 5000;
             const maxActivationPollingAttempts = 120;
@@ -145,6 +194,8 @@ else
             let activationPollingUserId = null;
             let activationPollingAttempts = 0;
             let pendingActivationUserId = null;
+            let usuarioFirmaInicioId = '';
+            let validandoFirmaInicio = false;
 
             const setButtonsState = (canStart, canRequest, hasActiveEvaluation) => {
                 if (iniciarBtn) {
@@ -210,6 +261,139 @@ else
             };
 
             const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+            const mostrarEstadoFirmaInicio = (mensaje, esError = false) => {
+                if (!estadoFirmaInicio) return;
+
+                estadoFirmaInicio.textContent = mensaje;
+                estadoFirmaInicio.className = esError
+                    ? 'form-text mt-2 text-danger'
+                    : 'form-text mt-2 text-success';
+            };
+
+            const fetchJson = async (url, options = {}) => {
+                const response = await fetch(url, options);
+                const contentType = response.headers.get('content-type') || '';
+                const data = contentType.includes('application/json')
+                    ? await response.json()
+                    : { message: await response.text() };
+
+                if (!response.ok) {
+                    throw new Error(data?.message || 'No fue posible completar la solicitud.');
+                }
+
+                return data;
+            };
+
+            const enviarFormularioInicio = () => {
+                if (iniciarForm instanceof HTMLFormElement) {
+                    HTMLFormElement.prototype.submit.call(iniciarForm);
+                }
+            };
+
+            const abrirModalFirmaInicio = (data) => {
+                usuarioFirmaInicioId = data?.usuarioId || evalInputId?.value || '';
+
+                if (textoFirmaInicio) {
+                    const etiqueta = data?.etiqueta ? ` de ${data.etiqueta}` : '';
+                    textoFirmaInicio.textContent = `Debes subir tu firma${etiqueta} antes de iniciar la evaluación.`;
+                }
+
+                if (firmaInicioArchivo instanceof HTMLInputElement) {
+                    firmaInicioArchivo.value = '';
+                }
+
+                mostrarEstadoFirmaInicio('Selecciona una imagen PNG o JPG.', false);
+                modalFirmaInicio?.show();
+            };
+
+            const validarFirmaEIniciar = async (userId) => {
+                if (!userId || !estadoFirmaInicioUrlBase || validandoFirmaInicio) {
+                    return;
+                }
+
+                validandoFirmaInicio = true;
+                const textoOriginal = iniciarBtn?.textContent;
+                if (iniciarBtn instanceof HTMLButtonElement) {
+                    iniciarBtn.disabled = true;
+                    iniciarBtn.textContent = 'Validando firma...';
+                }
+
+                try {
+                    const separador = estadoFirmaInicioUrlBase.includes('?') ? '&' : '?';
+                    const data = await fetchJson(`${estadoFirmaInicioUrlBase}${separador}usuarioId=${encodeURIComponent(userId)}&_=${Date.now()}`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        cache: 'no-store'
+                    });
+
+                    if (data?.status === 'ready') {
+                        enviarFormularioInicio();
+                        return;
+                    }
+
+                    if (data?.status === 'missingSignature') {
+                        abrirModalFirmaInicio(data);
+                        return;
+                    }
+
+                    window.alert(data?.message || 'No fue posible validar la firma.');
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : 'No fue posible validar la firma.');
+                } finally {
+                    validandoFirmaInicio = false;
+                    if (iniciarBtn instanceof HTMLButtonElement) {
+                        iniciarBtn.textContent = textoOriginal || iniciarBtnDefaultText;
+                    }
+                    updateSelection(false);
+                }
+            };
+
+            const subirFirmaInicio = async () => {
+                if (!(firmaInicioArchivo instanceof HTMLInputElement) ||
+                    !(guardarFirmaInicioBtn instanceof HTMLButtonElement) ||
+                    !(tokenFirmaInicioInput instanceof HTMLInputElement) ||
+                    !subirFirmaInicioUrl ||
+                    !usuarioFirmaInicioId) {
+                    return;
+                }
+
+                const file = firmaInicioArchivo.files?.[0];
+                if (!(file instanceof File)) {
+                    mostrarEstadoFirmaInicio('Selecciona una firma en PNG o JPG.', true);
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('usuarioId', usuarioFirmaInicioId);
+                formData.append('archivo', file);
+
+                const textoOriginal = guardarFirmaInicioBtn.textContent;
+                guardarFirmaInicioBtn.disabled = true;
+                guardarFirmaInicioBtn.textContent = 'Guardando...';
+                mostrarEstadoFirmaInicio('Validando y guardando la firma...', false);
+
+                try {
+                    await fetchJson(subirFirmaInicioUrl, {
+                        method: 'POST',
+                        headers: {
+                            'RequestVerificationToken': tokenFirmaInicioInput.value,
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: formData
+                    });
+
+                    mostrarEstadoFirmaInicio('Firma guardada correctamente. Abriendo evaluación...', false);
+                    modalFirmaInicio?.hide();
+                    enviarFormularioInicio();
+                } catch (error) {
+                    mostrarEstadoFirmaInicio(
+                        error instanceof Error ? error.message : 'No fue posible guardar la firma.',
+                        true);
+                } finally {
+                    guardarFirmaInicioBtn.disabled = false;
+                    guardarFirmaInicioBtn.textContent = textoOriginal || 'Guardar firma e iniciar';
+                }
+            };
 
             const refreshActivationState = async (userId, selectedCheckbox) => {
                 if (!userId || !estadoActivacionUrlBase) return false;
@@ -292,6 +476,24 @@ else
                     updateSelection();
                 });
             });
+
+            if (iniciarForm instanceof HTMLFormElement) {
+                iniciarForm.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+
+                    const selected = getSelectedCheckbox();
+                    const userId = selected?.dataset.id || evalInputId?.value || '';
+                    if (!userId || iniciarBtn?.disabled) {
+                        return;
+                    }
+
+                    await validarFirmaEIniciar(userId);
+                });
+            }
+
+            if (guardarFirmaInicioBtn instanceof HTMLButtonElement) {
+                guardarFirmaInicioBtn.addEventListener('click', subirFirmaInicio);
+            }
 
             if (solicitarBtn) {
                 solicitarBtn.addEventListener('click', async () => {

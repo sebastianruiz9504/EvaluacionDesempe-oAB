@@ -242,8 +242,7 @@ namespace EvaluacionDesempenoAB.Services
                     !_evaluaciones.Any(e =>
                         e.UsuarioId == usuario.Id &&
                         !e.EvaluacionOrigenId.HasValue &&
-                        string.Equals(e.TipoEvaluacion, "Inicial", StringComparison.OrdinalIgnoreCase) &&
-                        e.FechaEvaluacion.Date >= fechaActivacion.Value))
+                        string.Equals(e.TipoEvaluacion, "Inicial", StringComparison.OrdinalIgnoreCase)))
                 {
                     usuario.Habilitado = true;
                     count++;

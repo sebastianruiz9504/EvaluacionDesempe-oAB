@@ -232,7 +232,7 @@ namespace EvaluacionDesempenoAB.Controllers
                 EvaluacionCoberturaInfo? coberturaActual = null;
                 Evaluacion? evaluacionPendienteParaParte = null;
                 var encontroEvaluacionPendiente = false;
-                var tieneEvaluacionInicialIncompleta = false;
+                var tieneEvaluacionInicialRegistrada = false;
 
                 foreach (var evaluacion in evaluaciones.OrderByDescending(e => e.FechaEvaluacion))
                 {
@@ -265,9 +265,9 @@ namespace EvaluacionDesempenoAB.Controllers
                         }
                     }
 
-                    if (EsEvaluacionInicial(evaluacion) && !cobertura.AmbasPartesCompletas)
+                    if (EsEvaluacionInicial(evaluacion))
                     {
-                        tieneEvaluacionInicialIncompleta = true;
+                        tieneEvaluacionInicialRegistrada = true;
                     }
                 }
 
@@ -294,7 +294,7 @@ namespace EvaluacionDesempenoAB.Controllers
                     EvaluacionNormalCompleta = coberturaActual?.EvaluacionNormalCompleta ?? false,
                     EvaluacionSstCompleta = coberturaActual?.EvaluacionSstCompleta ?? false,
                     PuedeIniciarEvaluacion = puedeIniciarOContinuar,
-                    PuedeSolicitarActivacion = !usuario.Habilitado && !tieneEvaluacionInicialIncompleta,
+                    PuedeSolicitarActivacion = !usuario.Habilitado && !tieneEvaluacionInicialRegistrada,
                     TieneEvaluacionActiva = tieneEvaluacionActiva,
                     ResultadoFinal = coberturaActual?.AmbasPartesCompletas == true
                         ? evaluacionActual?.Total ?? coberturaActual.TotalCalculado
@@ -396,6 +396,12 @@ namespace EvaluacionDesempenoAB.Controllers
                 return Forbid();
             }
 
+            var evaluacionesUsuario = await _repo.GetEvaluacionesByUsuarioAsync(usuario.Id);
+            if (evaluacionesUsuario.Any(EsEvaluacionInicial))
+            {
+                return BadRequest("Este usuario ya tiene una evaluación inicial registrada y no puede solicitar otra activación automática.");
+            }
+
             var flowUrl = _configuration["PowerAutomate:SolicitudActivacionEvaluacionUrl"];
             if (string.IsNullOrWhiteSpace(flowUrl))
             {
@@ -478,22 +484,18 @@ namespace EvaluacionDesempenoAB.Controllers
             var comportamientosPorNivel = new Dictionary<Guid, List<Comportamiento>>();
             var coberturasPorEvaluacion = new Dictionary<Guid, EvaluacionCoberturaInfo>();
             Evaluacion? evaluacionPendienteParaParte = null;
-            var tieneEvaluacionInicialIncompleta = false;
+            var tieneEvaluacionInicialRegistrada = false;
 
             foreach (var evaluacion in evaluaciones
                          .Where(EsEvaluacionInicial)
                          .OrderByDescending(x => x.FechaEvaluacion))
             {
+                tieneEvaluacionInicialRegistrada = true;
                 var cobertura = await GetCoberturaAsync(
                     evaluacion,
                     competencias,
                     comportamientosPorNivel,
                     coberturasPorEvaluacion);
-
-                if (!cobertura.AmbasPartesCompletas)
-                {
-                    tieneEvaluacionInicialIncompleta = true;
-                }
 
                 if (!EstaParteCompleta(cobertura, parteActual))
                 {
@@ -509,7 +511,7 @@ namespace EvaluacionDesempenoAB.Controllers
             return Json(new
             {
                 puedeIniciar,
-                puedeSolicitar = !usuario.Habilitado && !tieneEvaluacionInicialIncompleta,
+                puedeSolicitar = !usuario.Habilitado && !tieneEvaluacionInicialRegistrada,
                 tieneEvaluacionActiva,
                 evaluacionActualId = evaluacionPendienteParaParte?.Id,
                 fechaActivacionEvaluacion = usuario.FechaActivacionEvaluacion?.ToString("yyyy-MM-dd"),

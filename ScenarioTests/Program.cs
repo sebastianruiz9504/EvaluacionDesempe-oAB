@@ -18,6 +18,12 @@ var evaluadorSst = "evaluador.sst@contoso.com";
 
 var normalController = BuildController(repo, evaluadorNormal);
 var sstController = BuildController(repo, evaluadorSst);
+
+var estadoFirmaInicioSinFirma = await normalController.EstadoFirmaInicioEvaluacion(usuarioEvaluado.Id);
+AssertJsonString(estadoFirmaInicioSinFirma, "status", "missingSignature", "Antes de iniciar evaluación se detecta si falta la firma del evaluador.");
+var firmaInicioFalsa = await normalController.SubirFirmaInicioEvaluacion(usuarioEvaluado.Id, BuildFakeJpgFormFile("firma-inicio-falsa.jpg"));
+Assert(firmaInicioFalsa is BadRequestObjectResult, "El popup de firma antes de iniciar rechaza un .jpg falso.");
+
 var formularioNormal = await GetFormularioAsync(normalController, usuarioEvaluado.Id, nivel.Id);
 Assert(formularioNormal.Competencias.Any(), "El evaluador normal ve competencias.");
 Assert(formularioNormal.Competencias.All(c => !c.Nombre.Contains("SST", StringComparison.OrdinalIgnoreCase)), "El evaluador normal no ve CULTURA SST.");
@@ -91,6 +97,14 @@ AssertJsonString(estadoCertificadoListo, "status", "ready", "El estado del certi
 
 var certificadoFinal = await normalController.ImprimirResultados(evaluacionId);
 Assert(certificadoFinal is ViewResult view && string.Equals(view.ViewName, "ReporteImpresion", StringComparison.Ordinal), "El certificado se genera cuando ambas firmas existen.");
+
+var plantillaCertificados = await normalController.DescargarPlantillaCertificadosMasivos();
+Assert(plantillaCertificados is FileContentResult, "La plantilla de certificados masivos se descarga como Excel.");
+var preparacionCertificadosFecha = await normalController.PrepararCertificadosMasivosPorFecha(DateTime.Today.AddDays(-1), DateTime.Today.AddDays(1));
+AssertJsonIntAtLeast(preparacionCertificadosFecha, "total", 1, "La preparación por fechas encuentra certificados listos.");
+
+var estadoActivacionTrasFinalizar = await BuildUsuariosController(repo, evaluadorNormal).EstadoActivacion(usuarioEvaluado.Id);
+AssertJsonBool(estadoActivacionTrasFinalizar, "puedeSolicitar", false, "Después de registrar una evaluación inicial no se permite solicitar otra activación automática.");
 
 var actualizarFirmaTrasBloqueo = await normalController.SubirFirmaEvaluador(evaluacionId, BuildJpgFormFile("firma-normal-actualizada.jpg"));
 Assert(actualizarFirmaTrasBloqueo is JsonResult, "El botón Subir o actualizar firma puede guardar una firma JPG aunque el plan ya esté firmado.");
@@ -299,6 +313,18 @@ static void AssertJsonString(IActionResult result, string propertyName, string e
     var property = json.Value.GetType().GetProperty(propertyName);
     var value = property?.GetValue(json.Value)?.ToString();
     Assert(string.Equals(value, expected, StringComparison.Ordinal), $"{message} Valor: {value ?? "(nulo)"}.");
+}
+
+static void AssertJsonIntAtLeast(IActionResult result, string propertyName, int minimum, string message)
+{
+    if (result is not JsonResult { Value: not null } json)
+    {
+        throw new InvalidOperationException($"{message} Resultado: {result.GetType().Name}.");
+    }
+
+    var property = json.Value.GetType().GetProperty(propertyName);
+    var value = property?.GetValue(json.Value);
+    Assert(value is int intValue && intValue >= minimum, $"{message} Valor: {value ?? "(nulo)"}.");
 }
 
 static void Assert(bool condition, string message)
