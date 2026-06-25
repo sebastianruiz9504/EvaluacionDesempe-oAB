@@ -117,7 +117,7 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy.result }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $targetUrl = "https://evdesempenoab.azurewebsites.net/SupervisionEvaluaciones?deploy=$env:DEPLOY_RESULT"
+          $targetUrl = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?deploy=' + $env:DEPLOY_RESULT
           $description = "Deploy job result: $env:DEPLOY_RESULT"
           $body = @{
             state = 'failure'
@@ -204,6 +204,6 @@ jobs:
           }
           catch {
             $encodedReason = [System.Uri]::EscapeDataString($_.Exception.Message)
-            Set-CommitStatus 'failure' $_.Exception.Message "$routeUrl?validation=$encodedReason"
+            Set-CommitStatus 'failure' $_.Exception.Message "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?validation=$encodedReason"
             throw
           }
