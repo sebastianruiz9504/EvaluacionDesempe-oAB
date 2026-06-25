@@ -1,0 +1,118 @@
+@using EvaluacionDesempenoAB.ViewModels
+@model SupervisionEvaluacionesViewModel
+
+@{
+    ViewData["Title"] = "Supervisión de evaluaciones";
+    var hayEvaluadores = Model.Evaluadores.Any();
+}
+
+<h2 class="mt-4">Supervisión de evaluaciones</h2>
+
+@if (TempData["SupervisionSuccess"] is string success)
+{
+    <div class="alert alert-success mt-3">
+        @success
+    </div>
+}
+
+@if (TempData["SupervisionError"] is string error)
+{
+    <div class="alert alert-danger mt-3">
+        @error
+    </div>
+}
+
+<div class="row g-3 mt-1">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="border rounded-2 p-3 bg-light h-100">
+            <div class="small text-muted">Evaluadores</div>
+            <div class="fs-4 fw-semibold">@Model.TotalEvaluadores</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="border rounded-2 p-3 bg-light h-100">
+            <div class="small text-muted">Usuarios asignados</div>
+            <div class="fs-4 fw-semibold">@Model.TotalUsuariosAsignados</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="border rounded-2 p-3 bg-light h-100">
+            <div class="small text-muted">Usuarios en ventana activa</div>
+            <div class="fs-4 fw-semibold">@Model.TotalUsuariosEnVentanaActiva</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="border rounded-2 p-3 bg-light h-100">
+            <div class="small text-muted">Evaluaciones pendientes</div>
+            <div class="fs-4 fw-semibold">@Model.TotalEvaluacionesPendientes</div>
+        </div>
+    </div>
+</div>
+
+@if (!hayEvaluadores)
+{
+    <div class="alert alert-info mt-3">
+        No se encontraron evaluadores asignados en las columnas de evaluador normal o evaluador SST.
+    </div>
+}
+else
+{
+    <div class="table-responsive mt-3" style="max-height: 65vh; overflow-y: auto;">
+        <table class="table table-striped table-bordered align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Evaluador</th>
+                    <th>Correo</th>
+                    <th>Cantidad usuarios asignados</th>
+                    <th>Cantidad usuarios en ventana activa de evaluación</th>
+                    <th>Cantidad de evaluaciones realizadas</th>
+                    <th>Evaluaciones pendientes en ventana activa por realizar</th>
+                    <th>Recordatorio</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var evaluador in Model.Evaluadores)
+            {
+                <tr>
+                    <td class="fw-semibold">@evaluador.EvaluadorNombre</td>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(evaluador.EvaluadorCorreo))
+                        {
+                            <span>@evaluador.EvaluadorCorreo</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">Sin correo</span>
+                        }
+                    </td>
+                    <td>@evaluador.CantidadUsuariosAsignados</td>
+                    <td>@evaluador.CantidadUsuariosEnVentanaActiva</td>
+                    <td>@evaluador.CantidadEvaluacionesRealizadas</td>
+                    <td>
+                        @if (evaluador.EvaluacionesPendientesEnVentanaActiva > 0)
+                        {
+                            <span class="badge text-bg-warning">@evaluador.EvaluacionesPendientesEnVentanaActiva</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-success">0</span>
+                        }
+                    </td>
+                    <td>
+                        <form asp-action="EnviarRecordatorio" method="post" class="m-0">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="evaluadorKey" value="@evaluador.EvaluadorKey" />
+                            <button type="submit"
+                                    class="btn btn-sm btn-outline-primary"
+                                    @(evaluador.PuedeEnviarRecordatorio ? "" : "disabled")
+                                    title="Enviar correo con el detalle y el enlace de la app">
+                                Enviar recordatorio
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
