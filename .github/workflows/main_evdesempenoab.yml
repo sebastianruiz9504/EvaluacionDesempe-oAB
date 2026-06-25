@@ -92,7 +92,7 @@ jobs:
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_CB1496462C0C4BBEBE9ABABB9F9DD460 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_989934D53EDA47848799F6905479E60A }}
+          tenant-id: c36f5389-922c-4c1e-b426-50bbf6a19cff
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7445E8249C6D4ECE9948F1B46B03C72B }}
 
       - name: Fallback Azure login from app settings
