@@ -29,16 +29,23 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $settingsPath = 'appsettings.json'
           $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
-          $tenantId = $settings.AzureAd.TenantId
-          $clientId = $settings.AzureAd.ClientId
-          $clientSecret = $settings.AzureAd.ClientSecret
-          $environmentId = '281406ef-ab25-e78f-ae54-4671f1cd19ed'
-          $workflowId = '20463e73-476f-f111-ab0f-002248e09de5'
-          $token = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Body @{ client_id = $clientId; client_secret = $clientSecret; grant_type = 'client_credentials'; scope = 'https://service.flow.microsoft.com/.default' }
-          $callback = Invoke-RestMethod -Method Post -Uri "https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/$environmentId/flows/$workflowId/triggers/manual/listCallbackUrl?api-version=2016-11-01" -Headers @{ Authorization = "Bearer $($token.access_token)" } -Body '{}' -ContentType 'application/json'
-          if (-not $callback.value) { throw 'Power Automate no devolvio callback URL.' }
           if (-not $settings.PowerAutomate) { $settings | Add-Member -NotePropertyName PowerAutomate -NotePropertyValue ([pscustomobject]@{}) }
-          $settings.PowerAutomate | Add-Member -NotePropertyName RecordatorioEvaluacionesUrl -NotePropertyValue $callback.value -Force
+
+          try {
+            $tenantId = $settings.AzureAd.TenantId
+            $clientId = $settings.AzureAd.ClientId
+            $clientSecret = $settings.AzureAd.ClientSecret
+            $environmentId = '281406ef-ab25-e78f-ae54-4671f1cd19ed'
+            $workflowId = '20463e73-476f-f111-ab0f-002248e09de5'
+            $token = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Body @{ client_id = $clientId; client_secret = $clientSecret; grant_type = 'client_credentials'; scope = 'https://service.flow.microsoft.com/.default' }
+            $callback = Invoke-RestMethod -Method Post -Uri "https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/$environmentId/flows/$workflowId/triggers/manual/listCallbackUrl?api-version=2016-11-01" -Headers @{ Authorization = "Bearer $($token.access_token)" } -Body '{}' -ContentType 'application/json'
+            if (-not $callback.value) { throw 'Power Automate no devolvio callback URL.' }
+            $settings.PowerAutomate | Add-Member -NotePropertyName RecordatorioEvaluacionesUrl -NotePropertyValue $callback.value -Force
+          }
+          catch {
+            Write-Warning "No fue posible resolver la URL de recordatorio de Power Automate: $($_.Exception.Message)"
+          }
+
           $settings | ConvertTo-Json -Depth 20 | Set-Content $settingsPath -Encoding UTF8
 
       - name: Build with dotnet
@@ -110,11 +117,11 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy.result }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $targetUrl = 'https://evdesempenoab.azurewebsites.net/SupervisionEvaluaciones'
+          $targetUrl = "https://evdesempenoab.azurewebsites.net/SupervisionEvaluaciones?deploy=$env:DEPLOY_RESULT"
           $description = "Deploy job result: $env:DEPLOY_RESULT"
           $body = @{
             state = 'failure'
-            context = 'appservice/production-smoke'
+            context = "appservice/deploy-$env:DEPLOY_RESULT"
             description = $description
             target_url = $targetUrl
           } | ConvertTo-Json -Depth 5
@@ -137,7 +144,7 @@ jobs:
           $routeUrl = 'https://evdesempenoab.azurewebsites.net/SupervisionEvaluaciones'
           $expectedCommit = '${{ github.sha }}'
 
-          function Set-CommitStatus([string]$state, [string]$description) {
+          function Set-CommitStatus([string]$state, [string]$description, [string]$targetUrl = $routeUrl) {
             if ($description.Length -gt 140) {
               $description = $description.Substring(0, 137) + '...'
             }
@@ -146,7 +153,7 @@ jobs:
               state = $state
               context = 'appservice/production-smoke'
               description = $description
-              target_url = $routeUrl
+              target_url = $targetUrl
             } | ConvertTo-Json -Depth 5
 
             Invoke-RestMethod -Method Post -Uri 'https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}' -Headers @{
@@ -196,6 +203,7 @@ jobs:
             Set-CommitStatus 'success' "Production has $shortCommit and supervision route HTTP $statusCode"
           }
           catch {
-            Set-CommitStatus 'failure' $_.Exception.Message
+            $encodedReason = [System.Uri]::EscapeDataString($_.Exception.Message)
+            Set-CommitStatus 'failure' $_.Exception.Message "$routeUrl?validation=$encodedReason"
             throw
           }
