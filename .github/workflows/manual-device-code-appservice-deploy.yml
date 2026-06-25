@@ -1,0 +1,172 @@
+name: Manual device-code App Service rescue deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/manual-device-code-appservice-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-with-device-code:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      statuses: write
+
+    steps:
+      - name: Report rescue run started
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $body = @{
+            state = 'pending'
+            context = 'appservice/device-code-rescue'
+            description = 'Waiting for Azure device-code login'
+            target_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          } | ConvertTo-Json -Depth 5
+          Invoke-RestMethod -Method Post -Uri 'https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}' -Headers @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+            'User-Agent' = 'appservice-device-code-rescue'
+          } -Body $body -ContentType 'application/json'
+
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Resolve Power Automate reminder URL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $settingsPath = 'appsettings.json'
+          $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
+          if (-not $settings.PowerAutomate) { $settings | Add-Member -NotePropertyName PowerAutomate -NotePropertyValue ([pscustomobject]@{}) }
+
+          try {
+            $tenantId = $settings.AzureAd.TenantId
+            $clientId = $settings.AzureAd.ClientId
+            $clientSecret = $settings.AzureAd.ClientSecret
+            $environmentId = '281406ef-ab25-e78f-ae54-4671f1cd19ed'
+            $workflowId = '20463e73-476f-f111-ab0f-002248e09de5'
+            $token = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Body @{ client_id = $clientId; client_secret = $clientSecret; grant_type = 'client_credentials'; scope = 'https://service.flow.microsoft.com/.default' }
+            $callback = Invoke-RestMethod -Method Post -Uri "https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/$environmentId/flows/$workflowId/triggers/manual/listCallbackUrl?api-version=2016-11-01" -Headers @{ Authorization = "Bearer $($token.access_token)" } -Body '{}' -ContentType 'application/json'
+            if (-not $callback.value) { throw 'Power Automate no devolvio callback URL.' }
+            $settings.PowerAutomate | Add-Member -NotePropertyName RecordatorioEvaluacionesUrl -NotePropertyValue $callback.value -Force
+          }
+          catch {
+            Write-Warning "No fue posible resolver la URL de recordatorio de Power Automate: $($_.Exception.Message)"
+          }
+
+          $settings | ConvertTo-Json -Depth 20 | Set-Content $settingsPath -Encoding UTF8
+
+      - name: Build and publish artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build --configuration Release
+          $markerDirectory = 'wwwroot/deployment-marker'
+          New-Item -ItemType Directory -Force -Path $markerDirectory | Out-Null
+          @{
+            commit = '${{ github.sha }}'
+            branch = '${{ github.ref_name }}'
+            feature = 'supervision-evaluaciones'
+            generatedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+          } | ConvertTo-Json -Depth 5 | Set-Content "$markerDirectory/supervision-evaluaciones.json" -Encoding UTF8
+          dotnet publish -c Release -o publish-output
+          Compress-Archive -Path publish-output/* -DestinationPath app.zip -Force
+
+      - name: Azure device-code login
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host 'DEVICE LOGIN REQUIRED: open https://microsoft.com/devicelogin and enter the code shown by Azure CLI below.'
+          az login --use-device-code --allow-no-subscriptions --output json
+          az account list --all --query "[].{name:name,id:id,tenantId:tenantId,state:state,isDefault:isDefault}" --output table
+
+      - name: Find App Services and deploy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @('EvdesempenoAB', 'evaluaciondedesempeñoAB')
+          $subscriptions = az account list --all --query "[?state=='Enabled'].id" -o tsv
+          if (-not $subscriptions) { throw 'No hay suscripciones habilitadas para la cuenta autenticada.' }
+
+          $found = @()
+          foreach ($subscription in $subscriptions) {
+            az account set --subscription $subscription
+            $appsJson = az webapp list --query "[?name=='EvdesempenoAB' || name=='evaluaciondedesempeñoAB'].{name:name,resourceGroup:resourceGroup,defaultHostName:defaultHostName,subscription:'$subscription'}" -o json
+            $apps = $appsJson | ConvertFrom-Json
+            if ($apps) { $found += $apps }
+          }
+
+          if (-not $found -or $found.Count -eq 0) {
+            throw 'No se encontraron App Services con nombre EvdesempenoAB o evaluaciondedesempeñoAB en las suscripciones disponibles.'
+          }
+
+          $found | ConvertTo-Json -Depth 5
+          foreach ($app in $found) {
+            az account set --subscription $app.subscription
+            Write-Host "Deploying $($app.name) in $($app.resourceGroup) / $($app.subscription)"
+            az webapp deploy --resource-group $app.resourceGroup --name $app.name --src-path app.zip --type zip --timeout 900
+          }
+
+          $found | ConvertTo-Json -Depth 5 | Set-Content deployed-apps.json -Encoding UTF8
+
+      - name: Validate production marker
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Set-CommitStatus([string]$state, [string]$description, [string]$targetUrl) {
+            if ($description.Length -gt 140) { $description = $description.Substring(0, 137) + '...' }
+            $body = @{
+              state = $state
+              context = 'appservice/device-code-rescue'
+              description = $description
+              target_url = $targetUrl
+            } | ConvertTo-Json -Depth 5
+            Invoke-RestMethod -Method Post -Uri 'https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}' -Headers @{
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+              Accept = 'application/vnd.github+json'
+              'X-GitHub-Api-Version' = '2022-11-28'
+              'User-Agent' = 'appservice-device-code-rescue'
+            } -Body $body -ContentType 'application/json'
+          }
+
+          try {
+            $apps = Get-Content deployed-apps.json -Raw | ConvertFrom-Json
+            $expectedCommit = '${{ github.sha }}'
+            $validated = @()
+            foreach ($app in $apps) {
+              $markerUrl = "https://$($app.defaultHostName)/deployment-marker/supervision-evaluaciones.json"
+              $marker = $null
+              for ($attempt = 1; $attempt -le 18; $attempt++) {
+                try {
+                  $marker = Invoke-RestMethod -Method Get -Uri $markerUrl -TimeoutSec 20
+                  if ($marker.commit -eq $expectedCommit) { break }
+                }
+                catch {
+                  if ($attempt -eq 18) { throw }
+                }
+                Start-Sleep -Seconds 10
+              }
+              if ($null -eq $marker -or $marker.commit -ne $expectedCommit) {
+                throw "Marker mismatch for $($app.name)."
+              }
+              $validated += $app.defaultHostName
+            }
+            Set-CommitStatus 'success' "Validated: $($validated -join ', ')" "https://$($validated[0])/SupervisionEvaluaciones"
+          }
+          catch {
+            Set-CommitStatus 'failure' $_.Exception.Message 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            throw
+          }
