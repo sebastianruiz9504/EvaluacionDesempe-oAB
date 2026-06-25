@@ -1,4 +1,4 @@
-﻿@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authorization
 @using EvaluacionDesempenoAB.Services
 @inject IHttpContextAccessor HttpContextAccessor
@@ -7,6 +7,7 @@
     var user = HttpContextAccessor.HttpContext?.User;
     var userName = user?.Identity?.IsAuthenticated == true ? user.Identity.Name : "";
     var isSuperAdmin = false;
+    var isSupervisionAdmin = false;
 
     if (user?.Identity?.IsAuthenticated == true)
     {
@@ -14,12 +15,22 @@
                     ?? user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
                     ?? user.FindFirst(System.Security.Claims.ClaimTypes.Upn)?.Value;
 
+        isSupervisionAdmin = string.Equals(
+            email?.Trim(),
+            "jully.pinto@aguasdebogota.com.co",
+            StringComparison.OrdinalIgnoreCase);
+
         if (!string.IsNullOrWhiteSpace(email))
         {
             try
             {
                 var usuario = await EvaluacionRepository.GetUsuarioByCorreoAsync(email);
                 isSuperAdmin = usuario?.EsSuperAdministrador == true;
+                isSupervisionAdmin = isSupervisionAdmin ||
+                                     string.Equals(
+                                         usuario?.CorreoElectronico?.Trim(),
+                                         "jully.pinto@aguasdebogota.com.co",
+                                         StringComparison.OrdinalIgnoreCase);
             }
             catch
             {
@@ -68,6 +79,10 @@
             @if (isSuperAdmin)
             {
                 <a class="ab-nav-link" asp-controller="Admin" asp-action="Index">Módulo admin</a>
+            }
+            @if (isSupervisionAdmin)
+            {
+                <a class="ab-nav-link" asp-controller="SupervisionEvaluaciones" asp-action="Index">Supervisión de evaluaciones</a>
             }
         </div>
     </nav>
