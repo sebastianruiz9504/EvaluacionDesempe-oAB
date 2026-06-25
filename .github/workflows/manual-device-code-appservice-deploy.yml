@@ -25,7 +25,7 @@ jobs:
           $body = @{
             state = 'pending'
             context = 'appservice/device-code-rescue'
-            description = 'Waiting for Azure device-code login'
+            description = 'Building package before Azure device login'
             target_url = 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
           } | ConvertTo-Json -Depth 5
           Invoke-RestMethod -Method Post -Uri 'https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}' -Headers @{
@@ -85,17 +85,70 @@ jobs:
 
       - name: Azure device-code login
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          Write-Host 'DEVICE LOGIN REQUIRED: open https://microsoft.com/devicelogin and enter the code shown by Azure CLI below.'
-          az login --use-device-code --allow-no-subscriptions --output json
+          function Set-CommitStatus([string]$state, [string]$context, [string]$description, [string]$targetUrl) {
+            if ($description.Length -gt 140) { $description = $description.Substring(0, 137) + '...' }
+            $body = @{
+              state = $state
+              context = $context
+              description = $description
+              target_url = $targetUrl
+            } | ConvertTo-Json -Depth 5
+            Invoke-RestMethod -Method Post -Uri 'https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}' -Headers @{
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+              Accept = 'application/vnd.github+json'
+              'X-GitHub-Api-Version' = '2022-11-28'
+              'User-Agent' = 'appservice-device-code-rescue'
+            } -Body $body -ContentType 'application/json'
+          }
+
+          Write-Host 'DEVICE LOGIN REQUIRED: open https://microsoft.com/devicelogin and enter the code published in commit status appservice/device-code-login.'
+          $logPath = Join-Path $env:RUNNER_TEMP 'az-device-login.log'
+          if (Test-Path $logPath) { Remove-Item $logPath -Force }
+          $command = "az login --use-device-code --allow-no-subscriptions --output json > `"$logPath`" 2>&1"
+          $process = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/s','/c',$command -NoNewWindow -PassThru
+
+          $code = $null
+          for ($attempt = 1; $attempt -le 60; $attempt++) {
+            Start-Sleep -Seconds 2
+            if (Test-Path $logPath) {
+              $text = Get-Content $logPath -Raw
+              if (-not $code -and $text -match 'enter the code\s+([A-Z0-9]+)') {
+                $code = $Matches[1]
+                Write-Host "Azure device code: $code"
+                Set-CommitStatus 'pending' 'appservice/device-code-login' "Use code $code at microsoft.com/devicelogin" 'https://microsoft.com/devicelogin'
+                break
+              }
+            }
+            if ($process.HasExited) { break }
+          }
+
+          if (-not $code) {
+            if (Test-Path $logPath) { Get-Content $logPath -Raw | Write-Host }
+            throw 'Azure CLI did not produce a device code.'
+          }
+
+          while (-not $process.HasExited) {
+            Start-Sleep -Seconds 5
+          }
+
+          $loginOutput = Get-Content $logPath -Raw
+          Write-Host $loginOutput
+          if ($process.ExitCode -ne 0) {
+            Set-CommitStatus 'failure' 'appservice/device-code-login' "Azure device login failed with exit code $($process.ExitCode)" 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            throw "Azure device login failed with exit code $($process.ExitCode)."
+          }
+
+          Set-CommitStatus 'success' 'appservice/device-code-login' 'Azure device login completed' 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
           az account list --all --query "[].{name:name,id:id,tenantId:tenantId,state:state,isDefault:isDefault}" --output table
 
       - name: Find App Services and deploy
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $targets = @('EvdesempenoAB', 'evaluaciondedesempeñoAB')
           $subscriptions = az account list --all --query "[?state=='Enabled'].id" -o tsv
           if (-not $subscriptions) { throw 'No hay suscripciones habilitadas para la cuenta autenticada.' }
 
