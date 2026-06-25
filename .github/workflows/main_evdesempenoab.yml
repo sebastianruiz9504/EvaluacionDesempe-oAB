@@ -44,6 +44,19 @@ jobs:
       - name: Build with dotnet
         run: dotnet build --configuration Release
 
+      - name: Write deployment marker
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $markerDirectory = 'wwwroot/deployment-marker'
+          New-Item -ItemType Directory -Force -Path $markerDirectory | Out-Null
+          @{
+            commit = '${{ github.sha }}'
+            branch = '${{ github.ref_name }}'
+            feature = 'supervision-evaluaciones'
+            generatedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+          } | ConvertTo-Json -Depth 5 | Set-Content "$markerDirectory/supervision-evaluaciones.json" -Encoding UTF8
+
       - name: dotnet publish
         run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/myapp"
 
@@ -80,4 +93,109 @@ jobs:
           app-name: 'EvdesempenoAB'
           slot-name: 'Production'
           package: .
-          
+
+  validate-production:
+    runs-on: windows-latest
+    needs: deploy
+    if: always()
+    permissions:
+      statuses: write
+
+    steps:
+      - name: Report failed deploy
+        if: needs.deploy.result != 'success'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targetUrl = 'https://evdesempenoab.azurewebsites.net/SupervisionEvaluaciones'
+          $description = "Deploy job result: $env:DEPLOY_RESULT"
+          $body = @{
+            state = 'failure'
+            context = 'appservice/production-smoke'
+            description = $description
+            target_url = $targetUrl
+          } | ConvertTo-Json -Depth 5
+          Invoke-RestMethod -Method Post -Uri 'https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}' -Headers @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+            'User-Agent' = 'appservice-production-smoke'
+          } -Body $body -ContentType 'application/json'
+          throw $description
+
+      - name: Smoke test production URL
+        if: needs.deploy.result == 'success'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $markerUrl = 'https://evdesempenoab.azurewebsites.net/deployment-marker/supervision-evaluaciones.json'
+          $routeUrl = 'https://evdesempenoab.azurewebsites.net/SupervisionEvaluaciones'
+          $expectedCommit = '${{ github.sha }}'
+
+          function Set-CommitStatus([string]$state, [string]$description) {
+            if ($description.Length -gt 140) {
+              $description = $description.Substring(0, 137) + '...'
+            }
+
+            $body = @{
+              state = $state
+              context = 'appservice/production-smoke'
+              description = $description
+              target_url = $routeUrl
+            } | ConvertTo-Json -Depth 5
+
+            Invoke-RestMethod -Method Post -Uri 'https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}' -Headers @{
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+              Accept = 'application/vnd.github+json'
+              'X-GitHub-Api-Version' = '2022-11-28'
+              'User-Agent' = 'appservice-production-smoke'
+            } -Body $body -ContentType 'application/json'
+          }
+
+          try {
+            $marker = $null
+            for ($attempt = 1; $attempt -le 18; $attempt++) {
+              try {
+                $marker = Invoke-RestMethod -Method Get -Uri $markerUrl -TimeoutSec 20
+                if ($marker.commit -eq $expectedCommit) {
+                  break
+                }
+              }
+              catch {
+                if ($attempt -eq 18) { throw }
+              }
+
+              Start-Sleep -Seconds 10
+            }
+
+            if ($null -eq $marker) {
+              throw 'Production marker was not returned.'
+            }
+
+            if ($marker.commit -ne $expectedCommit) {
+              throw "Production marker commit mismatch. Expected $expectedCommit, got $($marker.commit)."
+            }
+
+            $handler = [System.Net.Http.HttpClientHandler]::new()
+            $handler.AllowAutoRedirect = $false
+            $client = [System.Net.Http.HttpClient]::new($handler)
+            $response = $client.GetAsync($routeUrl).GetAwaiter().GetResult()
+            $statusCode = [int]$response.StatusCode
+            $acceptedStatuses = @(200, 302, 401, 403)
+
+            if ($acceptedStatuses -notcontains $statusCode) {
+              throw "SupervisionEvaluaciones route returned HTTP $statusCode."
+            }
+
+            $shortCommit = $expectedCommit.Substring(0, 7)
+            Set-CommitStatus 'success' "Production has $shortCommit and supervision route HTTP $statusCode"
+          }
+          catch {
+            Set-CommitStatus 'failure' $_.Exception.Message
+            throw
+          }
