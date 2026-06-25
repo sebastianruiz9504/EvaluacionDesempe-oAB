@@ -87,11 +87,24 @@ jobs:
           name: .net-app
       
       - name: Login to Azure
+        id: azure-login
+        continue-on-error: true
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_CB1496462C0C4BBEBE9ABABB9F9DD460 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_989934D53EDA47848799F6905479E60A }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7445E8249C6D4ECE9948F1B46B03C72B }}
+
+      - name: Fallback Azure login from app settings
+        if: steps.azure-login.outcome != 'success'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:AZURE_CORE_OUTPUT = 'none'
+          $settings = Get-Content 'appsettings.json' -Raw | ConvertFrom-Json
+          Write-Output "::add-mask::$($settings.AzureAd.ClientSecret)"
+          az login --service-principal --username $settings.AzureAd.ClientId --password $settings.AzureAd.ClientSecret --tenant $settings.AzureAd.TenantId | Out-Null
+          az account set --subscription '${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7445E8249C6D4ECE9948F1B46B03C72B }}'
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
