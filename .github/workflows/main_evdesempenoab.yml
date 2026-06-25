@@ -23,6 +23,24 @@ jobs:
         with:
           dotnet-version: '8.x'
 
+      - name: Resolve Power Automate reminder URL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $settingsPath = 'appsettings.json'
+          $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
+          $tenantId = $settings.AzureAd.TenantId
+          $clientId = $settings.AzureAd.ClientId
+          $clientSecret = $settings.AzureAd.ClientSecret
+          $environmentId = '281406ef-ab25-e78f-ae54-4671f1cd19ed'
+          $workflowId = '20463e73-476f-f111-ab0f-002248e09de5'
+          $token = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Body @{ client_id = $clientId; client_secret = $clientSecret; grant_type = 'client_credentials'; scope = 'https://service.flow.microsoft.com/.default' }
+          $callback = Invoke-RestMethod -Method Post -Uri "https://api.flow.microsoft.com/providers/Microsoft.ProcessSimple/environments/$environmentId/flows/$workflowId/triggers/manual/listCallbackUrl?api-version=2016-11-01" -Headers @{ Authorization = "Bearer $($token.access_token)" } -Body '{}' -ContentType 'application/json'
+          if (-not $callback.value) { throw 'Power Automate no devolvio callback URL.' }
+          if (-not $settings.PowerAutomate) { $settings | Add-Member -NotePropertyName PowerAutomate -NotePropertyValue ([pscustomobject]@{}) }
+          $settings.PowerAutomate | Add-Member -NotePropertyName RecordatorioEvaluacionesUrl -NotePropertyValue $callback.value -Force
+          $settings | ConvertTo-Json -Depth 20 | Set-Content $settingsPath -Encoding UTF8
+
       - name: Build with dotnet
         run: dotnet build --configuration Release
 
